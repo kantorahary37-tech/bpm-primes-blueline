@@ -1,0 +1,14 @@
+/* Import de Tailwind CSS v4 (inclut Daisy UI automatiquement si configuré dans vite.config.js) */
+@import "tailwindcss";
+
+/* Styles de base pour l'application */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Styles pour le conteneur principal */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
