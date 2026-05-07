@@ -12,19 +12,6 @@ from fastapi import HTTPException
 # Création du routeur API
 router = APIRouter()
 
-# Route POST pour créer un utilisateur
-@router.post("/users/", response_model=UserResponse)
-async def create_user(user: UserCreate):
-    # Création de l'utilisateur en base
-    obj = await User.create(**user.dict())
-    # Récupération de l'utilisateur avec son ID
-    return await User.get(id=obj.id)
-
-# Route GET pour lister les utilisateurs
-@router.get("/users/", response_model=List[UserResponse])
-async def list_users():
-    # Retourne tous les utilisateurs
-    return await User.all()
 
 # Route POST pour créer une prime
 @router.post("/bonuses/", response_model=BonusResponse)
@@ -48,27 +35,34 @@ async def validate_bonus(bonus_id: int, validation: ValidationCreate, step: str)
     # Récupération de la prime ou erreur 404
     bonus = await Bonus.get_or_none(id=bonus_id)
     if not bonus: raise HTTPException(404, "Bonus not found")
+    
+    # Vérification : si déjà validé, ON BLOQUE
+    if bonus.status == ValidationStatus.VALIDE:
+        raise HTTPException(status_code=400, detail="Bonus déjà validé - aucune action possible")
+    
     # Création de l'enregistrement de validation
     await Validation.create(**validation.dict())
+    
     # Mise à jour du statut selon l'étape et l'action
     if validation.action == "VALIDER":
         bonus.status = {
             "N1": ValidationStatus.EN_ATTENTE_DIRECTEUR, 
-            "DIRECTEUR": ValidationStatus.EN_ATTENTE_DRH, 
-            "DRH": ValidationStatus.EN_ATTENTE_DG,
+            "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG, 
             "DG": ValidationStatus.VALIDE
         }[step]
         
+        # Clôture automatique si DG valide
         if bonus.status == ValidationStatus.VALIDE:
             await Validation.create(
                 bonus_id=bonus.id, 
                 validator_id=validation.validator_id, 
                 step="CLOSED", 
                 action="AUTOMATIC", 
-                note="Prime validée par DG"
+                note="Prime validée par DG - Clôture automatique"
             )
     elif validation.action == "REJETER":
         bonus.status = ValidationStatus.REJETE
+    
     # Sauvegarde de la prime
     await bonus.save()
     return {"message": "OK", "status": bonus.status}
