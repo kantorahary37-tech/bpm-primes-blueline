@@ -17,7 +17,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # Route POST pour créer une prime
 @router.post("/bonuses/", response_model=BonusResponse)
-async def create_bonus(bonus: BonusCreate, user_id: int):
+async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user)):
     # Vérification : pas de chevauchement de période pour le même employé + même type
     existing = await Bonus.filter(
         employee_id=bonus.employee_id,
@@ -30,8 +30,8 @@ async def create_bonus(bonus: BonusCreate, user_id: int):
             status_code=409,
             detail=f"Une prime de type '{bonus.bonus_type.value}' existe déjà sur cette période pour cet employé."
         )
-    # Création de la prime avec le créateur
-    obj = await Bonus.create(**bonus.dict(), created_by_id=user_id)
+    # Création de la prime avec le créateur (depuis le token JWT)
+    obj = await Bonus.create(**bonus.dict(), created_by_id=user.id)
     # Récupération avec les relations préchargées
     return await Bonus.get(id=obj.id).prefetch_related('employee')
 
@@ -54,7 +54,12 @@ async def list_bonuses(
 
 # Route POST pour valider une prime
 @router.post("/bonuses/{bonus_id}/validate")
-async def validate_bonus(bonus_id: int, validation: ValidationCreate, step: str):
+async def validate_bonus(
+    bonus_id: int,
+    validation: ValidationCreate,
+    step: str,
+    user: User = Depends(get_current_user)
+):
     # Récupération de la prime ou erreur 404
     bonus = await Bonus.get_or_none(id=bonus_id)
     if not bonus: raise HTTPException(404, "Bonus not found")
@@ -63,13 +68,37 @@ async def validate_bonus(bonus_id: int, validation: ValidationCreate, step: str)
     if bonus.status == ValidationStatus.VALIDE:
         raise HTTPException(status_code=400, detail="Bonus déjà validé - aucune action possible")
     
-    # Création de l'enregistrement de validation
-    await Validation.create(**validation.dict())
+    # Validation du workflow : chaque étape n'est possible que si le statut actuel correspond
+    expected_status = {
+        "N1": ValidationStatus.INITIALISE,
+        "DIRECTEUR": ValidationStatus.EN_ATTENTE_DIRECTEUR,
+        "DG": ValidationStatus.EN_ATTENTE_DG,
+    }.get(step)
+    
+    if not expected_status:
+        raise HTTPException(400, "Étape de validation invalide")
+    
+    if bonus.status != expected_status:
+        raise HTTPException(
+            400,
+            f"Action impossible : la prime est au statut '{bonus.status}', "
+            f"attendait '{expected_status}' pour l'étape {step}."
+        )
+    
+    # Création de l'enregistrement de validation (validator_id depuis le JWT)
+    await Validation.create(
+        bonus_id=bonus.id,
+        validator_id=user.id,
+        step=step,
+        action=validation.action,
+        note=validation.note,
+        motif_rejet=validation.motif_rejet,
+    )
     
     # Mise à jour du statut selon l'étape et l'action
     if validation.action == "VALIDER":
         bonus.status = {
-            "N1": ValidationStatus.EN_ATTENTE_DIRECTEUR, 
+            "N1": ValidationStatus.EN_ATTENTE_DIRECTEUR,
             "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
             "DG": ValidationStatus.VALIDE
         }[step]
@@ -77,10 +106,10 @@ async def validate_bonus(bonus_id: int, validation: ValidationCreate, step: str)
         # Clôture automatique si DG valide
         if bonus.status == ValidationStatus.VALIDE:
             await Validation.create(
-                bonus_id=bonus.id, 
-                validator_id=validation.validator_id, 
-                step="CLOSED", 
-                action="AUTOMATIC", 
+                bonus_id=bonus.id,
+                validator_id=user.id,
+                step="CLOSED",
+                action="AUTOMATIC",
                 note="Prime validée par DG - Clôture automatique"
             )
     elif validation.action == "REJETER":

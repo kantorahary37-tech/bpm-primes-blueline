@@ -97,16 +97,19 @@ class BonusResponse(BonusBase):
 
 # Schéma de création de validation
 class ValidationCreate(BaseModel):
+    action: str
+    note: Optional[str] = None
+    motif_rejet: Optional[str] = None
+
+# Schéma de réponse validation
+class ValidationResponse(BaseModel):
+    id: int
     bonus_id: int
     validator_id: int
     step: str
     action: str
     note: Optional[str] = None
     motif_rejet: Optional[str] = None
-
-# Schéma de réponse validation
-class ValidationResponse(ValidationCreate):
-    id: int
     validated_at: datetime
     class Config: from_attributes = True
 
