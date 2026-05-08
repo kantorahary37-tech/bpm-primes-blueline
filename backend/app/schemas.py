@@ -3,7 +3,7 @@ from pydantic import BaseModel
 # Imports de typage
 from typing import Optional, List
 # Import de datetime pour les dates
-from datetime import datetime
+from datetime import datetime, date
 # Import des enums depuis les modèles
 from app.models import DepartmentType, BonusType, ValidationStatus
 
@@ -67,8 +67,8 @@ class EmployeeResponse(EmployeeBase):
 # Schéma de base pour les primes
 class BonusBase(BaseModel):
     employee_id: int
-    month: int
-    year: int
+    start_date: date
+    end_date: date
     bonus_type: BonusType
     performance_score: Optional[float] = None
     absences: Optional[int] = None

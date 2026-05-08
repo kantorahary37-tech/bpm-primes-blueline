@@ -85,10 +85,10 @@ class Bonus(models.Model):
     id = fields.IntField(pk=True)
     # Relation vers l'employé concerné
     employee = fields.ForeignKeyField('models.Employee', related_name='bonuses')
-    # Mois de la prime (1-12)
-    month = fields.IntField()
-    # Année de la prime
-    year = fields.IntField()
+    # Date de début de la période
+    start_date = fields.DateField()
+    # Date de fin de la période
+    end_date = fields.DateField()
     # Type de prime (mensuel/astreinte/commission)
     bonus_type = fields.CharEnumField(BonusType)
     # Score de performance (optionnel)

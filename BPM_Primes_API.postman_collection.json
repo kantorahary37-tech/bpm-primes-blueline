@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "BPM Primes API",
-    "description": "Collection pour tester l'API BPM Primes Blueline\n\n## Authentification\n1. Commence par \"Signup\" pour créer un compte (retourne un message, pas de token)\n2. Puis \"Login\" pour récupérer un token JWT\n3. Le token est automatiquement stocké dans la variable `token` après le login\n4. Toutes les autres requêtes l'utilisent automatiquement\n\n## Workflow validation\nCréer prime (N+1) → Valider N+1 → Valider Directeur → Valider DG → Clôture auto",
+    "description": "Collection pour tester l'API BPM Primes Blueline\n\n## Authentification\n1. Commence par \"Signup\" pour créer un compte (retourne un message, pas de token)\n2. Puis \"Login\" pour récupérer un token JWT (stocké automatiquement dans variable `token`)\n3. Toutes les autres requêtes utilisent `{{token}}` automatiquement\n\n## Changements récents\n- month/year remplacés par start_date/end_date (format YYYY-MM-DD)\n- Anti-chevauchement : pas de même type de prime sur une période qui se chevauche pour le même employé\n- Erreurs propres en français (ex: \"Employé (ID 999) introuvable\")\n\n## Workflow validation\nCéer prime → Valider N+1 → Valider Directeur → Valider DG → Clôture auto",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -216,6 +216,32 @@
           }
         },
         {
+          "name": "Lister par dates",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/bonuses/?start_date=2026-05-01&end_date=2026-05-31",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Lister par type",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/bonuses/?bonus_type=astreinte",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ]
+          }
+        },
+        {
           "name": "Créer une prime mensuelle",
           "request": {
             "method": "POST",
@@ -232,7 +258,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"employee_id\": 1,\n  \"month\": 5,\n  \"year\": 2026,\n  \"bonus_type\": \"mensuel\",\n  \"performance_score\": 85.5,\n  \"absences\": 2,\n  \"retard\": 1,\n  \"prime_mensuel_amount\": 150000,\n  \"total_amount\": 150000\n}"
+              "raw": "{\n  \"employee_id\": 1,\n  \"start_date\": \"2026-06-01\",\n  \"end_date\": \"2026-06-30\",\n  \"bonus_type\": \"mensuel\",\n  \"performance_score\": 85.5,\n  \"absences\": 2,\n  \"retard\": 1,\n  \"prime_mensuel_amount\": 150000,\n  \"total_amount\": 150000\n}"
             }
           }
         },
@@ -253,7 +279,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"employee_id\": 1,\n  \"month\": 5,\n  \"year\": 2026,\n  \"bonus_type\": \"astreinte\",\n  \"nb_jours_astreinte\": 5,\n  \"taux_jour\": 30000,\n  \"prime_astreinte_amount\": 150000,\n  \"total_amount\": 150000\n}"
+              "raw": "{\n  \"employee_id\": 1,\n  \"start_date\": \"2026-05-08\",\n  \"end_date\": \"2026-05-15\",\n  \"bonus_type\": \"astreinte\",\n  \"nb_jours_astreinte\": 5,\n  \"taux_jour\": 30000,\n  \"prime_astreinte_amount\": 150000,\n  \"total_amount\": 150000\n}"
             }
           }
         },
@@ -274,7 +300,28 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"employee_id\": 2,\n  \"month\": 5,\n  \"year\": 2026,\n  \"bonus_type\": \"commission\",\n  \"ca_realise\": 50000000,\n  \"ca_objectif\": 100000000,\n  \"taux_commission\": 2.5,\n  \"commission_amount\": 1250000,\n  \"total_amount\": 1250000\n}"
+              "raw": "{\n  \"employee_id\": 2,\n  \"start_date\": \"2026-05-01\",\n  \"end_date\": \"2026-05-31\",\n  \"bonus_type\": \"commission\",\n  \"ca_realise\": 50000000,\n  \"ca_objectif\": 100000000,\n  \"taux_commission\": 2.5,\n  \"commission_amount\": 1250000,\n  \"total_amount\": 1250000\n}"
+            }
+          }
+        },
+        {
+          "name": "Test chevauchement (copie de la mensuelle)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/bonuses/?user_id=1",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": 1,\n  \"start_date\": \"2026-06-01\",\n  \"end_date\": \"2026-06-30\",\n  \"bonus_type\": \"mensuel\",\n  \"total_amount\": 150000\n}"
             }
           }
         },
