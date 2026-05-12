@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getBonuses, validateBonus } from '../services/api';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const BonusesList = () => {
+  const { user } = useAuth();
   const [bonuses, setBonuses] = useState([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,14 @@ const BonusesList = () => {
     } catch (error) {
       alert('Erreur lors de la validation');
     }
+  };
+
+  const getValidStep = (bonus) => {
+    if (!user) return null;
+    if (user.is_validator_n1 && (bonus.status === 'Initialisé' || bonus.status === 'En attente N+1')) return 'N1';
+    if (user.is_directeur && bonus.status === 'En attente Directeur') return 'DIRECTEUR';
+    if (user.is_dg && bonus.status === 'En attente DG') return 'DG';
+    return null;
   };
 
   const formatDate = (dateStr) => {
@@ -115,14 +125,17 @@ const BonusesList = () => {
                   </span>
                 </td>
                 <td>
-                  {bonus.status !== 'Prime validée' && bonus.status !== 'Prime rejetée' && bonus.status !== 'Validé' && bonus.status !== 'Rejeté' && (
-                    <button
-                      className="btn btn-sm btn-success"
-                      onClick={() => handleValidate(bonus.id, 'N1')}
-                    >
-                      Valider
-                    </button>
-                  )}
+                  {(() => {
+                    const step = getValidStep(bonus);
+                    return step ? (
+                      <button
+                        className="btn btn-sm btn-success"
+                        onClick={() => handleValidate(bonus.id, step)}
+                      >
+                        Valider ({step})
+                      </button>
+                    ) : null;
+                  })()}
                 </td>
               </tr>
             ))}

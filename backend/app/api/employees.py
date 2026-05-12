@@ -27,7 +27,10 @@ async def list_employees(
             raise HTTPException(400, "Aucun département associé à votre profil.")
         query = query.filter(department=user.department)
     else:
-        query = query.filter(manager_id=user.id)
+        if user.department:
+            query = query.filter(department=user.department)
+        else:
+            query = query.filter(manager_id=user.id)
 
     if department:
         query = query.filter(department=department)
