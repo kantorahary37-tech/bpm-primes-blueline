@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 
 const typeConfig = {
@@ -11,9 +11,11 @@ const typeConfig = {
 
 export default function BonusForm() {
   const { user: connectedUser } = useAuth()
-  const { type } = useParams()
+  const { type, id } = useParams()
   const navigate = useNavigate()
-  const config = typeConfig[type]
+  const isEditing = !!id
+  const [editType, setEditType] = useState(type)
+  const config = typeConfig[editType]
   const today = new Date().toISOString().split('T')[0]
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
@@ -24,6 +26,12 @@ export default function BonusForm() {
     const days = Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1
     return Math.max(1, Math.ceil(days / 7))
   }
+
+  const saveBonus = isEditing ? (data) => updateBonus(id, data) : createBonus;
+  const navigateAfterSave = () => {
+    if (!isEditing) navigate('/bonuses');
+    else { getBonus(id).then(setEditBonus); navigate('/bonuses'); }
+  };
 
   const [employees, setEmployees] = useState([])
   const [selectedEmp, setSelectedEmp] = useState(null)
@@ -81,6 +89,28 @@ export default function BonusForm() {
   useEffect(() => {
     getEmployees().then(setEmployees).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!isEditing || !id) return;
+    getBonus(id).then((b) => {
+      setEditType(b.bonus_type);
+      setSelectedEmp(b.employee || null);
+      setParams((p) => ({ ...p, startDate: b.start_date, endDate: b.end_date }));
+      if (b.details) {
+        const d = b.details;
+        if (d.budgets) setBudgets(d.budgets);
+        if (d.quantitative) setQuantitative(d.quantitative);
+        if (d.qualitative) setQualitative(d.qualitative);
+        if (d.sales) setSales(d.sales.map((s, i) => ({ ...s, key: i + 1 })));
+        if (d.disponibilites) setDisponibilites(d.disponibilites.map((s, i) => ({ ...s, key: i + 1 })));
+        if (d.interventions) setInterventions(d.interventions.map((s, i) => ({ ...s, key: i + 1 })));
+        if (d.weekly_max) setAstreinteConfig((c) => ({ ...c, weeklyMax: d.weekly_max, interventionRate: d.intervention_rate }));
+        if (d.rate) setCommissionConfig((c) => ({ ...c, rate: d.rate }));
+        if (d.exceptionnelle !== undefined) setAdditionalPrimes((p) => ({ ...p, exceptionnelle: d.exceptionnelle }));
+        if (d.ponctuelle !== undefined) setAdditionalPrimes((p) => ({ ...p, ponctuelle: d.ponctuelle }));
+      }
+    });
+  }, [id]);
 
   const totalQuantitative = quantitative.reduce((s, i) => s + i.value, 0)
   const totalQualitative = qualitative.reduce((s, i) => s + i.value, 0)
@@ -157,11 +187,13 @@ export default function BonusForm() {
     e.preventDefault()
     setError('')
     setLoading(true)
+    const weeks = calcWeeks(astreinteConfig.periodStart, astreinteConfig.periodEnd)
     const totalDispo = disponibilites.reduce((s, d) => s + (parseFloat(d.nombre) || 0) * astreinteConfig.weeklyMax, 0)
     const totalInterv = interventions.filter(i => i.employee_id).length * astreinteConfig.interventionRate
     const amount = totalDispo + totalInterv + (parseFloat(additionalPrimes.exceptionnelle) || 0) + (parseFloat(additionalPrimes.ponctuelle) || 0)
+    const empName = (id) => employees.find((e) => e.id === id)?.name || `#${id}`
     try {
-      await createBonus({
+      await saveBonus({
         employee_id: disponibilites.find(d => d.employee_id)?.employee_id || interventions.find(i => i.employee_id)?.employee_id,
         start_date: astreinteConfig.periodStart,
         end_date: astreinteConfig.periodEnd,
@@ -170,10 +202,27 @@ export default function BonusForm() {
         nb_jours_astreinte: totalDispo,
         taux_jour: astreinteConfig.weeklyMax,
         prime_astreinte_amount: totalInterv,
+        details: {
+          weeks,
+          weekly_max: astreinteConfig.weeklyMax,
+          intervention_rate: astreinteConfig.interventionRate,
+          disponibilites: disponibilites.filter((d) => d.employee_id).map((d) => ({
+            employee_id: d.employee_id, employee_name: empName(d.employee_id), nombre: d.nombre,
+          })),
+          interventions: interventions.filter((i) => i.employee_id).map((i) => ({
+            employee_id: i.employee_id, employee_name: empName(i.employee_id),
+            date: i.date, heure: i.heure, motif: i.motif, ticket: i.ticket,
+          })),
+          total_dispo: totalDispo,
+          total_interv: totalInterv,
+          exceptionnelle: parseFloat(additionalPrimes.exceptionnelle) || 0,
+          ponctuelle: parseFloat(additionalPrimes.ponctuelle) || 0,
+        },
       })
-      navigate('/bonuses')
+      navigateAfterSave()
     } catch (err) {
-      setError(err.response?.data?.detail || "Erreur lors de la création")
+      setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : (err.response?.data?.detail || "Erreur lors de la création"))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
       setLoading(false)
     }
@@ -203,17 +252,27 @@ export default function BonusForm() {
     setLoading(true)
     const amount = sales.reduce((s, row) => s + (parseFloat(row.nombre) || 0) * commissionConfig.rate, 0)
     try {
-      await createBonus({
+      await saveBonus({
         employee_id: selectedEmp?.id,
         start_date: commissionConfig.periodStart,
         end_date: commissionConfig.periodEnd,
         bonus_type: 'commission',
+        taux_commission: commissionConfig.rate,
+        commission_amount: amount,
         total_amount: amount,
         ca_realise: amount,
+        details: {
+          rate: commissionConfig.rate,
+          sales: sales.map((s) => ({
+            designation: s.designation, nombre: s.nombre, description: s.description,
+          })),
+          total: amount,
+        },
       })
-      navigate('/bonuses')
+      navigateAfterSave()
     } catch (err) {
-      setError(err.response?.data?.detail || "Erreur lors de la création")
+      setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : (err.response?.data?.detail || "Erreur lors de la création"))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
       setLoading(false)
     }
@@ -237,17 +296,33 @@ export default function BonusForm() {
     setLoading(true)
     const amount = Math.min(totalEval, params.maxPrime)
     try {
-      await createBonus({
+      await saveBonus({
         employee_id: selectedEmp?.id,
         start_date: params.startDate,
         end_date: params.endDate,
         bonus_type: 'mensuel',
         performance_score: (totalEval / params.maxPrime) * 100,
         total_amount: amount,
+        details: {
+          prime_max: params.maxPrime,
+          budgets: { quanti: budgets.quanti, quali: budgets.quali },
+          quantitative: quantitative.map((c) => ({
+            criteria: c.criteria, description: c.description,
+            objective: c.objective, evaluation: c.evaluation, value: c.value,
+          })),
+          qualitative: qualitative.map((c) => ({
+            criteria: c.criteria, description: c.description,
+            objective: c.objective, evaluation: c.evaluation, value: c.value,
+          })),
+          total_quantitative: totalQuantitative,
+          total_qualitative: totalQualitative,
+          total_evaluation: totalEval,
+        },
       })
-      navigate('/bonuses')
+      navigateAfterSave()
     } catch (err) {
-      setError(err.response?.data?.detail || "Erreur lors de la création")
+      setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : (err.response?.data?.detail || "Erreur lors de la création"))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
       setLoading(false)
     }
@@ -271,10 +346,11 @@ export default function BonusForm() {
       for (const f of extraFields) {
         if (simpleForm[f]) payload[f] = parseFloat(simpleForm[f])
       }
-      await createBonus(payload)
-      navigate('/bonuses')
+      await saveBonus(payload)
+      navigateAfterSave()
     } catch (err) {
-      setError(err.response?.data?.detail || "Erreur lors de la création")
+      setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : (err.response?.data?.detail || "Erreur lors de la création"))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
       setLoading(false)
     }

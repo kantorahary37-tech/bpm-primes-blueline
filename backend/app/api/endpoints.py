@@ -44,6 +44,27 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
     obj = await Bonus.create(**bonus.dict(), created_by_id=user.id)
     return await Bonus.get(id=obj.id).prefetch_related('employee')
 
+# Route PUT pour modifier une prime (seulement si statut = Initialisé)
+@router.put("/bonuses/{bonus_id}", response_model=BonusResponse)
+async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(get_current_user)):
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
+    if not bonus: raise HTTPException(404, "Bonus not found")
+    if bonus.status != ValidationStatus.INITIALISE:
+        raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé'")
+
+    update_data = data.dict(exclude_unset=True)
+    if 'total_amount' in update_data:
+        employee = await Employee.get(id=bonus.employee_id)
+        primemax = await PrimeMax.filter(department=employee.department, bonus_type=bonus.bonus_type).first()
+        if primemax and update_data['total_amount'] > primemax.amount:
+            raise HTTPException(400, f"Le montant dépasse le plafond autorisé ({primemax.amount} Ar)")
+    if 'employee_id' in update_data:
+        del update_data['employee_id']
+
+    await bonus.update_from_dict(update_data)
+    await bonus.save()
+    return await Bonus.get(id=bonus.id).prefetch_related('employee')
+
 # Route GET pour lister les primes (filtres optionnels)
 @router.get("/bonuses/", response_model=List[BonusResponse])
 async def list_bonuses(
@@ -60,6 +81,34 @@ async def list_bonuses(
     if start_date: query = query.filter(start_date__gte=start_date)
     if end_date: query = query.filter(end_date__lte=end_date)
     return await query
+
+# Route GET pour une prime spécifique
+@router.get("/bonuses/{bonus_id}", response_model=BonusResponse)
+async def get_bonus(bonus_id: int):
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
+    if not bonus: raise HTTPException(404, "Bonus not found")
+    return bonus
+
+# Route GET pour l'historique des validations d'une prime
+@router.get("/bonuses/{bonus_id}/validations", response_model=List[ValidationResponse])
+async def get_bonus_validations(bonus_id: int):
+    bonus = await Bonus.get_or_none(id=bonus_id)
+    if not bonus: raise HTTPException(404, "Bonus not found")
+    validations = await Validation.filter(bonus_id=bonus_id).prefetch_related('validator')
+    result = []
+    for v in validations:
+        result.append({
+            "id": v.id,
+            "bonus_id": v.bonus_id,
+            "validator_id": v.validator_id,
+            "validator_name": v.validator.name if v.validator else None,
+            "step": v.step,
+            "action": v.action,
+            "note": v.note,
+            "motif_rejet": v.motif_rejet,
+            "validated_at": v.validated_at,
+        })
+    return result
 
 # Route POST pour valider une prime
 @router.post("/bonuses/{bonus_id}/validate")
@@ -122,7 +171,8 @@ async def validate_bonus(
                 note="Prime validée par DG - Clôture automatique"
             )
     elif validation.action == "REJETER":
-        bonus.status = ValidationStatus.REJETE
+        bonus.status = ValidationStatus.INITIALISE
+        bonus.was_rejected = True
     
     # Sauvegarde de la prime
     await bonus.save()

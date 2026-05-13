@@ -114,11 +114,15 @@ class Bonus(models.Model):
     # Chiffre d'affaires objectif (optionnel)
     ca_objectif = fields.DecimalField(max_digits=15, decimal_places=2, null=True)
     # Taux de commission (optionnel)
-    taux_commission = fields.DecimalField(max_digits=5, decimal_places=2, null=True)
+    taux_commission = fields.DecimalField(max_digits=10, decimal_places=2, null=True)
     # Montant commission (optionnel)
     commission_amount = fields.DecimalField(max_digits=15, decimal_places=2, null=True)
     # Montant total de la prime
     total_amount = fields.DecimalField(max_digits=15, decimal_places=2)
+    # Données détaillées de l'évaluation (JSON : critères, budgets, notes, etc.)
+    details = fields.JSONField(null=True)
+    # Indique si la prime a déjà été rejetée
+    was_rejected = fields.BooleanField(default=False)
     # Statut de validation de la prime
     status = fields.CharEnumField(ValidationStatus, default=ValidationStatus.INITIALISE)
     # Créateur de la prime (relation vers User)

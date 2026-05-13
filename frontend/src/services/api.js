@@ -73,6 +73,21 @@ export const createBonus = async (bonusData) => {
   return data;
 };
 
+export const updateBonus = async (id, data) => {
+  const { data: res } = await api.put(`/bonuses/${id}`, data);
+  return res;
+};
+
+export const getBonus = async (id) => {
+  const { data } = await api.get(`/bonuses/${id}`);
+  return data;
+};
+
+export const getBonusValidations = async (id) => {
+  const { data } = await api.get(`/bonuses/${id}/validations`);
+  return data;
+};
+
 export const validateBonus = async (bonusId, validationData, step) => {
   const { data } = await api.post(`/bonuses/${bonusId}/validate?step=${step}`, validationData);
   return data;

@@ -1,7 +1,7 @@
 # Import de Pydantic pour la validation des données
 from pydantic import BaseModel
 # Imports de typage
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 # Import de datetime pour les dates
 from datetime import datetime, date
 # Import des enums depuis les modèles
@@ -88,6 +88,8 @@ class BonusBase(BaseModel):
     ca_objectif: Optional[float] = None
     taux_commission: Optional[float] = None
     commission_amount: Optional[float] = None
+    details: Optional[Dict[str, Any]] = None
+    was_rejected: Optional[bool] = False
     total_amount: float
 
 # Schéma de création de prime
@@ -114,6 +116,7 @@ class ValidationResponse(BaseModel):
     id: int
     bonus_id: int
     validator_id: int
+    validator_name: Optional[str] = None
     step: str
     action: str
     note: Optional[str] = None
