@@ -2,12 +2,19 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { createBonus, getEmployees, getBonus, updateBonus } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 
-const typeConfig = {
-  mensuel: { title: 'Prime Mensuelle', icon: '📅' },
-  astreinte: { title: "Prime d'Astreinte", icon: '🌙' },
-  commission: { title: 'Prime Commission', icon: '📈' },
-}
+const DEFAULT_QUANTI_CRITERIA = [
+  'Planification du travail',
+  'Respect des deadlines',
+  "Capacité d'analyse",
+  'Exécution des tâches périodiques',
+]
+const DEFAULT_QUALI_CRITERIA = [
+  'Qualité du travail',
+  'Initiative',
+  "Travail d'équipe",
+]
 
 export default function BonusForm() {
   const { user: connectedUser } = useAuth()
@@ -15,7 +22,6 @@ export default function BonusForm() {
   const navigate = useNavigate()
   const isEditing = !!id
   const [editType, setEditType] = useState(type)
-  const config = typeConfig[editType]
   const today = new Date().toISOString().split('T')[0]
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
@@ -41,23 +47,30 @@ export default function BonusForm() {
   })
   const [manager, setManager] = useState({ name: '', function: '' })
   const [params, setParams] = useState({ startDate: monthStart, endDate: monthEnd, maxPrime: 150000 })
-  const [budgets, setBudgets] = useState({ quanti: 80000, quali: 70000 })
+
   const [observation, setObservation] = useState('')
-  const [applyToAll, setApplyToAll] = useState(false)
+  const [teamSelections, setTeamSelections] = useState([])
+
+  const sameDeptEmployees = selectedEmp
+    ? employees.filter(e => e.department === selectedEmp.department && e.id !== selectedEmp.id)
+    : []
+
+  const toggleTeamMember = (id) => {
+    setTeamSelections(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const [quantitative, setQuantitative] = useState([
-    { criteria: 'Planification du travail', description: '', objective: '20%', evaluation: 0, value: 0 },
-    { criteria: 'Respect des deadlines', description: '', objective: '20%', evaluation: 0, value: 0 },
-    { criteria: "Capacité d'analyse", description: '', objective: '20%', evaluation: 0, value: 0 },
-    { criteria: 'Respect des deadlines (doublon)', description: '', objective: '10%', evaluation: 0, value: 0 },
-    { criteria: 'Exécution des tâches périodiques', description: '', objective: '30%', evaluation: 0, value: 0 },
+    { criteria: 'Planification du travail', description: '', objective: '15%', evaluation: 0, value: 0 },
+    { criteria: 'Respect des deadlines', description: '', objective: '15%', evaluation: 0, value: 0 },
+    { criteria: "Capacité d'analyse", description: '', objective: '10%', evaluation: 0, value: 0 },
+    { criteria: 'Exécution des tâches périodiques', description: '', objective: '10%', evaluation: 0, value: 0 },
   ])
   const [qualitative, setQualitative] = useState([
-    { criteria: 'Qualité du travail', description: '', objective: '40%', evaluation: 0, value: 0 },
-    { criteria: 'Initiative', description: '', objective: '30%', evaluation: 0, value: 0 },
-    { criteria: "Travail d'équipe", description: '', objective: '30%', evaluation: 0, value: 0 },
+    { criteria: 'Qualité du travail', description: '', objective: '20%', evaluation: 0, value: 0 },
+    { criteria: 'Initiative', description: '', objective: '15%', evaluation: 0, value: 0 },
+    { criteria: "Travail d'équipe", description: '', objective: '15%', evaluation: 0, value: 0 },
   ])
 
   const [simpleForm, setSimpleForm] = useState({
@@ -98,7 +111,6 @@ export default function BonusForm() {
       setParams((p) => ({ ...p, startDate: b.start_date, endDate: b.end_date }));
       if (b.details) {
         const d = b.details;
-        if (d.budgets) setBudgets(d.budgets);
         if (d.quantitative) setQuantitative(d.quantitative);
         if (d.qualitative) setQualitative(d.qualitative);
         if (d.sales) setSales(d.sales.map((s, i) => ({ ...s, key: i + 1 })));
@@ -112,11 +124,16 @@ export default function BonusForm() {
     });
   }, [id]);
 
-  const totalQuantitative = quantitative.reduce((s, i) => s + i.value, 0)
-  const totalQualitative = qualitative.reduce((s, i) => s + i.value, 0)
-  const totalEval = totalQuantitative + totalQualitative
+  const totalQuantiEval = quantitative.reduce((s, i) => s + (parseFloat(i.evaluation) || 0), 0)
+  const totalQualiEval = qualitative.reduce((s, i) => s + (parseFloat(i.evaluation) || 0), 0)
+  const totalEvalPct = totalQuantiEval + totalQualiEval
+  const totalQuantiValue = quantitative.reduce((s, i) => s + i.value, 0)
+  const totalQualiValue = qualitative.reduce((s, i) => s + i.value, 0)
+  const totalValue = totalQuantiValue + totalQualiValue
+  const totalQuantiObj = quantitative.reduce((s, i) => s + (parseInt(i.objective) || 0), 0)
+  const totalQualiObj = qualitative.reduce((s, i) => s + (parseInt(i.objective) || 0), 0)
 
-  if (!config) {
+  if (!['mensuel', 'astreinte', 'commission'].includes(editType)) {
     return (
       <div className="page-container">
         <div className="card-blueline p-8 text-center">
@@ -130,26 +147,32 @@ export default function BonusForm() {
   const handleEvalChange = (list, setter, index, field, value, section) => {
     const newData = [...list]
     if (field === 'evaluation') {
-      const pct = parseFloat(value) || 0
-      const budget = section === 'quanti' ? budgets.quanti : budgets.quali
+      const item = newData[index]
+      const maxEval = parseInt(item.objective) || 0
+      const pct = Math.max(0, Math.min(parseFloat(value) || 0, maxEval))
       newData[index].evaluation = pct
-      newData[index].value = budget * (pct / 100)
+      newData[index].value = params.maxPrime * (pct / 100)
     } else {
       newData[index][field] = value
     }
     setter(newData)
   }
 
-  const handleBudgetChange = (section, value) => {
-    const newVal = parseFloat(value) || 0
-    if (section === 'quanti') {
-      const clamped = Math.min(newVal, params.maxPrime)
-      setBudgets({ quanti: clamped, quali: params.maxPrime - clamped })
-    } else {
-      const clamped = Math.min(newVal, params.maxPrime)
-      setBudgets({ quali: clamped, quanti: params.maxPrime - clamped })
-    }
+  const getAvailableCriteria = (currentList, defaults) =>
+    defaults.filter((c) => !currentList.some((item) => item.criteria === c))
+
+  const removeEvalItem = (list, setter, index) => {
+    setter(list.filter((_, i) => i !== index))
   }
+
+  const addEvalItem = (list, setter, criteria, section) => {
+    setter([...list, { criteria, description: '', objective: '0%', evaluation: 0, value: 0 }])
+  }
+
+  const [showAddQuanti, setShowAddQuanti] = useState(false)
+  const [showAddQuali, setShowAddQuali] = useState(false)
+  const [customMode, setCustomMode] = useState(null) // 'quanti' | 'quali' | null
+  const [customCriteria, setCustomCriteria] = useState('')
 
   const handleConfigChange = (field, value) => {
     setAstreinteConfig({ ...astreinteConfig, [field]: value })
@@ -294,31 +317,33 @@ export default function BonusForm() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const amount = Math.min(totalEval, params.maxPrime)
+    const amount = Math.min(totalValue, params.maxPrime)
+    const allEmpIds = [selectedEmp?.id, ...teamSelections].filter(Boolean)
     try {
-      await saveBonus({
-        employee_id: selectedEmp?.id,
-        start_date: params.startDate,
-        end_date: params.endDate,
-        bonus_type: 'mensuel',
-        performance_score: (totalEval / params.maxPrime) * 100,
-        total_amount: amount,
-        details: {
-          prime_max: params.maxPrime,
-          budgets: { quanti: budgets.quanti, quali: budgets.quali },
-          quantitative: quantitative.map((c) => ({
-            criteria: c.criteria, description: c.description,
-            objective: c.objective, evaluation: c.evaluation, value: c.value,
-          })),
-          qualitative: qualitative.map((c) => ({
-            criteria: c.criteria, description: c.description,
-            objective: c.objective, evaluation: c.evaluation, value: c.value,
-          })),
-          total_quantitative: totalQuantitative,
-          total_qualitative: totalQualitative,
-          total_evaluation: totalEval,
-        },
-      })
+      await Promise.all(allEmpIds.map(employee_id =>
+        saveBonus({
+          employee_id,
+          start_date: params.startDate,
+          end_date: params.endDate,
+          bonus_type: 'mensuel',
+          performance_score: totalEvalPct,
+          total_amount: amount,
+          details: {
+            prime_max: params.maxPrime,
+            quantitative: quantitative.map((c) => ({
+              criteria: c.criteria, description: c.description,
+              objective: c.objective, evaluation: c.evaluation, value: c.value,
+            })),
+            qualitative: qualitative.map((c) => ({
+              criteria: c.criteria, description: c.description,
+              objective: c.objective, evaluation: c.evaluation, value: c.value,
+            })),
+            total_quantitative: totalQuantiValue,
+            total_qualitative: totalQualiValue,
+            total_evaluation: totalValue,
+          },
+        })
+      ))
       navigateAfterSave()
     } catch (err) {
       setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : (err.response?.data?.detail || "Erreur lors de la création"))
@@ -444,11 +469,7 @@ export default function BonusForm() {
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-1">Prime maximum (Ar)</label>
               <input type="number" value={params.maxPrime} onChange={(e) => {
-                const newMax = parseFloat(e.target.value) || 0
-                setParams({ ...params, maxPrime: newMax })
-                if (editType === 'mensuel' && budgets.quanti + budgets.quali > newMax) {
-                  setBudgets(prev => ({ ...prev, quali: Math.max(0, newMax - prev.quanti) }))
-                }
+                setParams({ ...params, maxPrime: parseFloat(e.target.value) || 0 })
               }} className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
             </div>
           )}
@@ -464,9 +485,9 @@ export default function BonusForm() {
       <div className="page-container max-w-5xl">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-          <div><h1 className="page-title">📈 Prime Commission</h1><p className="text-sm text-base-content/50">Commission par vente</p></div>
+          <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Commission par vente</p></div></div>
         </div>
-        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6">⚠️ {error}</div>}
+        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
         <form onSubmit={handleSubmitCommission} className="space-y-6">
           {sharedHeader}
           <div className="card-blueline p-6">
@@ -578,9 +599,9 @@ export default function BonusForm() {
       <div className="page-container max-w-5xl">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-          <div><h1 className="page-title">🌙 Prime d'Astreinte</h1><p className="text-sm text-base-content/50">Gestion des astreintes et interventions</p></div>
+          <div className="flex items-center gap-2"><MoonIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime d'Astreinte</h1><p className="text-sm text-base-content/50">Gestion des astreintes et interventions</p></div></div>
         </div>
-        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6">⚠️ {error}</div>}
+        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
         <form onSubmit={handleSubmitAstreinte} className="space-y-6">
           {sharedHeader}
 
@@ -758,24 +779,24 @@ export default function BonusForm() {
     <div className="page-container max-w-5xl">
       <div className="flex items-center gap-3 mb-6">
         <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-        <div><h1 className="page-title">📅 Prime Mensuelle</h1><p className="text-sm text-base-content/50">Établissement des primes mensuelles</p></div>
+        <div className="flex items-center gap-2"><CalendarIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Mensuelle</h1><p className="text-sm text-base-content/50">Établissement des primes mensuelles</p></div></div>
       </div>
 
-      {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6">⚠️ {error}</div>}
+      {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
 
       <form onSubmit={handleSubmitMensuel}>
         {sharedHeader}
 
+        {(totalQuantiObj + totalQualiObj) !== 100 && (
+          <div className="mb-4 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">
+            <ExclamationIcon className="w-4 h-4" /> Les objectifs qualitatifs et quantitatifs totalisent {totalQuantiObj + totalQualiObj}% (doivent faire 100%)
+          </div>
+        )}
+
         <div className="card-blueline p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-base-content">Évaluation Quantitative</h2>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-base-content/70">Budget (Ar) :</label>
-              <input type="number" value={budgets.quanti}
-                onChange={(e) => handleBudgetChange('quanti', e.target.value)}
-                className="w-28 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
-              <span className="text-xs text-base-content/50">/ {params.maxPrime.toLocaleString('fr-FR')} Ar</span>
-            </div>
+            <span className="text-xs text-base-content/50">{totalQuantiEval.toFixed(1)}%</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -786,6 +807,7 @@ export default function BonusForm() {
                   <th className="text-center py-2 px-2 font-medium text-base-content/60">Objectif</th>
                   <th className="text-center py-2 px-2 font-medium text-base-content/60">Note (0 à poids)</th>
                   <th className="text-right py-2 px-2 font-medium text-base-content/60">Valeur (Ar)</th>
+                  <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -793,36 +815,84 @@ export default function BonusForm() {
                   <tr key={i} className="border-b border-base-100">
                     <td className="py-2 px-2 font-medium">{item.criteria}</td>
                     <td className="py-2 px-2">
-                      <input type="text" value={item.description}                       onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'description', e.target.value, 'quanti')}
+                      <input type="text" value={item.description}
+                        onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'description', e.target.value, 'quanti')}
                         className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
-                    <td className="py-2 px-2 text-center">{item.objective}</td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" value={item.evaluation} onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'evaluation', e.target.value, 'quanti')}
+                      <input type="text" value={item.objective}
+                        onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'objective', e.target.value, 'quanti')}
+                        className="w-16 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <input type="number" min="0" max={parseInt(item.objective) || 100}
+                        value={item.evaluation}
+                        onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'evaluation', e.target.value, 'quanti')}
                         className="w-20 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                    <td className="py-2 px-2 text-center">
+                      <button type="button" onClick={() => removeEvalItem(quantitative, setQuantitative, i)}
+                        className="text-red-400 hover:text-red-600 text-lg leading-none">&minus;</button>
+                    </td>
                   </tr>
                 ))}
                 <tr className="font-semibold border-t-2 border-brand-200">
-                  <td colSpan="4" className="py-2 px-2 text-right">Total Quantitatif</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{totalQuantitative.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {budgets.quanti.toLocaleString('fr-FR')} Ar</td>
+                  <td colSpan="5" className="py-2 px-2 text-right">Total Quantitatif</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{totalQuantiEval.toFixed(0)}</td>
                 </tr>
               </tbody>
             </table>
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              {!showAddQuanti && (
+                <button type="button" onClick={() => { setShowAddQuanti(true); setCustomMode(null); setCustomCriteria('') }}
+                  className="btn btn-xs btn-ghost text-brand-600 flex items-center gap-1">
+                  <PlusIcon className="w-3.5 h-3.5" /> Ajouter un critère
+                </button>
+              )}
+              {showAddQuanti && !customMode && (
+                <div className="flex items-center gap-2">
+                  <select className="select select-bordered select-xs w-auto"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') { setCustomMode('quanti'); return }
+                      addEvalItem(quantitative, setQuantitative, e.target.value, 'quanti')
+                      setShowAddQuanti(false)
+                    }}>
+                    <option value="">Sélectionner...</option>
+                    {getAvailableCriteria(quantitative, DEFAULT_QUANTI_CRITERIA).map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="__custom__">Autre...</option>
+                  </select>
+                  <button type="button" onClick={() => setShowAddQuanti(false)} className="btn btn-xs btn-ghost">Annuler</button>
+                </div>
+              )}
+              {customMode === 'quanti' && (
+                <div className="flex items-center gap-2">
+                  <input type="text" value={customCriteria}
+                    onChange={(e) => setCustomCriteria(e.target.value)}
+                    placeholder="Nom du critère personnalisé..."
+                    className="input input-bordered input-xs w-64" />
+                  <button type="button" onClick={() => {
+                    if (customCriteria.trim()) {
+                      addEvalItem(quantitative, setQuantitative, customCriteria.trim(), 'quanti')
+                      setCustomCriteria('')
+                      setCustomMode(null)
+                      setShowAddQuanti(false)
+                    }
+                  }} className="btn btn-xs bg-brand-600 text-white border-0">Ajouter</button>
+                  <button type="button" onClick={() => { setCustomMode(null); setShowAddQuanti(false) }} className="btn btn-xs btn-ghost">Annuler</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="card-blueline p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-base-content">Évaluation Qualitative</h2>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-base-content/70">Budget (Ar) :</label>
-              <input type="number" value={budgets.quali}
-                onChange={(e) => handleBudgetChange('quali', e.target.value)}
-                className="w-28 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
-              <span className="text-xs text-base-content/50">/ {params.maxPrime.toLocaleString('fr-FR')} Ar</span>
-            </div>
+            <span className="text-xs text-base-content/50">{totalQualiEval.toFixed(1)}% / 100%</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -833,6 +903,7 @@ export default function BonusForm() {
                   <th className="text-center py-2 px-2 font-medium text-base-content/60">Objectif</th>
                   <th className="text-center py-2 px-2 font-medium text-base-content/60">Note (0 à poids)</th>
                   <th className="text-right py-2 px-2 font-medium text-base-content/60">Valeur (Ar)</th>
+                  <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -840,23 +911,77 @@ export default function BonusForm() {
                   <tr key={i} className="border-b border-base-100">
                     <td className="py-2 px-2 font-medium">{item.criteria}</td>
                     <td className="py-2 px-2">
-                      <input type="text" value={item.description}                       onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'description', e.target.value, 'quali')}
+                      <input type="text" value={item.description}
+                        onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'description', e.target.value, 'quali')}
                         className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
-                    <td className="py-2 px-2 text-center">{item.objective}</td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" value={item.evaluation} onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'evaluation', e.target.value, 'quali')}
+                      <input type="text" value={item.objective}
+                        onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'objective', e.target.value, 'quali')}
+                        className="w-16 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <input type="number" min="0" max={parseInt(item.objective) || 100}
+                        value={item.evaluation}
+                        onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'evaluation', e.target.value, 'quali')}
                         className="w-20 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                    <td className="py-2 px-2 text-center">
+                      <button type="button" onClick={() => removeEvalItem(qualitative, setQualitative, i)}
+                        className="text-red-400 hover:text-red-600 text-lg leading-none">&minus;</button>
+                    </td>
                   </tr>
                 ))}
                 <tr className="font-semibold border-t-2 border-brand-200">
-                  <td colSpan="4" className="py-2 px-2 text-right">Total Qualitatif</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{totalQualitative.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {budgets.quali.toLocaleString('fr-FR')} Ar</td>
+                  <td colSpan="5" className="py-2 px-2 text-right">Total Qualitatif</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{totalQualiEval.toFixed(0)}</td>
                 </tr>
               </tbody>
             </table>
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              {!showAddQuali && (
+                <button type="button" onClick={() => { setShowAddQuali(true); setCustomMode(null); setCustomCriteria('') }}
+                  className="btn btn-xs btn-ghost text-brand-600 flex items-center gap-1">
+                  <PlusIcon className="w-3.5 h-3.5" /> Ajouter un critère
+                </button>
+              )}
+              {showAddQuali && !customMode && (
+                <div className="flex items-center gap-2">
+                  <select className="select select-bordered select-xs w-auto"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') { setCustomMode('quali'); return }
+                      addEvalItem(qualitative, setQualitative, e.target.value, 'quali')
+                      setShowAddQuali(false)
+                    }}>
+                    <option value="">Sélectionner...</option>
+                    {getAvailableCriteria(qualitative, DEFAULT_QUALI_CRITERIA).map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="__custom__">Autre...</option>
+                  </select>
+                  <button type="button" onClick={() => setShowAddQuali(false)} className="btn btn-xs btn-ghost">Annuler</button>
+                </div>
+              )}
+              {customMode === 'quali' && (
+                <div className="flex items-center gap-2">
+                  <input type="text" value={customCriteria}
+                    onChange={(e) => setCustomCriteria(e.target.value)}
+                    placeholder="Nom du critère personnalisé..."
+                    className="input input-bordered input-xs w-64" />
+                  <button type="button" onClick={() => {
+                    if (customCriteria.trim()) {
+                      addEvalItem(qualitative, setQualitative, customCriteria.trim(), 'quali')
+                      setCustomCriteria('')
+                      setCustomMode(null)
+                      setShowAddQuali(false)
+                    }
+                  }} className="btn btn-xs bg-brand-600 text-white border-0">Ajouter</button>
+                  <button type="button" onClick={() => { setCustomMode(null); setShowAddQuali(false) }} className="btn btn-xs btn-ghost">Annuler</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -867,53 +992,65 @@ export default function BonusForm() {
               <span className="text-sm text-base-content/60">Période : {params.startDate} → {params.endDate}</span>
             </div>
 
-            <div className="space-y-3">
-              <div>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex-1">
                 <div className="flex justify-between text-xs text-base-content/50 mb-1">
-                  <span>Budget quantitatif utilisé</span>
-                  <span className={totalQuantitative > budgets.quanti ? 'text-red-600 font-semibold' : ''}>
-                    {totalQuantitative.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {budgets.quanti.toLocaleString('fr-FR')} Ar
-                  </span>
+                  <span>Quantitatif</span>
+                  <span>{totalQuantiEval.toFixed(1)}%</span>
                 </div>
                 <div className="w-full h-2 bg-base-200 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all duration-300 ${totalQuantitative > budgets.quanti ? 'bg-red-500' : totalQuantitative > budgets.quanti * 0.8 ? 'bg-amber-500' : 'bg-brand-500'}`}
-                    style={{ width: `${Math.min((totalQuantitative / budgets.quanti) * 100, 100)}%` }} />
+                  <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
+                    style={{ width: `${Math.min(totalQuantiEval, 100)}%` }} />
                 </div>
               </div>
-              <div>
+              <div className="flex-1">
                 <div className="flex justify-between text-xs text-base-content/50 mb-1">
-                  <span>Budget qualitatif utilisé</span>
-                  <span className={totalQualitative > budgets.quali ? 'text-red-600 font-semibold' : ''}>
-                    {totalQualitative.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {budgets.quali.toLocaleString('fr-FR')} Ar
-                  </span>
+                  <span>Qualitatif</span>
+                  <span>{totalQualiEval.toFixed(1)}%</span>
                 </div>
                 <div className="w-full h-2 bg-base-200 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all duration-300 ${totalQualitative > budgets.quali ? 'bg-red-500' : totalQualitative > budgets.quali * 0.8 ? 'bg-amber-500' : 'bg-brand-500'}`}
-                    style={{ width: `${Math.min((totalQualitative / budgets.quali) * 100, 100)}%` }} />
+                  <div className="h-full rounded-full transition-all duration-300 bg-violet-500"
+                    style={{ width: `${Math.min(totalQualiEval, 100)}%` }} />
                 </div>
               </div>
             </div>
 
             <div className="text-right pt-2 border-t border-base-200">
-              <p className="text-sm text-base-content/60">Total général</p>
-              <p className={`text-2xl font-bold ${totalQuantitative > budgets.quanti || totalQualitative > budgets.quali ? 'text-red-600' : 'text-brand-600'}`}>
-                {totalEval.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
+              <p className="text-sm text-base-content/60">Total (quanti + quali)</p>
+              <p className={`text-2xl font-bold ${totalEvalPct !== 100 ? 'text-red-600' : 'text-brand-600'}`}>
+                {totalEvalPct.toFixed(1)}% — {totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
               </p>
             </div>
           </div>
-          {(totalQuantitative > budgets.quanti || totalQualitative > budgets.quali) && (
-            <div className="mt-3 bg-red-50 text-red-700 text-sm rounded-lg px-4 py-2">
-              ⚠️ Un ou plusieurs budgets sont dépassés. Ajustez les évaluations.
-            </div>
-          )}
+
         </div>
 
         <div className="card-blueline p-6">
           <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked={applyToAll} onChange={(e) => setApplyToAll(e.target.checked)} className="checkbox checkbox-sm border-base-300 rounded [--chkbg:theme(colors.brand.600)] checked:border-brand-600" />
-              <span className="text-sm text-base-content/70">Appliquer ce modèle à tous mes équipes</span>
-            </label>
+            <div>
+              <label className="block text-sm font-medium text-base-content/70 mb-2">Appliquer ce modèle à :</label>
+              {!selectedEmp ? (
+                <p className="text-xs text-base-content/40">Sélectionnez d'abord un employé.</p>
+              ) : sameDeptEmployees.length === 0 ? (
+                <p className="text-xs text-base-content/40">Aucun autre employé dans le même département.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {sameDeptEmployees.map(e => (
+                    <button key={e.id} type="button" onClick={() => toggleTeamMember(e.id)}
+                      className={`px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                        teamSelections.includes(e.id)
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-white text-base-content/70 border-base-300 hover:border-brand-300'
+                      }`}>
+                      {e.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {teamSelections.length > 0 && (
+                <p className="text-xs text-brand-600 mt-1">{teamSelections.length} employé(s) sélectionné(s)</p>
+              )}
+            </div>
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-1">Observations générales</label>
               <textarea value={observation} onChange={(e) => setObservation(e.target.value)} rows={3}
@@ -922,7 +1059,7 @@ export default function BonusForm() {
             </div>
             <div className="flex gap-3 justify-end">
               <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-              <button type="submit" disabled={loading} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+              <button type="submit" disabled={loading || totalEvalPct !== 100} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
                 {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
               </button>
             </div>

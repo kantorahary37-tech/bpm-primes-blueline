@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
+import { EyeIcon, EyeOffIcon, ExclamationIcon } from '../components/Icons'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -35,7 +36,7 @@ export default function Login() {
         <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-8">
           {error && (
             <div className="flex items-center gap-2 bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
-              <span>⚠</span>
+              <ExclamationIcon className="w-4 h-4" />
               {error}
             </div>
           )}
@@ -69,7 +70,7 @@ export default function Login() {
                   onClick={() => setShowPwd(!showPwd)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-sm"
                 >
-                  {showPwd ? '🙈' : '👁'}
+                  {showPwd ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                 </button>
               </div>
             </div>

@@ -1,8 +1,10 @@
+import { CheckIcon, XCircleIcon, EditIcon } from './Icons';
+
 const iconMap = {
-  creation: { icon: '📝', bg: 'bg-slate-100' },
-  VALIDER: { icon: '✅', bg: 'bg-emerald-100' },
-  REJETER: { icon: '❌', bg: 'bg-red-100' },
-  AUTOMATIC: { icon: '🤖', bg: 'bg-slate-100' },
+  creation: { icon: EditIcon, bg: 'bg-slate-100 text-slate-600' },
+  VALIDER: { icon: CheckIcon, bg: 'bg-emerald-100 text-emerald-600' },
+  REJETER: { icon: XCircleIcon, bg: 'bg-red-100 text-red-600' },
+  AUTOMATIC: { icon: CheckIcon, bg: 'bg-slate-100 text-slate-400' },
 }
 
 export default function Timeline({ items }) {
@@ -14,11 +16,12 @@ export default function Timeline({ items }) {
     <div className="relative pl-8 space-y-6">
       <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-base-300" />
       {items.map((item, i) => {
-        const cfg = iconMap[item.action] || iconMap[item.step] || { icon: '•', bg: 'bg-base-200' }
+        const cfg = iconMap[item.action] || iconMap[item.step] || { icon: null, bg: 'bg-base-200' }
+        const Icon = cfg.icon
         return (
           <div key={i} className="relative">
-            <div className={`absolute -left-8 w-8 h-8 rounded-full ${cfg.bg} flex items-center justify-center text-sm ring-4 ring-base-100`}>
-              {cfg.icon}
+            <div className={`absolute -left-8 w-8 h-8 rounded-full ${cfg.bg} flex items-center justify-center ring-4 ring-base-100`}>
+              {Icon ? <Icon className="w-4 h-4" /> : <span className="text-sm">•</span>}
             </div>
             <div className="card-blueline p-4">
               <div className="flex items-center justify-between gap-4">

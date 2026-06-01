@@ -6,6 +6,8 @@ import BonusesList from './pages/BonusesList'
 import BonusForm from './pages/BonusForm'
 import BonusTypeSelect from './pages/BonusTypeSelect'
 import BonusDetail from './pages/BonusDetail'
+import PlafondsPage from './pages/PlafondsPage'
+import Employees from './pages/Employees'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
 import ForgotPassword from './pages/ForgotPassword'
@@ -31,12 +33,8 @@ function AppContent() {
       <Route path="/bonuses/new/:type" element={<ProtectedRoute><BonusForm /></ProtectedRoute>} />
       <Route path="/bonuses/:id" element={<ProtectedRoute><BonusDetail /></ProtectedRoute>} />
       <Route path="/bonuses/edit/:id" element={<ProtectedRoute><BonusForm /></ProtectedRoute>} />
-      <Route path="/employees" element={<ProtectedRoute>
-        <div className="page-container">
-          <h1 className="page-title">Employés</h1>
-          <p className="mt-4 text-base-content/60">Page à venir...</p>
-        </div>
-      </ProtectedRoute>} />
+      <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
+      <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>
   )
 }
