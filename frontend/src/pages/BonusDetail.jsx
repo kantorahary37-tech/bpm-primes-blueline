@@ -4,7 +4,19 @@ import { getBonus, getBonusValidations, validateBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
-import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon } from '../components/Icons';
+import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon } from '../components/Icons';
+
+const typeIcons = {
+  mensuel: CalendarIcon,
+  astreinte: MoonIcon,
+  commission: ChartIcon,
+}
+
+const typeColors = {
+  mensuel: 'blue',
+  astreinte: 'violet',
+  commission: 'emerald',
+}
 
 const BonusDetail = () => {
   const { id } = useParams();
@@ -81,54 +93,82 @@ const BonusDetail = () => {
   };
 
   const getBadgeClass = (status) => {
-    if (status === 'Prime validée' || status === 'Validé') return 'badge-success';
-    if (status === 'Prime rejetée' || status === 'Rejeté') return 'badge-error';
-    return 'badge-warning';
+    if (status === 'Prime validée' || status === 'Validé') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'Prime rejetée' || status === 'Rejeté') return 'bg-red-100 text-red-700';
+    return 'bg-amber-100 text-amber-700';
   };
 
   const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', {
     day: '2-digit', month: 'long', year: 'numeric',
   });
 
-  const EvaluationTable = ({ label, items, budget, total, color }) => {
-    if (!items || items.length === 0) return null;
-    return (
-      <div className="mb-6 last:mb-0">
-        <h4 className="font-semibold text-sm mb-3">{label}</h4>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-sm text-base-content/60">Budget :</span>
-          <span className="font-medium">{budget?.toLocaleString()} Ar</span>
-          <div className="flex-1 max-w-xs">
-            <progress
-              className={`progress ${color} w-full`}
-              value={total}
-              max={budget || 1}
-            />
+  const formatAr = (n) => (n ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+
+  const InfoRow = ({ label, value, big }) => (
+    <div>
+      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+      <p className={`${big ? 'text-xl font-bold' : 'font-medium'} text-gray-900`}>{value}</p>
+    </div>
+  )
+
+  const InfoCard = ({ icon: Icon, children, className = '' }) => (
+    <div className={`rounded-xl border border-gray-200 bg-white p-5 ${className}`}>
+      {Icon && (
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <Icon className="w-3.5 h-3.5" />
           </div>
-          <span className="text-sm font-medium">{total?.toLocaleString()} / {budget?.toLocaleString()} Ar</span>
+          <h3 className="font-semibold text-gray-900 text-sm">{children}</h3>
+        </div>
+      )}
+    </div>
+  )
+
+  const Section = ({ title, icon: Icon, children }) => (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 bg-gray-50/50">
+        {Icon && <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center"><Icon className="w-3.5 h-3.5" /></div>}
+        <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  )
+
+  const EvaluationTable = ({ label, items, totalEval, totalValue, primeMax, color }) => {
+    if (!items || items.length === 0) return null;
+    const pct = primeMax > 0 ? (totalValue / primeMax) * 100 : 0;
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-sm text-gray-700">{label}</h4>
+          <span className="text-xs text-gray-400">{totalEval}%</span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
         </div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
+          <table className="w-full text-sm">
             <thead>
-              <tr>
-                <th>Critères</th>
-                <th>Objectif</th>
-                <th>Note (0 à poids)</th>
-                <th className="text-right">Valeur (Ar)</th>
+              <tr className="border-b border-gray-100">
+                <th className="text-left py-2 pr-2 font-medium text-gray-400 text-xs">Critères</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-400 text-xs">Objectif</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-400 text-xs">Note</th>
+                <th className="text-right py-2 pl-2 font-medium text-gray-400 text-xs">Valeur (Ar)</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
-                <tr key={i}>
-                  <td>{item.criteria}</td>
-                  <td>{item.objective}</td>
-                  <td>{item.evaluation ?? 0}</td>
-                  <td className="text-right">{item.value?.toLocaleString() ?? '0,00'}</td>
+                <tr key={i} className="border-b border-gray-50">
+                  <td className="py-2 pr-2 text-gray-900">{item.criteria}</td>
+                  <td className="py-2 px-2 text-center text-gray-500">{item.objective}</td>
+                  <td className="py-2 px-2 text-center font-medium text-gray-700">{item.evaluation ?? 0}</td>
+                  <td className="py-2 pl-2 text-right font-medium text-gray-700">{formatAr(item.value)}</td>
                 </tr>
               ))}
-              <tr className="font-semibold bg-base-200">
-                <td colSpan={3}>Total {label}</td>
-                <td className="text-right">{total?.toLocaleString()} Ar</td>
+              <tr className="font-semibold bg-gray-50">
+                <td className="py-2 pr-2 text-gray-900">Total {label}</td>
+                <td colSpan={2}></td>
+                <td className="py-2 pl-2 text-right text-blue-600">{formatAr(totalValue)}</td>
               </tr>
             </tbody>
           </table>
@@ -136,8 +176,6 @@ const BonusDetail = () => {
       </div>
     );
   };
-
-  const formatAr = (n) => (n ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
 
   if (loading) {
     return (
@@ -149,7 +187,7 @@ const BonusDetail = () => {
 
   if (!bonus) {
     return (
-      <div className="container mx-auto px-4 py-8 text-center">
+      <div className="page-container text-center">
         <h1 className="text-2xl font-bold mb-4">Prime introuvable</h1>
         <Link to="/bonuses" className="btn btn-primary">Retour à la liste</Link>
       </div>
@@ -157,316 +195,278 @@ const BonusDetail = () => {
   }
 
   const step = getValidStep(bonus.status);
+  const TypeIcon = typeIcons[bonus.bonus_type] || ClipboardIcon
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="flex items-center gap-4 mb-6">
-        <Link to="/bonuses" className="btn btn-ghost btn-sm"><ArrowLeftIcon className="w-4 h-4" /> Retour</Link>
-        <h1 className="text-2xl font-bold">Détail de la prime</h1>
-        <span className={`badge badge-lg ${getBadgeClass(bonus.status)}`}>{bonus.status}</span>
-      </div>
-
-      <div className="grid gap-6">
-        <div className="card bg-base-100 shadow">
-          <div className="card-body">
-            <h2 className="card-title text-lg mb-4">Informations générales</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-base-content/60">Employé</p>
-                <p className="font-medium">{bonus.employee?.name || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-base-content/60">Département</p>
-                <p className="font-medium">{bonus.employee?.department || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-base-content/60">Type de prime</p>
-                <p className="badge badge-ghost">{bonus.bonus_type}</p>
-              </div>
-              <div>
-                <p className="text-sm text-base-content/60">Période</p>
-                <p className="font-medium">{formatDate(bonus.start_date)} → {formatDate(bonus.end_date)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-base-content/60">Montant total</p>
-                <p className="text-xl font-bold text-blue-600">{bonus.total_amount} Ar</p>
-              </div>
-              <div>
-                <p className="text-sm text-base-content/60">Créé le</p>
-                <p className="font-medium">{formatDate(bonus.created_at)}</p>
-              </div>
-            </div>
+    <div className="page-container max-w-4xl">
+      <div className="flex items-center gap-3 mb-6">
+        <Link to="/bonuses" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></Link>
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <TypeIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Prime {typeIcons[bonus.bonus_type] ? ['Mensuelle', 'd\'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(bonus.bonus_type)] : bonus.bonus_type}</h1>
+            <p className="text-xs text-gray-400">{bonus.employee?.name || 'N/A'}</p>
           </div>
         </div>
+        <span className={`ml-auto text-xs font-medium px-2.5 py-1 rounded-full ${getBadgeClass(bonus.status)}`}>
+          {bonus.status}
+        </span>
+      </div>
 
-        {bonus.bonus_type === 'mensuel' && (
-          <div className="card bg-base-100 shadow">
-            <div className="card-body">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="card-title text-lg">Évaluation mensuelle</h2>
-                <span className="text-sm text-base-content/60">
-                  Prime max : {formatAr(bonus.details?.prime_max || bonus.total_amount)} Ar
-                </span>
-              </div>
-
-              {bonus.details ? (
-                <>
-                  <EvaluationTable
-                    label="Quantitatif"
-                    items={bonus.details.quantitative}
-                    budget={bonus.details.budgets?.quanti}
-                    total={bonus.details.total_quantitative}
-                    color="progress-primary"
-                  />
-                  <EvaluationTable
-                    label="Qualitatif"
-                    items={bonus.details.qualitative}
-                    budget={bonus.details.budgets?.quali}
-                    total={bonus.details.total_qualitative}
-                    color="progress-secondary"
-                  />
-
-                  <div className="border-t pt-4 mt-4">
-                    <div className="flex items-center justify-between text-sm text-base-content/60 mb-1">
-                      <span>Budget quantitatif utilisé</span>
-                      <span>{formatAr(bonus.details.total_quantitative)} / {formatAr(bonus.details.budgets?.quanti)} Ar</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-base-content/60 mb-3">
-                      <span>Budget qualitatif utilisé</span>
-                      <span>{formatAr(bonus.details.total_qualitative)} / {formatAr(bonus.details.budgets?.quali)} Ar</span>
-                    </div>
-                    <div className="flex items-center justify-between text-lg font-bold text-blue-600 border-t pt-3">
-                      <span>Total général</span>
-                      <span>{formatAr(bonus.total_amount)} / {formatAr(bonus.details.prime_max)} Ar</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center text-base-content/60 py-4">
-                  Détails non disponibles pour cette prime
-                  <div className="grid grid-cols-3 gap-4 mt-4">
-                    <div className="stat bg-base-200 rounded-box p-4">
-                      <div className="stat-title">Score performance</div>
-                      <div className="stat-value text-lg">{bonus.performance_score ?? '—'}</div>
-                    </div>
-                    <div className="stat bg-base-200 rounded-box p-4">
-                      <div className="stat-title">Absences</div>
-                      <div className="stat-value text-lg">{bonus.absences ?? 0}</div>
-                    </div>
-                    <div className="stat bg-base-200 rounded-box p-4">
-                      <div className="stat-title">Retards</div>
-                      <div className="stat-value text-lg">{bonus.retard ?? 0}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+      <div className="space-y-5">
+        <Section title="Informations générales">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+            <InfoRow label="Employé" value={bonus.employee?.name || 'N/A'} />
+            <InfoRow label="Département" value={bonus.employee?.department || 'N/A'} />
+            <InfoRow label="Matricule" value={bonus.employee?.matricule || 'N/A'} />
+            <InfoRow label="Type de prime" value={
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                <span className={`w-1.5 h-1.5 rounded-full bg-${typeColors[bonus.bonus_type] || 'blue'}-500`} />
+                {typeIcons[bonus.bonus_type] ? ['Mensuelle', 'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(bonus.bonus_type)] : bonus.bonus_type}
+              </span>
+            } />
+            <InfoRow label="Période" value={`${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}`} />
+            <InfoRow label="Créé le" value={formatDate(bonus.created_at)} />
           </div>
+        </Section>
+
+        <Section title="Montant" icon={ClipboardIcon}>
+          <div className="flex items-center gap-4">
+            <div className="flex-1 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+              <p className="text-xs text-blue-600 font-medium mb-1">Montant total</p>
+              <p className="text-2xl font-bold text-blue-700">{bonus.total_amount} Ar</p>
+            </div>
+            {bonus.bonus_type === 'mensuel' && bonus.details?.prime_max && (
+              <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-200">
+                <p className="text-xs text-gray-500 font-medium mb-1">Prime maximum</p>
+                <p className="text-2xl font-bold text-gray-700">{formatAr(bonus.details.prime_max)} Ar</p>
+              </div>
+            )}
+            {bonus.performance_score && (
+              <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-200">
+                <p className="text-xs text-gray-500 font-medium mb-1">Score</p>
+                <p className="text-2xl font-bold text-gray-700">{bonus.performance_score}%</p>
+              </div>
+            )}
+          </div>
+        </Section>
+
+        {bonus.bonus_type === 'mensuel' && bonus.details && (
+          <Section title="Évaluation mensuelle" icon={ChartIcon}>
+            <div className="space-y-6">
+              <EvaluationTable
+                label="Quantitatif"
+                items={bonus.details.quantitative}
+                totalEval={bonus.details.quantitative?.reduce((s, i) => s + (i.evaluation || 0), 0)}
+                totalValue={bonus.details.total_quantitative || 0}
+                primeMax={bonus.details.prime_max || bonus.total_amount}
+                color="bg-blue-500"
+              />
+              <div className="border-t border-gray-100" />
+              <EvaluationTable
+                label="Qualitatif"
+                items={bonus.details.qualitative}
+                totalEval={bonus.details.qualitative?.reduce((s, i) => s + (i.evaluation || 0), 0)}
+                totalValue={bonus.details.total_qualitative || 0}
+                primeMax={bonus.details.prime_max || bonus.total_amount}
+                color="bg-violet-500"
+              />
+              <div className="border-t-2 border-blue-200 pt-4 mt-4">
+                <div className="flex items-center justify-between text-lg font-bold text-blue-700">
+                  <span>Total général</span>
+                  <span>{formatAr(bonus.total_amount)} / {formatAr(bonus.details.prime_max || bonus.total_amount)} Ar</span>
+                </div>
+              </div>
+            </div>
+          </Section>
         )}
 
-        {bonus.bonus_type === 'astreinte' && (
-          <div className="card bg-base-100 shadow">
-            <div className="card-body">
-              <h2 className="card-title text-lg mb-4">Détails astreinte</h2>
-
-              {bonus.details ? (
-                <>
-                  <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-base-200 rounded-box">
-                    <div>
-                      <p className="text-sm text-base-content/60">Nombre de semaines</p>
-                      <p className="font-semibold">{bonus.details.weeks || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-base-content/60">Prime max / semaine</p>
-                      <p className="font-semibold">{formatAr(bonus.details.weekly_max)} Ar</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-base-content/60">Taux par intervention</p>
-                      <p className="font-semibold">{formatAr(bonus.details.intervention_rate)} Ar</p>
-                    </div>
-                  </div>
-
-                  {bonus.details.disponibilites?.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="font-semibold text-sm mb-2">Disponibilité</h4>
-                      <table className="table table-sm">
-                        <thead>
-                          <tr><th>Employé</th><th>Nombre</th><th className="text-right">Montant (Ar)</th></tr>
-                        </thead>
-                        <tbody>
-                          {bonus.details.disponibilites.map((d, i) => (
-                            <tr key={i}>
-                              <td>{d.employee_name || `#${d.employee_id}`}</td>
-                              <td>{d.nombre}</td>
-                              <td className="text-right font-medium">{formatAr(parseInt(d.nombre) * (bonus.details.weekly_max || 0))}</td>
-                            </tr>
-                          ))}
-                          <tr className="font-semibold bg-base-200">
-                            <td colSpan={2}>Total Disponibilité</td>
-                            <td className="text-right">{formatAr(bonus.details.total_dispo)} Ar</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {bonus.details.interventions?.length > 0 && (
-                    <div className="mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-sm">Interventions</h4>
-                        <span className="text-xs text-base-content/60">Taux : {formatAr(bonus.details.intervention_rate)} Ar / intervention</span>
-                      </div>
-                      <table className="table table-sm">
-                        <thead>
-                          <tr><th>Employé</th><th>Date</th><th>Heure</th><th>Motif</th><th>Ticket</th><th className="text-right">Montant (Ar)</th></tr>
-                        </thead>
-                        <tbody>
-                          {bonus.details.interventions.map((iv, i) => (
-                            <tr key={i}>
-                              <td>{iv.employee_name || `#${iv.employee_id}`}</td>
-                              <td>{iv.date || '—'}</td>
-                              <td>{iv.heure || '—'}</td>
-                              <td className="text-sm text-base-content/60">{iv.motif || '—'}</td>
-                              <td className="text-sm">{iv.ticket || '—'}</td>
-                              <td className="text-right font-medium">{formatAr(bonus.details.intervention_rate)}</td>
-                            </tr>
-                          ))}
-                          <tr className="font-semibold bg-base-200">
-                            <td colSpan={5}>Total Interventions</td>
-                            <td className="text-right">{formatAr(bonus.details.total_interv)} Ar</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  <div className="border-t pt-4 mt-4">
-                    <h4 className="font-semibold text-sm mb-3">Récapitulatif</h4>
-                    <div className="flex items-center justify-between text-sm text-base-content/60 mb-1">
-                      <span>Prime exceptionnelle</span>
-                      <span>{formatAr(bonus.details.exceptionnelle || 0)} Ar</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-base-content/60 mb-3">
-                      <span>Prime ponctuelle</span>
-                      <span>{formatAr(bonus.details.ponctuelle || 0)} Ar</span>
-                    </div>
-                    <div className="flex items-center justify-between text-lg font-bold text-blue-600 border-t pt-3">
-                      <span>Total Général</span>
-                      <span>{formatAr(bonus.total_amount)} Ar</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="stat bg-base-200 rounded-box p-4">
-                    <div className="stat-title">Jours d'astreinte</div>
-                    <div className="stat-value text-lg">{bonus.nb_jours_astreinte ?? 0}</div>
-                  </div>
-                  <div className="stat bg-base-200 rounded-box p-4">
-                    <div className="stat-title">Taux journalier</div>
-                    <div className="stat-value text-lg">{bonus.taux_jour ?? '—'} Ar</div>
-                  </div>
-                  <div className="stat bg-base-200 rounded-box p-4">
-                    <div className="stat-title">Montant astreinte</div>
-                    <div className="stat-value text-lg">{bonus.prime_astreinte_amount ?? '—'} Ar</div>
-                  </div>
-                </div>
-              )}
+        {bonus.bonus_type === 'astreinte' && bonus.details && (
+          <Section title="Détails astreinte" icon={MoonIcon}>
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Semaines</p>
+                <p className="font-semibold text-gray-900">{bonus.details.weeks || '—'}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Prime max / semaine</p>
+                <p className="font-semibold text-gray-900">{formatAr(bonus.details.weekly_max)} Ar</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Taux / intervention</p>
+                <p className="font-semibold text-gray-900">{formatAr(bonus.details.intervention_rate)} Ar</p>
+              </div>
             </div>
-          </div>
-        )}
 
-        {bonus.bonus_type === 'commission' && (
-          <div className="card bg-base-100 shadow">
-            <div className="card-body">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="card-title text-lg">Détails commission</h2>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="stat bg-base-200 rounded-box p-4">
-                  <div className="stat-title">Commission par vente</div>
-                  <div className="stat-value text-lg">{formatAr(bonus.taux_commission ?? bonus.details?.rate ?? 0)} Ar</div>
-                </div>
-                <div className="stat bg-base-200 rounded-box p-4">
-                  <div className="stat-title">Total commission</div>
-                  <div className="stat-value text-lg text-blue-600">{formatAr(bonus.total_amount)} Ar</div>
-                </div>
-              </div>
-
-              {bonus.details?.sales && bonus.details.sales.length > 0 ? (
+            {bonus.details.disponibilites?.length > 0 && (
+              <div className="mb-6">
+                <h4 className="font-semibold text-sm text-gray-700 mb-2">Disponibilité</h4>
                 <div className="overflow-x-auto">
-                  <table className="table table-sm">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr>
-                        <th>Désignation</th>
-                        <th>Nombre</th>
-                        <th>Description</th>
-                        <th className="text-right">Montant (Ar)</th>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-2 font-medium text-gray-400 text-xs">Employé</th>
+                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Nombre</th>
+                        <th className="text-right py-2 font-medium text-gray-400 text-xs">Montant (Ar)</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {bonus.details.sales.map((sale, i) => {
-                        const montant = (parseFloat(sale.nombre) || 0) * (bonus.details.rate || 0);
-                        return (
-                          <tr key={i}>
-                            <td>{sale.designation || '—'}</td>
-                            <td>{sale.nombre ?? 0}</td>
-                            <td className="text-base-content/60 text-sm">{sale.description || '—'}</td>
-                            <td className="text-right font-medium">{formatAr(montant)}</td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="font-semibold bg-base-200">
-                        <td colSpan={3}>Total commission</td>
-                        <td className="text-right">{formatAr(bonus.total_amount)} Ar</td>
+                      {bonus.details.disponibilites.map((d, i) => (
+                        <tr key={i} className="border-b border-gray-50">
+                          <td className="py-1.5 text-gray-900">{d.employee_name || `#${d.employee_id}`}</td>
+                          <td className="py-1.5 text-center">{d.nombre}</td>
+                          <td className="py-1.5 text-right font-medium">{formatAr(parseInt(d.nombre) * (bonus.details.weekly_max || 0))}</td>
+                        </tr>
+                      ))}
+                      <tr className="font-semibold bg-gray-50">
+                        <td colSpan={2} className="py-1.5 text-gray-900">Total Disponibilité</td>
+                        <td className="py-1.5 text-right text-violet-600">{formatAr(bonus.details.total_dispo)} Ar</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <div className="text-center text-base-content/60 py-4">
-                  {bonus.ca_realise ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="stat bg-base-200 rounded-box p-4">
-                        <div className="stat-title">CA réalisé</div>
-                        <div className="stat-value text-lg">{formatAr(bonus.ca_realise)} Ar</div>
-                      </div>
-                      <div className="stat bg-base-200 rounded-box p-4">
-                        <div className="stat-title">CA objectif</div>
-                        <div className="stat-value text-lg">{formatAr(bonus.ca_objectif ?? 0)} Ar</div>
-                      </div>
-                    </div>
-                  ) : (
-                    'Détails non disponibles pour cette prime'
-                  )}
+              </div>
+            )}
+
+            {bonus.details.interventions?.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-sm text-gray-700">Interventions</h4>
                 </div>
-              )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-2 font-medium text-gray-400 text-xs">Employé</th>
+                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Date</th>
+                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Heure</th>
+                        <th className="text-left py-2 font-medium text-gray-400 text-xs">Motif</th>
+                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Ticket</th>
+                        <th className="text-right py-2 font-medium text-gray-400 text-xs">Montant (Ar)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bonus.details.interventions.map((iv, i) => (
+                        <tr key={i} className="border-b border-gray-50">
+                          <td className="py-1.5 text-gray-900">{iv.employee_name || `#${iv.employee_id}`}</td>
+                          <td className="py-1.5 text-center text-gray-500 text-xs">{iv.date || '—'}</td>
+                          <td className="py-1.5 text-center text-gray-500 text-xs">{iv.heure || '—'}</td>
+                          <td className="py-1.5 text-gray-500 text-xs">{iv.motif || '—'}</td>
+                          <td className="py-1.5 text-center text-xs">{iv.ticket || '—'}</td>
+                          <td className="py-1.5 text-right font-medium">{formatAr(bonus.details.intervention_rate)}</td>
+                        </tr>
+                      ))}
+                      <tr className="font-semibold bg-gray-50">
+                        <td colSpan={5} className="py-1.5 text-gray-900">Total Interventions</td>
+                        <td className="py-1.5 text-right text-violet-600">{formatAr(bonus.details.total_interv)} Ar</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-gray-200 pt-4 mt-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Prime exceptionnelle</span>
+                <span className="font-medium text-gray-900">{formatAr(bonus.details.exceptionnelle || 0)} Ar</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Prime ponctuelle</span>
+                <span className="font-medium text-gray-900">{formatAr(bonus.details.ponctuelle || 0)} Ar</span>
+              </div>
+              <div className="flex items-center justify-between text-lg font-bold text-violet-700 border-t border-gray-200 pt-3 mt-3">
+                <span>Total Général</span>
+                <span>{formatAr(bonus.total_amount)} Ar</span>
+              </div>
             </div>
-          </div>
+          </Section>
         )}
 
-        <div className="card bg-base-100 shadow">
-          <div className="card-body">
-            <h2 className="card-title text-lg mb-4">Historique des validations</h2>
-            <Timeline items={validations} />
-          </div>
-        </div>
+        {bonus.bonus_type === 'commission' && (
+          <Section title="Détails commission" icon={ChartIcon}>
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Commission par vente</p>
+                <p className="font-semibold text-gray-900">{formatAr(bonus.taux_commission ?? bonus.details?.rate ?? 0)} Ar</p>
+              </div>
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                <p className="text-xs text-emerald-600 font-medium">Total commission</p>
+                <p className="font-semibold text-emerald-700">{formatAr(bonus.total_amount)} Ar</p>
+              </div>
+            </div>
+
+            {bonus.details?.sales && bonus.details.sales.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-2 font-medium text-gray-400 text-xs">Désignation</th>
+                      <th className="text-center py-2 font-medium text-gray-400 text-xs">Nombre</th>
+                      <th className="text-left py-2 font-medium text-gray-400 text-xs">Description</th>
+                      <th className="text-right py-2 font-medium text-gray-400 text-xs">Montant (Ar)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bonus.details.sales.map((sale, i) => {
+                      const montant = (parseFloat(sale.nombre) || 0) * (bonus.details.rate || 0);
+                      return (
+                        <tr key={i} className="border-b border-gray-50">
+                          <td className="py-1.5 text-gray-900">{sale.designation || '—'}</td>
+                          <td className="py-1.5 text-center">{sale.nombre ?? 0}</td>
+                          <td className="py-1.5 text-gray-500 text-xs">{sale.description || '—'}</td>
+                          <td className="py-1.5 text-right font-medium">{formatAr(montant)}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="font-semibold bg-gray-50">
+                      <td colSpan={3} className="py-1.5 text-gray-900">Total commission</td>
+                      <td className="py-1.5 text-right text-emerald-600">{formatAr(bonus.total_amount)} Ar</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 py-4 text-sm">
+                {bonus.ca_realise ? (
+                  <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                      <p className="text-xs text-gray-400">CA réalisé</p>
+                      <p className="font-semibold text-gray-900">{formatAr(bonus.ca_realise)} Ar</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                      <p className="text-xs text-gray-400">CA objectif</p>
+                      <p className="font-semibold text-gray-900">{formatAr(bonus.ca_objectif ?? 0)} Ar</p>
+                    </div>
+                  </div>
+                ) : (
+                  'Détails non disponibles'
+                )}
+              </div>
+            )}
+          </Section>
+        )}
+
+        <Section title="Historique des validations" icon={EyeIcon}>
+          <Timeline items={validations} />
+        </Section>
 
         {step && (
-          <div className="flex gap-3 justify-end">
+          <div className="flex gap-3 justify-end pt-2">
             {bonus.was_rejected ? (
-              <Link to={`/bonuses/edit/${bonus.id}`} className="btn btn-warning btn-lg">
-                <EditIcon className="w-5 h-5" /> Modifier
+              <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
+                <EditIcon className="w-4 h-4" /> Modifier
               </Link>
             ) : (
-              <button className="btn btn-success btn-lg" onClick={() => handleValidate(step)}>
-                <CheckIcon className="w-5 h-5" /> Valider
+              <button className="btn bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleValidate(step)}>
+                <CheckIcon className="w-4 h-4" /> Valider
               </button>
             )}
             {user?.is_dg && (
-              <button className="btn btn-error btn-lg" onClick={() => setShowRejectModal(true)}>
-                <XCircleIcon className="w-5 h-5" /> Rejeter
+              <button className="btn bg-red-500 hover:bg-red-600 text-white border-0" onClick={() => setShowRejectModal(true)}>
+                <XCircleIcon className="w-4 h-4" /> Rejeter
               </button>
             )}
           </div>
@@ -474,7 +474,7 @@ const BonusDetail = () => {
       </div>
 
       <Modal open={showRejectModal} onClose={() => setShowRejectModal(false)} title="Rejeter la prime" size="md">
-        <p className="text-sm text-base-content/60 mb-4">
+        <p className="text-sm text-gray-500 mb-4">
           La prime sera remise au statut <strong>Initialisé</strong> et le validateur N+1 pourra la modifier.
         </p>
         <textarea
@@ -487,7 +487,7 @@ const BonusDetail = () => {
           <button className="btn btn-ghost" onClick={() => { setShowRejectModal(false); setMotifRejet(''); }}>
             Annuler
           </button>
-          <button className="btn btn-error" onClick={handleReject} disabled={!motifRejet.trim()}>
+          <button className="btn bg-red-500 hover:bg-red-600 text-white border-0" onClick={handleReject} disabled={!motifRejet.trim()}>
             Confirmer le rejet
           </button>
         </div>

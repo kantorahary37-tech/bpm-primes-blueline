@@ -2,7 +2,19 @@ import { useEffect, useState, useMemo } from 'react';
 import { getBonuses, validateBonus } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { EyeIcon, CheckIcon, EditIcon, DownloadIcon } from '../components/Icons';
+import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon } from '../components/Icons';
+
+const typeIcons = {
+  mensuel: CalendarIcon,
+  astreinte: MoonIcon,
+  commission: ChartIcon,
+}
+
+const typeLabels = {
+  mensuel: 'Mensuelle',
+  astreinte: 'Astreinte',
+  commission: 'Commission',
+}
 
 const BonusesList = () => {
   const { user } = useAuth();
@@ -50,9 +62,9 @@ const BonusesList = () => {
   };
 
   const getBadgeClass = (status) => {
-    if (status === 'Prime validée' || status === 'Validé') return 'badge-success';
-    if (status === 'Prime rejetée' || status === 'Rejeté') return 'badge-error';
-    return 'badge-warning';
+    if (status === 'Prime validée' || status === 'Validé') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'Prime rejetée' || status === 'Rejeté') return 'bg-red-100 text-red-700';
+    return 'bg-amber-100 text-amber-700';
   };
 
   const sections = useMemo(() => {
@@ -119,95 +131,77 @@ const BonusesList = () => {
         if (items.length === 0 && section.key !== 'myValidation') return null;
 
         return (
-          <div
-            key={section.key}
-            className={`card mb-6 ${section.highlight ? 'bg-blue-50 border-2 border-blue-400 shadow-lg' : 'bg-white shadow-sm border border-gray-200'}`}
-          >
-            <div className="card-body p-0">
-              <div className={`flex items-center gap-2 px-6 py-4 border-b ${section.highlight ? 'border-blue-300' : 'border-gray-100'}`}>
-                <h2 className={`card-title text-lg ${section.highlight ? 'text-blue-800' : 'text-gray-900'}`}>{section.title}</h2>
-                <span className={`badge ${section.highlight ? 'bg-blue-600 text-white border-0' : 'badge-ghost'} ml-auto`}>
-                  {items.length}
-                </span>
-              </div>
-
-              {items.length === 0 ? (
-                <div className="p-6 text-center text-gray-400">
-                  Aucune prime à valider
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="table table-zebra">
-                    <thead>
-                      <tr>
-                        <th>Employé</th>
-                        <th>Période</th>
-                        <th>Type</th>
-                        <th>Montant</th>
-                        <th>Statut</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((bonus) => (
-                        <tr key={bonus.id}>
-                          <td className="font-medium text-gray-900">{bonus.employee?.name || 'N/A'}</td>
-                          <td className="text-sm text-gray-500">
-                            {bonus.start_date && bonus.end_date
-                              ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}`
-                              : 'N/A'}
-                          </td>
-                          <td>
-                            <span className="badge badge-ghost">{bonus.bonus_type}</span>
-                          </td>
-                          <td className="font-medium text-gray-900">{bonus.total_amount} Ar</td>
-                          <td>
-                            <span className={`badge ${getBadgeClass(bonus.status)}`}>
-                              {bonus.status}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="flex gap-2">
-                              <Link
-                                to={`/bonuses/${bonus.id}`}
-                                className="btn btn-sm btn-ghost"
-                                title="Voir le détail"
-                              >
-                                <EyeIcon className="w-4 h-4" />
-                              </Link>
-                              {(() => {
-                                const step = getValidStep(bonus);
-                                if (!step) return null;
-                                if (bonus.was_rejected) {
-                                  return (
-                                    <Link
-                                      to={`/bonuses/edit/${bonus.id}`}
-                                      className="btn btn-sm btn-warning"
-                                    >
-                                      <EditIcon className="w-4 h-4" />
-                                      Modifier
-                                    </Link>
-                                  );
-                                }
-                                return (
-                                  <button
-                                    className="btn btn-sm btn-success"
-                                    onClick={() => handleValidate(bonus.id, step)}
-                                  >
-                                    <CheckIcon className="w-4 h-4" />
-                                    Valider
-                                  </button>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          <div key={section.key} className="mb-6">
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl ${section.highlight ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+              <h2 className="font-semibold">{section.title}</h2>
+              <span className={`ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full ${section.highlight ? 'bg-white text-blue-700' : 'bg-gray-300 text-gray-700'}`}>
+                {items.length}
+              </span>
             </div>
+
+            {items.length === 0 ? (
+              <div className="p-6 text-center text-gray-400 bg-white rounded-b-xl border border-t-0 border-gray-200">
+                Aucune prime à valider
+              </div>
+            ) : (
+              <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {items.map((bonus) => {
+                    const Icon = typeIcons[bonus.bonus_type] || CalendarIcon
+                    const step = getValidStep(bonus)
+                    return (
+                      <Link
+                        key={bonus.id}
+                        to={`/bonuses/${bonus.id}`}
+                        className="block p-4 rounded-xl border border-gray-200 bg-white hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all group"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</span>
+                          </div>
+                          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${getBadgeClass(bonus.status)}`}>
+                            {bonus.status}
+                          </span>
+                        </div>
+
+                        <p className="font-semibold text-gray-900 mb-1">{bonus.employee?.name || 'N/A'}</p>
+                        <p className="text-xs text-gray-400 mb-3">
+                          {bonus.start_date && bonus.end_date
+                            ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}`
+                            : 'Période non définie'}
+                        </p>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <span className="text-sm font-bold text-blue-600">{bonus.total_amount} Ar</span>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                            <Link to={`/bonuses/${bonus.id}`} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Voir le détail">
+                              <EyeIcon className="w-4 h-4" />
+                            </Link>
+                            {step && !bonus.was_rejected && (
+                              <button
+                                className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600"
+                                onClick={() => handleValidate(bonus.id, step)}
+                                title="Valider"
+                              >
+                                <CheckIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                            {step && bonus.was_rejected && (
+                              <Link to={`/bonuses/edit/${bonus.id}`} className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600" title="Modifier">
+                                <EditIcon className="w-4 h-4" />
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
