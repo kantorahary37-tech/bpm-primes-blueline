@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getBonuses, validateBonus } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { EyeIcon, CheckIcon, EditIcon, DownloadIcon } from '../components/Icons';
 
 const BonusesList = () => {
   const { user } = useAuth();
@@ -63,11 +64,11 @@ const BonusesList = () => {
     if (user.is_dg) myStatuses.push('En attente DG');
 
     const base = [
-      { key: 'myValidation', title: 'À valider par vous', icon: '🫵', highlight: true, filter: (b) => myStatuses.includes(b.status) },
-      { key: 'pendingDirector', title: 'En attente Directeur', icon: '⏳', highlight: false, filter: (b) => b.status === 'En attente Directeur' },
-      { key: 'pendingDG', title: 'En attente DG', icon: '⏳', highlight: false, filter: (b) => b.status === 'En attente DG' },
-      { key: 'initialised', title: 'Initialisées', icon: '📋', highlight: false, filter: (b) => b.status === 'Initialisé' || b.status === 'En attente N+1' },
-      { key: 'validated', title: 'Validées', icon: '✅', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
+      { key: 'myValidation', title: 'À valider par vous', highlight: true, filter: (b) => myStatuses.includes(b.status) },
+      { key: 'initialised', title: 'Initialisées', highlight: false, filter: (b) => b.status === 'Initialisé' || b.status === 'En attente N+1' },
+      { key: 'pendingDirector', title: 'En attente Directeur', highlight: false, filter: (b) => b.status === 'En attente Directeur' },
+      { key: 'pendingDG', title: 'En attente DG', highlight: false, filter: (b) => b.status === 'En attente DG' },
+      { key: 'validated', title: 'Validées', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
     ];
 
     const order = [];
@@ -96,17 +97,18 @@ const BonusesList = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Primes</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
-          <Link to="/bonuses/new" className="btn btn-primary">Nouvelle Prime</Link>
+          <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
           <a
             href="/api/v1/bonuses/export/sage"
             className="btn btn-outline btn-success"
             target="_blank"
             rel="noopener noreferrer"
           >
+            <DownloadIcon className="w-4 h-4" />
             Export SAGE
           </a>
         </div>
@@ -119,19 +121,18 @@ const BonusesList = () => {
         return (
           <div
             key={section.key}
-            className={`card mb-6 ${section.highlight ? 'bg-teal-50 border-2 border-teal-400 shadow-lg' : 'bg-base-100 shadow'}`}
+            className={`card mb-6 ${section.highlight ? 'bg-blue-50 border-2 border-blue-400 shadow-lg' : 'bg-white shadow-sm border border-gray-200'}`}
           >
-            <div className={`card-body p-0 ${section.highlight ? '' : ''}`}>
-              <div className={`flex items-center gap-2 px-6 py-4 border-b ${section.highlight ? 'border-teal-300' : 'border-base-200'}`}>
-                <span className="text-xl">{section.icon}</span>
-                <h2 className="card-title text-lg">{section.title}</h2>
-                <span className={`badge ${section.highlight ? 'badge-accent' : 'badge-ghost'} ml-auto`}>
+            <div className="card-body p-0">
+              <div className={`flex items-center gap-2 px-6 py-4 border-b ${section.highlight ? 'border-blue-300' : 'border-gray-100'}`}>
+                <h2 className={`card-title text-lg ${section.highlight ? 'text-blue-800' : 'text-gray-900'}`}>{section.title}</h2>
+                <span className={`badge ${section.highlight ? 'bg-blue-600 text-white border-0' : 'badge-ghost'} ml-auto`}>
                   {items.length}
                 </span>
               </div>
 
               {items.length === 0 ? (
-                <div className="p-6 text-center text-base-content/60">
+                <div className="p-6 text-center text-gray-400">
                   Aucune prime à valider
                 </div>
               ) : (
@@ -150,8 +151,8 @@ const BonusesList = () => {
                     <tbody>
                       {items.map((bonus) => (
                         <tr key={bonus.id}>
-                          <td>{bonus.employee?.name || 'N/A'}</td>
-                          <td>
+                          <td className="font-medium text-gray-900">{bonus.employee?.name || 'N/A'}</td>
+                          <td className="text-sm text-gray-500">
                             {bonus.start_date && bonus.end_date
                               ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}`
                               : 'N/A'}
@@ -159,7 +160,7 @@ const BonusesList = () => {
                           <td>
                             <span className="badge badge-ghost">{bonus.bonus_type}</span>
                           </td>
-                          <td className="font-medium">{bonus.total_amount} Ar</td>
+                          <td className="font-medium text-gray-900">{bonus.total_amount} Ar</td>
                           <td>
                             <span className={`badge ${getBadgeClass(bonus.status)}`}>
                               {bonus.status}
@@ -172,7 +173,7 @@ const BonusesList = () => {
                                 className="btn btn-sm btn-ghost"
                                 title="Voir le détail"
                               >
-                                👁
+                                <EyeIcon className="w-4 h-4" />
                               </Link>
                               {(() => {
                                 const step = getValidStep(bonus);
@@ -183,7 +184,8 @@ const BonusesList = () => {
                                       to={`/bonuses/edit/${bonus.id}`}
                                       className="btn btn-sm btn-warning"
                                     >
-                                      ✏️ Modifier
+                                      <EditIcon className="w-4 h-4" />
+                                      Modifier
                                     </Link>
                                   );
                                 }
@@ -192,6 +194,7 @@ const BonusesList = () => {
                                     className="btn btn-sm btn-success"
                                     onClick={() => handleValidate(bonus.id, step)}
                                   >
+                                    <CheckIcon className="w-4 h-4" />
                                     Valider
                                   </button>
                                 );

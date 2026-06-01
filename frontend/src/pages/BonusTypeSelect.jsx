@@ -1,29 +1,47 @@
 import { useNavigate } from 'react-router-dom'
 
+const CalendarSvg = () => (
+  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+  </svg>
+)
+
+const MoonSvg = () => (
+  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+  </svg>
+)
+
+const ChartSvg = () => (
+  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+  </svg>
+)
+
 const types = [
   {
     id: 'mensuel',
     title: 'Prime Mensuelle',
     desc: 'Prime basée sur la performance mensuelle, absences et retards',
-    icon: '📅',
-    color: 'from-brand-500 to-brand-600',
-    bg: 'bg-brand-50 text-brand-600',
+    icon: CalendarSvg,
+    bg: 'bg-blue-50 text-blue-600',
+    border: 'hover:border-blue-400',
   },
   {
     id: 'astreinte',
     title: "Prime d'Astreinte",
-    desc: 'Prime pour les jours d\'astreinte avec taux journalier',
-    icon: '🌙',
-    color: 'from-violet-500 to-violet-600',
+    desc: "Prime pour les jours d'astreinte avec taux journalier",
+    icon: MoonSvg,
     bg: 'bg-violet-50 text-violet-600',
+    border: 'hover:border-violet-400',
   },
   {
     id: 'commission',
     title: 'Prime Commission',
     desc: 'Commission basée sur le CA réalisé vs objectif',
-    icon: '📈',
-    color: 'from-amber-500 to-amber-600',
+    icon: ChartSvg,
     bg: 'bg-amber-50 text-amber-600',
+    border: 'hover:border-amber-400',
   },
 ]
 
@@ -31,28 +49,29 @@ export default function BonusTypeSelect() {
   const navigate = useNavigate()
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Nouvelle prime</h1>
-          <p className="text-sm text-base-content/50 mt-1">Choisissez le type de prime à créer</p>
-        </div>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900">Nouvelle prime</h1>
+        <p className="text-sm text-gray-400 mt-1">Choisissez le type de prime à créer</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl">
-        {types.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => navigate(`/bonuses/new/${t.id}`)}
-            className="group card-blueline-hover p-8 text-left cursor-pointer"
-          >
-            <div className={`w-14 h-14 rounded-2xl ${t.bg} flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform`}>
-              {t.icon}
-            </div>
-            <h3 className="text-lg font-semibold text-base-content mb-2">{t.title}</h3>
-            <p className="text-sm text-base-content/50 leading-relaxed">{t.desc}</p>
-          </button>
-        ))}
+        {types.map((t) => {
+          const Icon = t.icon
+          return (
+            <button
+              key={t.id}
+              onClick={() => navigate(`/bonuses/new/${t.id}`)}
+              className={`group bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-left cursor-pointer transition-all duration-200 hover:shadow-md ${t.border}`}
+            >
+              <div className={`w-14 h-14 rounded-2xl ${t.bg} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform`}>
+                <Icon />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{t.title}</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">{t.desc}</p>
+            </button>
+          )
+        })}
       </div>
     </div>
   )

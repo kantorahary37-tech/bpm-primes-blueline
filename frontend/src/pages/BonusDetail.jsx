@@ -4,6 +4,7 @@ import { getBonus, getBonusValidations, validateBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
+import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon } from '../components/Icons';
 
 const BonusDetail = () => {
   const { id } = useParams();
@@ -160,7 +161,7 @@ const BonusDetail = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="flex items-center gap-4 mb-6">
-        <Link to="/bonuses" className="btn btn-ghost btn-sm">← Retour</Link>
+        <Link to="/bonuses" className="btn btn-ghost btn-sm"><ArrowLeftIcon className="w-4 h-4" /> Retour</Link>
         <h1 className="text-2xl font-bold">Détail de la prime</h1>
         <span className={`badge badge-lg ${getBadgeClass(bonus.status)}`}>{bonus.status}</span>
       </div>
@@ -188,7 +189,7 @@ const BonusDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-base-content/60">Montant total</p>
-                <p className="text-xl font-bold text-teal-600">{bonus.total_amount} Ar</p>
+                <p className="text-xl font-bold text-blue-600">{bonus.total_amount} Ar</p>
               </div>
               <div>
                 <p className="text-sm text-base-content/60">Créé le</p>
@@ -234,7 +235,7 @@ const BonusDetail = () => {
                       <span>Budget qualitatif utilisé</span>
                       <span>{formatAr(bonus.details.total_qualitative)} / {formatAr(bonus.details.budgets?.quali)} Ar</span>
                     </div>
-                    <div className="flex items-center justify-between text-lg font-bold text-teal-600 border-t pt-3">
+                    <div className="flex items-center justify-between text-lg font-bold text-blue-600 border-t pt-3">
                       <span>Total général</span>
                       <span>{formatAr(bonus.total_amount)} / {formatAr(bonus.details.prime_max)} Ar</span>
                     </div>
@@ -349,7 +350,7 @@ const BonusDetail = () => {
                       <span>Prime ponctuelle</span>
                       <span>{formatAr(bonus.details.ponctuelle || 0)} Ar</span>
                     </div>
-                    <div className="flex items-center justify-between text-lg font-bold text-teal-600 border-t pt-3">
+                    <div className="flex items-center justify-between text-lg font-bold text-blue-600 border-t pt-3">
                       <span>Total Général</span>
                       <span>{formatAr(bonus.total_amount)} Ar</span>
                     </div>
@@ -389,7 +390,7 @@ const BonusDetail = () => {
                 </div>
                 <div className="stat bg-base-200 rounded-box p-4">
                   <div className="stat-title">Total commission</div>
-                  <div className="stat-value text-lg text-teal-600">{formatAr(bonus.total_amount)} Ar</div>
+                  <div className="stat-value text-lg text-blue-600">{formatAr(bonus.total_amount)} Ar</div>
                 </div>
               </div>
 
@@ -456,16 +457,16 @@ const BonusDetail = () => {
           <div className="flex gap-3 justify-end">
             {bonus.was_rejected ? (
               <Link to={`/bonuses/edit/${bonus.id}`} className="btn btn-warning btn-lg">
-                ✏️ Modifier
+                <EditIcon className="w-5 h-5" /> Modifier
               </Link>
             ) : (
               <button className="btn btn-success btn-lg" onClick={() => handleValidate(step)}>
-                Valider
+                <CheckIcon className="w-5 h-5" /> Valider
               </button>
             )}
             {user?.is_dg && (
               <button className="btn btn-error btn-lg" onClick={() => setShowRejectModal(true)}>
-                Rejeter
+                <XCircleIcon className="w-5 h-5" /> Rejeter
               </button>
             )}
           </div>

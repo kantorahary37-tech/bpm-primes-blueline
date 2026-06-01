@@ -3,6 +3,7 @@ import { getBonuses, getEmployees } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import StatCard from '../components/StatCard';
+import { EyeIcon } from '../components/Icons';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -72,8 +73,8 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="page-container">
-      <h1 className="page-title mb-8">Dashboard</h1>
+    <div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard icon="📋" label="Total Primes" value={stats.total} sub={formatAmount(stats.totalAmount)} color="brand" />
@@ -88,16 +89,16 @@ const Dashboard = () => {
         <StatCard icon="📈" label="Commission" value={stats.byType.commission?.count || 0} sub={formatAmount(stats.byType.commission?.amount)} color="emerald" />
       </div>
 
-      <div className="card bg-teal-50 border-2 border-teal-400 shadow-lg mb-6">
+      <div className="card bg-blue-50 border-2 border-blue-400 shadow-lg mb-6">
         <div className="card-body p-0">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-teal-300">
-            <span className="text-xl">🫵</span>
-            <h2 className="card-title text-lg">À valider par vous</h2>
-            <span className="badge badge-accent ml-auto">{myPending.length}</span>
+          <div className="flex items-center gap-2 px-6 py-4 border-b border-blue-300">
+            <span className="text-xl text-blue-600">🫵</span>
+            <h2 className="card-title text-lg text-gray-900">À valider par vous</h2>
+            <span className="badge bg-blue-600 text-white border-0 ml-auto">{myPending.length}</span>
           </div>
 
           {myPending.length === 0 ? (
-            <div className="p-6 text-center text-base-content/60">
+            <div className="p-6 text-center text-gray-400">
               Aucune prime en attente de votre validation
             </div>
           ) : (
@@ -115,16 +116,18 @@ const Dashboard = () => {
                 <tbody>
                   {myPending.map((bonus) => (
                     <tr key={bonus.id}>
-                      <td className="font-medium">{bonus.employee?.name || 'N/A'}</td>
+                      <td className="font-medium text-gray-900">{bonus.employee?.name || 'N/A'}</td>
                       <td><span className="badge badge-ghost">{bonus.bonus_type}</span></td>
-                      <td className="text-sm text-base-content/60">
+                      <td className="text-sm text-gray-400">
                         {bonus.start_date && bonus.end_date
                           ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}`
                           : 'N/A'}
                       </td>
-                      <td className="font-medium">{bonus.total_amount} Ar</td>
+                      <td className="font-medium text-gray-900">{bonus.total_amount} Ar</td>
                       <td>
-                        <Link to={`/bonuses/${bonus.id}`} className="btn btn-sm btn-ghost" title="Voir le détail">👁</Link>
+                        <Link to={`/bonuses/${bonus.id}`} className="btn btn-sm btn-ghost" title="Voir le détail">
+                          <EyeIcon className="w-4 h-4" />
+                        </Link>
                       </td>
                     </tr>
                   ))}
@@ -136,7 +139,7 @@ const Dashboard = () => {
       </div>
 
       <div className="flex gap-4">
-        <Link to="/bonuses/new" className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">Nouvelle Prime</Link>
+        <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
         <Link to="/bonuses" className="btn btn-outline">Voir les Primes</Link>
       </div>
     </div>

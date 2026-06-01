@@ -427,16 +427,31 @@ export default function BonusForm() {
           {params.endDate < params.startDate && (
             <p className="text-red-500 text-sm mt-1">⚠️ La date de fin ne peut pas être avant la date de début.</p>
           )}
-          <div>
-            <label className="block text-sm font-medium text-base-content/70 mb-1">Prime maximum (Ar)</label>
-            <input type="number" value={params.maxPrime} onChange={(e) => {
-              const newMax = parseFloat(e.target.value) || 0
-              setParams({ ...params, maxPrime: newMax })
-              if (editType === 'mensuel' && budgets.quanti + budgets.quali > newMax) {
-                setBudgets(prev => ({ ...prev, quali: Math.max(0, newMax - prev.quanti) }))
-              }
-            }} className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
-          </div>
+          {editType === 'astreinte' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-base-content/70 mb-1">Prime max / semaine (Ar)</label>
+                <input type="number" value={astreinteConfig.weeklyMax} onChange={(e) => handleConfigChange('weeklyMax', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-base-content/70 mb-1">Nombre de semaines</label>
+                <input type="number" value={calcWeeks(params.startDate, params.endDate)} readOnly
+                  className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-base-content/70 mb-1">Prime maximum (Ar)</label>
+              <input type="number" value={params.maxPrime} onChange={(e) => {
+                const newMax = parseFloat(e.target.value) || 0
+                setParams({ ...params, maxPrime: newMax })
+                if (editType === 'mensuel' && budgets.quanti + budgets.quali > newMax) {
+                  setBudgets(prev => ({ ...prev, quali: Math.max(0, newMax - prev.quanti) }))
+                }
+              }} className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            </div>
+          )}
         </div>
       </div>
     </div>
