@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getBonuses, validateBonus } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon } from '../components/Icons';
+import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon, FilterIcon } from '../components/Icons';
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -20,6 +20,9 @@ const BonusesList = () => {
   const { user } = useAuth();
   const [bonuses, setBonuses] = useState([]);
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -92,13 +95,31 @@ const BonusesList = () => {
     return order.map((key) => map.get(key)).filter(Boolean);
   }, [user]);
 
+  const filteredBonuses = useMemo(() => {
+    return bonuses.filter((b) => {
+      if (typeFilter && b.bonus_type !== typeFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const name = b.employee?.name?.toLowerCase() || '';
+        const mat = b.employee?.matricule?.toLowerCase() || '';
+        if (!name.includes(q) && !mat.includes(q)) return false;
+      }
+      if (monthFilter) {
+        const start = b.start_date ? b.start_date.substring(0, 7) : '';
+        const end = b.end_date ? b.end_date.substring(0, 7) : '';
+        if (start !== monthFilter && end !== monthFilter) return false;
+      }
+      return true;
+    });
+  }, [bonuses, typeFilter, searchQuery, monthFilter]);
+
   const grouped = useMemo(() => {
     const result = {};
     for (const s of sections) {
-      result[s.key] = bonuses.filter(s.filter);
+      result[s.key] = filteredBonuses.filter(s.filter);
     }
     return result;
-  }, [bonuses, sections]);
+  }, [filteredBonuses, sections]);
 
   if (loading) {
     return (
@@ -124,6 +145,28 @@ const BonusesList = () => {
             Export SAGE
           </a>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-6 p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+        <FilterIcon className="w-4 h-4 text-gray-400 ml-1" />
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+          <option value="">Tous types</option>
+          <option value="mensuel">Mensuelle</option>
+          <option value="astreinte">Astreinte</option>
+          <option value="commission">Commission</option>
+        </select>
+        <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Rechercher un employé..."
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 w-48" />
+        <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+        {(typeFilter || searchQuery || monthFilter) && (
+          <button onClick={() => { setTypeFilter(''); setSearchQuery(''); setMonthFilter(''); }}
+            className="px-3 py-1.5 rounded-lg text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100">
+            Réinitialiser
+          </button>
+        )}
       </div>
 
       {sections.map((section) => {
