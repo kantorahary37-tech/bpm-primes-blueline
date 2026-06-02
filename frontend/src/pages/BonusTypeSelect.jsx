@@ -1,4 +1,11 @@
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+
+const BONUS_TYPE_DEPARTMENTS = {
+  mensuel: ['Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
+  astreinte: ['BBS', 'DO', 'DSI', 'DT'],
+  commission: ['Commercial GP', 'Commercial entreprise'],
+}
 
 const CalendarSvg = () => (
   <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -46,7 +53,13 @@ const types = [
 ]
 
 export default function BonusTypeSelect() {
+  const { user } = useAuth()
   const navigate = useNavigate()
+
+  const isTypeAllowed = (typeId) => {
+    const allowed = BONUS_TYPE_DEPARTMENTS[typeId]
+    return allowed && user?.department ? allowed.includes(user.department) : true
+  }
 
   return (
     <div>
@@ -58,17 +71,26 @@ export default function BonusTypeSelect() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl">
         {types.map((t) => {
           const Icon = t.icon
+          const allowed = isTypeAllowed(t.id)
           return (
             <button
               key={t.id}
-              onClick={() => navigate(`/bonuses/new/${t.id}`)}
-              className={`group bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-left cursor-pointer transition-all duration-200 hover:shadow-md ${t.border}`}
+              onClick={() => allowed && navigate(`/bonuses/new/${t.id}`)}
+              disabled={!allowed}
+              className={`group bg-white rounded-xl shadow-sm border p-8 text-left transition-all duration-200
+                ${allowed
+                  ? `border-gray-200 cursor-pointer hover:shadow-md ${t.border}`
+                  : 'border-gray-100 cursor-not-allowed opacity-50'
+                }`}
             >
               <div className={`w-14 h-14 rounded-2xl ${t.bg} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform`}>
                 <Icon />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">{t.title}</h3>
               <p className="text-sm text-gray-400 leading-relaxed">{t.desc}</p>
+              {!allowed && (
+                <span className="inline-block mt-2 text-xs text-red-400">Non disponible pour votre département</span>
+              )}
             </button>
           )
         })}

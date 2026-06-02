@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 
@@ -15,6 +15,12 @@ const DEFAULT_QUALI_CRITERIA = [
   'Initiative',
   "Travail d'équipe",
 ]
+
+const BONUS_TYPE_DEPARTMENTS = {
+  mensuel: ['Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
+  astreinte: ['BBS', 'DO', 'DSI', 'DT'],
+  commission: ['Commercial GP', 'Commercial entreprise'],
+}
 
 export default function BonusForm() {
   const { user: connectedUser } = useAuth()
@@ -110,6 +116,15 @@ export default function BonusForm() {
   useEffect(() => {
     getEmployees().then(setEmployees).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!selectedEmp || !editType) return
+    getPrimeMax(selectedEmp.department, editType).then(data => {
+      if (Array.isArray(data) && data.length > 0) {
+        setParams(p => ({ ...p, maxPrime: data[0].price }))
+      }
+    }).catch(() => {})
+  }, [selectedEmp?.id, editType])
 
   useEffect(() => {
     if (!isEditing || !id) return;
@@ -232,6 +247,15 @@ export default function BonusForm() {
       return
     }
 
+    const badDept = allEmpIds.some(id => {
+      const e = employees.find(x => x.id === id)
+      return e && !BONUS_TYPE_DEPARTMENTS.astreinte.includes(e.department)
+    })
+    if (badDept) {
+      setError('Seuls les départements BBS, DO, DSI, DT sont autorisés pour les primes d\'astreinte.')
+      setLoading(false); return
+    }
+
     try {
       await Promise.all(allEmpIds.map(employee_id => {
         const empDispos = disponibilites.filter(d => d.employee_id === employee_id)
@@ -299,6 +323,13 @@ export default function BonusForm() {
     e.preventDefault()
     setError('')
     setLoading(true)
+    if (selectedEmp) {
+      const allowed = BONUS_TYPE_DEPARTMENTS.commission
+      if (!allowed.includes(selectedEmp.department)) {
+        setError(`Le département "${selectedEmp.department}" n'est pas autorisé pour les commissions.`)
+        setLoading(false); return
+      }
+    }
     const amount = sales.reduce((s, row) => s + (parseFloat(row.nombre) || 0) * commissionConfig.rate, 0)
     try {
       await saveBonus({
@@ -332,19 +363,35 @@ export default function BonusForm() {
   const handleSelectEmployee = (e) => {
     const id = parseInt(e.target.value)
     const emp = employees.find((x) => x.id === id)
-    setSelectedEmp(emp)
-    setSimpleForm({ ...simpleForm, employee_id: id })
     if (emp) {
+      const allowed = BONUS_TYPE_DEPARTMENTS[editType]
+      if (allowed && !allowed.includes(emp.department)) {
+        setError(`Le département "${emp.department}" n'est pas autorisé pour les primes ${editType === 'mensuel' ? 'mensuelles' : editType === 'astreinte' ? "d'astreinte" : 'de commission'}.`)
+        setSelectedEmp(null)
+        setEmployee({ department: '', service: '', name: '', function: '', matricule: '' })
+        return
+      }
+      setError('')
       setEmployee({ department: emp.department || '', service: '', name: emp.name, function: '', matricule: emp.matricule })
     }
+    setSelectedEmp(emp)
+    setSimpleForm({ ...simpleForm, employee_id: id })
   }
 
   const handleSubmitMensuel = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const amount = Math.min(totalValue, params.maxPrime)
     const allEmpIds = [selectedEmp?.id, ...teamSelections].filter(Boolean)
+    const badDept = allEmpIds.some(id => {
+      const e = employees.find(x => x.id === id)
+      return e && !BONUS_TYPE_DEPARTMENTS.mensuel.includes(e.department)
+    })
+    if (badDept) {
+      setError('Un ou plusieurs employés sélectionnés ne sont pas autorisés pour les primes mensuelles.')
+      setLoading(false); return
+    }
+    const amount = Math.min(totalValue, params.maxPrime)
     try {
       await Promise.all(allEmpIds.map(employee_id =>
         saveBonus({
