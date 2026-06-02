@@ -1017,7 +1017,7 @@ export default function BonusForm() {
 
             <div className="text-right pt-2 border-t border-base-200">
               <p className="text-sm text-base-content/60">Total (quanti + quali)</p>
-              <p className={`text-2xl font-bold ${totalEvalPct !== 100 ? 'text-red-600' : 'text-brand-600'}`}>
+              <p className="text-2xl font-bold text-brand-600">
                 {totalEvalPct.toFixed(1)}% — {totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
               </p>
             </div>
@@ -1059,7 +1059,7 @@ export default function BonusForm() {
             </div>
             <div className="flex gap-3 justify-end">
               <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-              <button type="submit" disabled={loading || totalEvalPct !== 100} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+              <button type="submit" disabled={loading} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
                 {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
               </button>
             </div>
