@@ -3,6 +3,7 @@ import { getBonuses, validateBonus } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon, FilterIcon } from '../components/Icons';
+import Modal from '../components/Modal';
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -24,6 +25,13 @@ const BonusesList = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const [confirmBonus, setConfirmBonus] = useState(null);
+
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     fetchBonuses();
@@ -41,12 +49,19 @@ const BonusesList = () => {
   };
 
   const handleValidate = async (bonusId, step) => {
+    setConfirmBonus({ bonusId, step });
+  };
+
+  const confirmValidate = async () => {
+    if (!confirmBonus) return;
     try {
-      await validateBonus(bonusId, { action: 'VALIDER' }, step);
-      alert('Prime validée !');
+      await validateBonus(confirmBonus.bonusId, { action: 'VALIDER' }, confirmBonus.step);
+      showToast('success', 'Prime validée avec succès !');
+      setConfirmBonus(null);
       fetchBonuses();
     } catch (error) {
-      alert('Erreur lors de la validation');
+      showToast('error', error.response?.data?.detail || "Erreur lors de la validation");
+      setConfirmBonus(null);
     }
   };
 
@@ -131,6 +146,13 @@ const BonusesList = () => {
 
   return (
     <div>
+      {toast && (
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
+          toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {toast.message}
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
@@ -248,6 +270,14 @@ const BonusesList = () => {
           </div>
         );
       })}
+
+      <Modal open={!!confirmBonus} onClose={() => setConfirmBonus(null)} title="Confirmer la validation" size="sm">
+        <p className="text-sm text-gray-600 mb-6">Êtes-vous sûr de vouloir valider cette prime ?</p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => setConfirmBonus(null)} className="btn btn-sm btn-ghost">Annuler</button>
+          <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
+        </div>
+      </Modal>
     </div>
   );
 };

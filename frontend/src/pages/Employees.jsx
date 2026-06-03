@@ -77,6 +77,11 @@ const Employees = () => {
 
   const loadEmployeeBonuses = async (emp) => {
     setSelectedEmp(emp);
+    if (user?.department && emp.department !== user.department) {
+      setEmpBonuses([]);
+      setBonusesLoading(false);
+      return;
+    }
     setBonusesLoading(true);
     try {
       const data = await getBonuses(null, emp.id);
@@ -193,6 +198,8 @@ const Employees = () => {
           <div className="p-3">
             {bonusesLoading ? (
               <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm" /></div>
+            ) : selectedEmp.department !== user?.department ? (
+              <p className="text-center text-gray-400 py-6 text-sm">Vous ne pouvez voir que les primes des employés de votre département</p>
             ) : empBonuses.length === 0 ? (
               <p className="text-center text-gray-400 py-6 text-sm">Aucune prime pour cet employé</p>
             ) : (

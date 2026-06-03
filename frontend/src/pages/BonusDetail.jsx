@@ -25,7 +25,14 @@ const BonusDetail = () => {
   const [validations, setValidations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showValidateModal, setShowValidateModal] = useState(false);
   const [motifRejet, setMotifRejet] = useState('');
+  const [toast, setToast] = useState(null);
+
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     Promise.all([getBonus(id), getBonusValidations(id)])
@@ -49,25 +56,39 @@ const BonusDetail = () => {
       .catch(() => setLoading(false));
   }, [id]);
 
-  const handleValidate = async (step) => {
-    await validateBonus(bonus.id, { action: 'VALIDER' }, step);
-    alert('Prime validée !');
-    const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
-    setBonus(b);
-    const timeline = v.map((entry) => ({
-      ...entry,
-      date: new Date(entry.validated_at).toLocaleDateString('fr-FR', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-      }),
-    }));
-    setValidations(timeline);
+  const handleValidate = async () => {
+    const step = getValidStep(bonus.status);
+    if (!step) return;
+    setShowValidateModal(true);
+  };
+
+  const confirmValidate = async () => {
+    const step = getValidStep(bonus.status);
+    if (!step) return;
+    try {
+      await validateBonus(bonus.id, { action: 'VALIDER' }, step);
+      showToast('success', 'Prime validée avec succès !');
+      setShowValidateModal(false);
+      const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
+      setBonus(b);
+      const timeline = v.map((entry) => ({
+        ...entry,
+        date: new Date(entry.validated_at).toLocaleDateString('fr-FR', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        }),
+      }));
+      setValidations(timeline);
+    } catch (err) {
+      showToast('error', err.response?.data?.detail || 'Erreur lors de la validation');
+      setShowValidateModal(false);
+    }
   };
 
   const handleReject = async () => {
     if (!motifRejet.trim()) return;
     try {
       await validateBonus(bonus.id, { action: 'REJETER', motif_rejet: motifRejet }, getValidStep(bonus.status));
-      alert('Prime rejetée — retour au statut Initialisé');
+      showToast('success', 'Prime rejetée — retour au statut Initialisé');
       setShowRejectModal(false);
       setMotifRejet('');
       const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
@@ -80,7 +101,7 @@ const BonusDetail = () => {
       }));
       setValidations(timeline);
     } catch (err) {
-      alert(err.response?.data?.detail || 'Erreur lors du rejet');
+      showToast('error', err.response?.data?.detail || 'Erreur lors du rejet');
     }
   };
 
@@ -199,6 +220,13 @@ const BonusDetail = () => {
 
   return (
     <div className="page-container max-w-4xl">
+      {toast && (
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
+          toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {toast.message}
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-6">
         <Link to="/bonuses" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></Link>
         <div className="flex items-center gap-2">
@@ -460,7 +488,7 @@ const BonusDetail = () => {
                 <EditIcon className="w-4 h-4" /> Modifier
               </Link>
             ) : (
-              <button className="btn bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleValidate(step)}>
+              <button className="btn bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={handleValidate}>
                 <CheckIcon className="w-4 h-4" /> Valider
               </button>
             )}
@@ -490,6 +518,14 @@ const BonusDetail = () => {
           <button className="btn bg-red-500 hover:bg-red-600 text-white border-0" onClick={handleReject} disabled={!motifRejet.trim()}>
             Confirmer le rejet
           </button>
+        </div>
+      </Modal>
+
+      <Modal open={showValidateModal} onClose={() => setShowValidateModal(false)} title="Confirmer la validation" size="sm">
+        <p className="text-sm text-gray-600 mb-6">Êtes-vous sûr de vouloir valider cette prime ?</p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => setShowValidateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+          <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
         </div>
       </Modal>
     </div>

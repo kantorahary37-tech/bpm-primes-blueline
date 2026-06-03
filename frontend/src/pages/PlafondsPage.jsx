@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPrimeMax, createPrimeMax, updatePrimeMax, deletePrimeMax } from '../services/api';
-import { PlusIcon, EditIcon, XCircleIcon } from '../components/Icons';
-
-const DEPARTMENTS = [
-  'Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation',
-  'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat',
-  'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG',
-];
+import { useAuth } from '../contexts/AuthContext';
+import { PlusIcon, EditIcon, XCircleIcon, LockIcon } from '../components/Icons';
 
 const BONUS_TYPES = [
   { value: 'mensuel', label: 'Mensuel' },
@@ -15,11 +10,12 @@ const BONUS_TYPES = [
 ];
 
 const PlafondsPage = () => {
+  const { user } = useAuth();
   const [plafonds, setPlafonds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ department: 'Clientèle', bonus_type: 'mensuel', amount: '' });
+  const [form, setForm] = useState({ department: user?.department || 'Clientèle', bonus_type: 'mensuel', amount: '' });
 
   const fetchPlafonds = async () => {
     try {
@@ -34,6 +30,8 @@ const PlafondsPage = () => {
 
   useEffect(() => { fetchPlafonds(); }, []);
 
+  const canEdit = (p) => p.department === user?.department;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -44,7 +42,7 @@ const PlafondsPage = () => {
       }
       setShowForm(false);
       setEditing(null);
-      setForm({ department: 'Clientèle', bonus_type: 'mensuel', amount: '' });
+      setForm({ department: user?.department || 'Clientèle', bonus_type: 'mensuel', amount: '' });
       fetchPlafonds();
     } catch (err) {
       alert(err.response?.data?.detail || 'Erreur lors de la sauvegarde');
@@ -52,6 +50,7 @@ const PlafondsPage = () => {
   };
 
   const handleEdit = (p) => {
+    if (!canEdit(p)) return;
     setEditing(p.id);
     setForm({ department: p.department, bonus_type: p.bonus_type, amount: p.amount });
     setShowForm(true);
@@ -69,7 +68,7 @@ const PlafondsPage = () => {
 
   const openNewForm = () => {
     setEditing(null);
-    setForm({ department: 'Clientèle', bonus_type: 'mensuel', amount: '' });
+    setForm({ department: user?.department || 'Clientèle', bonus_type: 'mensuel', amount: '' });
     setShowForm(true);
   };
 
@@ -80,7 +79,10 @@ const PlafondsPage = () => {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Plafonds des Primes</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Plafonds des Primes</h1>
+          <p className="text-sm text-gray-400 mt-1">Vous ne pouvez modifier que les plafonds de votre département ({user?.department})</p>
+        </div>
         <button onClick={openNewForm} className="btn bg-blue-600 hover:bg-blue-700 text-white border-0 btn-sm flex items-center gap-1.5">
           <PlusIcon className="w-4 h-4" /> Nouveau plafond
         </button>
@@ -96,10 +98,9 @@ const PlafondsPage = () => {
                 <select
                   className="select select-bordered select-sm w-56"
                   value={form.department}
-                  onChange={(e) => setForm({ ...form, department: e.target.value })}
-                  required
+                  disabled
                 >
-                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  <option value={user?.department}>{user?.department}</option>
                 </select>
               </div>
               <div className="form-control">
@@ -137,40 +138,55 @@ const PlafondsPage = () => {
         </div>
       )}
 
-      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
-        <table className="table table-zebra">
-          <thead>
-            <tr>
-              <th>Département</th>
-              <th>Type de prime</th>
-              <th>Montant max (Ar)</th>
-              <th className="w-24">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {plafonds.length === 0 ? (
-              <tr><td colSpan={4} className="text-center text-gray-400 py-8">Aucun plafond défini</td></tr>
-            ) : (
-              plafonds.map((p) => (
-                <tr key={p.id}>
-                  <td className="font-medium text-gray-900">{p.department}</td>
-                  <td><span className="badge badge-ghost">{p.bonus_type}</span></td>
-                  <td className="font-medium text-gray-900">{parseFloat(p.amount).toLocaleString('fr-FR')} Ar</td>
-                  <td>
-                    <div className="flex gap-1">
-                      <button className="btn btn-sm btn-ghost" title="Modifier" onClick={() => handleEdit(p)}>
-                        <EditIcon className="w-4 h-4" />
-                      </button>
-                      <button className="btn btn-sm btn-ghost text-red-500" title="Supprimer" onClick={() => handleDelete(p.id)}>
-                        <XCircleIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="space-y-6">
+        {BONUS_TYPES.map((bt) => {
+          const items = plafonds.filter(p => p.bonus_type === bt.value);
+          if (items.length === 0) return null;
+          const typeColors = { mensuel: 'bg-blue-50 text-blue-600 border-blue-200', astreinte: 'bg-violet-50 text-violet-600 border-violet-200', commission: 'bg-amber-50 text-amber-600 border-amber-200' };
+          const color = typeColors[bt.value] || typeColors.mensuel;
+          return (
+            <div key={bt.value} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className={`px-5 py-3 font-semibold text-sm border-b ${color}`}>
+                {bt.label} — {items.length} département{items.length !== 1 ? 's' : ''}
+              </div>
+              <table className="table table-zebra w-full">
+                <thead>
+                  <tr>
+                    <th>Département</th>
+                    <th>Montant max (Ar)</th>
+                    <th className="w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((p) => (
+                    <tr key={p.id} className={!canEdit(p) ? 'opacity-60' : ''}>
+                      <td className="font-medium text-gray-900">{p.department}</td>
+                      <td className="font-medium text-gray-900">{parseFloat(p.amount).toLocaleString('fr-FR')} Ar</td>
+                      <td>
+                        <div className="flex gap-1">
+                          {canEdit(p) ? (
+                            <>
+                              <button className="btn btn-sm btn-ghost" title="Modifier" onClick={() => handleEdit(p)}>
+                                <EditIcon className="w-4 h-4" />
+                              </button>
+                              <button className="btn btn-sm btn-ghost text-red-500" title="Supprimer" onClick={() => handleDelete(p.id)}>
+                                <XCircleIcon className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-gray-400 flex items-center gap-1 px-2">
+                              <LockIcon className="w-3 h-3" /> Autre dép.
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
