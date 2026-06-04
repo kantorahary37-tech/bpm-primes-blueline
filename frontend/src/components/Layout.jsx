@@ -22,6 +22,14 @@ function userDept(user) {
   return user?.department || '—'
 }
 
+function userColor(user) {
+  if (user?.is_dg) return 'bg-amber-100 text-amber-700'
+  if (user?.is_drh) return 'bg-emerald-100 text-emerald-700'
+  if (user?.is_directeur) return 'bg-purple-100 text-purple-700'
+  if (user?.is_validator_n1) return 'bg-orange-100 text-orange-700'
+  return 'bg-blue-100 text-blue-700'
+}
+
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
@@ -74,7 +82,7 @@ export default function Layout({ children }) {
               <div className="relative" ref={menuRef}>
                 <button onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="hidden sm:flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-sm">
+                  <div className={'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ' + userColor(user)}>
                     {user?.name?.charAt(0)?.toUpperCase() || '?'}
                   </div>
                   <div className="text-left text-sm leading-tight">
@@ -121,7 +129,7 @@ export default function Layout({ children }) {
           <div className="fixed top-16 left-0 right-0 z-30 bg-white border-b border-gray-200 shadow-lg md:hidden animate-slideUp">
             <nav className="p-4 space-y-1">
               <div className="flex items-center gap-3 px-3 py-3 border-b border-gray-100 mb-2">
-                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-sm">
+                <div className={'w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm ' + userColor(user)}>
                   {user?.name?.charAt(0)?.toUpperCase() || '?'}
                 </div>
                 <div className="min-w-0">
