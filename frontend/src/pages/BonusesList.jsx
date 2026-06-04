@@ -157,6 +157,19 @@ const BonusesList = () => {
     })
   }, [filteredBonuses]);
 
+  const exportUrl = useMemo(() => {
+    const p = new URLSearchParams()
+    if (typeFilter) p.set('bonus_type', typeFilter)
+    if (monthFilter) {
+      const [y, m] = monthFilter.split('-')
+      const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+      p.set('start_date', `${monthFilter}-01`)
+      p.set('end_date', `${monthFilter}-${String(lastDay).padStart(2, '0')}`)
+    }
+    const qs = p.toString()
+    return `/api/v1/bonuses/export${qs ? '?' + qs : ''}`
+  }, [typeFilter, monthFilter])
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -178,6 +191,14 @@ const BonusesList = () => {
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
           <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
+          <a href={exportUrl}
+            className="btn btn-outline btn-sm"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <DownloadIcon className="w-4 h-4" />
+            Exporter
+          </a>
           <a
             href="/api/v1/bonuses/export/sage"
             className="btn btn-outline btn-success"
