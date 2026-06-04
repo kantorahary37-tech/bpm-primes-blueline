@@ -50,8 +50,8 @@ const Employees = () => {
   const [bonusesLoading, setBonusesLoading] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [bonusSearch, setBonusSearch] = useState('');
-  const [bonusDateStart, setBonusDateStart] = useState('');
-  const [bonusDateEnd, setBonusDateEnd] = useState('');
+  const [bonusMonthFilter, setBonusMonthFilter] = useState('');
+  const [bonusStatusFilter, setBonusStatusFilter] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -87,8 +87,8 @@ const Employees = () => {
   const loadEmployeeBonuses = async (emp) => {
     setSelectedEmp(emp);
     setBonusSearch('');
-    setBonusDateStart('');
-    setBonusDateEnd('');
+    setBonusMonthFilter('');
+    setBonusStatusFilter('');
     if (!user?.is_dg && !user?.is_drh && user?.department && emp.department !== user.department) {
       setEmpBonuses([]);
       setBonusesLoading(false);
@@ -200,10 +200,10 @@ const Employees = () => {
       </div>
 
       {selectedEmp && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]" onClick={() => setSelectedEmp(null)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh]" onClick={() => setSelectedEmp(null)}>
           <div className="fixed inset-0 bg-black/40" />
-          <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg max-h-[70vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 shrink-0">
+          <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-xl max-h-[78vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
               <div className="flex items-center gap-2">
                 <ClipboardIcon className="w-4 h-4 text-blue-600" />
                 <h3 className="font-semibold text-gray-900 text-sm">Primes de {selectedEmp.name}</h3>
@@ -214,20 +214,27 @@ const Employees = () => {
             </div>
             <>
               {!bonusesLoading && empBonuses.length > 0 && (
-                <div className="px-4 pt-3 pb-2 border-b border-gray-100 space-y-2">
+                <div className="px-4 pt-3 pb-2.5 border-b border-gray-100 space-y-2 shrink-0">
                   <input type="text" value={bonusSearch} onChange={(e) => setBonusSearch(e.target.value)}
-                    placeholder="Rechercher par type ou statut..."
+                    placeholder="Rechercher..."
                     className="w-full px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
                   <div className="flex gap-2">
-                    <input type="date" value={bonusDateStart} onChange={(e) => setBonusDateStart(e.target.value)}
+                    <input type="month" value={bonusMonthFilter} onChange={(e) => setBonusMonthFilter(e.target.value)}
                       className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
-                    <span className="text-gray-400 self-center text-xs">→</span>
-                    <input type="date" value={bonusDateEnd} onChange={(e) => setBonusDateEnd(e.target.value)}
-                      className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+                    <select value={bonusStatusFilter} onChange={(e) => setBonusStatusFilter(e.target.value)}
+                      className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+                      <option value="">Tous les statuts</option>
+                      <option value="Initialisé">Initialisé</option>
+                      <option value="En attente N+1">En attente N+1</option>
+                      <option value="En attente Directeur">En attente Directeur</option>
+                      <option value="En attente DG">En attente DG</option>
+                      <option value="Prime validée">Validée</option>
+                      <option value="Prime rejetée">Rejetée</option>
+                    </select>
                   </div>
                 </div>
               )}
-              <div className="p-4 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                 {bonusesLoading ? (
                   <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm" /></div>
                 ) : !user?.is_dg && !user?.is_drh && selectedEmp.department !== user?.department ? (
@@ -235,41 +242,52 @@ const Employees = () => {
                 ) : empBonuses.length === 0 ? (
                   <p className="text-center text-gray-400 py-6 text-sm">Aucune prime pour cet employé</p>
                 ) : (
-                  <div className="space-y-1.5">
-                    {empBonuses.filter(b => {
-                      const q = bonusSearch.toLowerCase()
+                  (() => {
+                    const q = bonusSearch.toLowerCase()
+                    const filtered = empBonuses.filter(b => {
                       if (q && !(typeLabels[b.bonus_type] || b.bonus_type).toLowerCase().includes(q) && !b.status.toLowerCase().includes(q)) return false
-                      if (bonusDateStart && b.end_date && b.end_date < bonusDateStart) return false
-                      if (bonusDateEnd && b.start_date && b.start_date > bonusDateEnd) return false
+                      if (bonusMonthFilter) {
+                        const ym = b.start_date ? b.start_date.slice(0, 7) : ''
+                        if (ym !== bonusMonthFilter) return false
+                      }
+                      if (bonusStatusFilter && b.status !== bonusStatusFilter) return false
                       return true
-                    }).map((bonus) => {
-                      return (
-                        <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all">
-                          <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                            {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</p>
-                            <p className="text-[11px] text-gray-400">{bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}</p>
-                          </div>
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                            {bonus.status}
-                          </span>
-                          <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
-                        </Link>
-                      );
-                    })}
-                    {empBonuses.filter(b => {
-                      const q = bonusSearch.toLowerCase()
-                      if (q && !(typeLabels[b.bonus_type] || b.bonus_type).toLowerCase().includes(q) && !b.status.toLowerCase().includes(q)) return false
-                      if (bonusDateStart && b.end_date && b.end_date < bonusDateStart) return false
-                      if (bonusDateEnd && b.start_date && b.start_date > bonusDateEnd) return false
-                      return true
-                    }).length === 0 && (
-                      <p className="text-center text-gray-400 py-6 text-sm">Aucune prime ne correspond aux filtres</p>
-                    )}
-                  </div>
+                    })
+                    if (filtered.length === 0) {
+                      return <p className="text-center text-gray-400 py-6 text-sm">Aucune prime ne correspond aux filtres</p>
+                    }
+                    const groups = {}
+                    filtered.forEach(b => {
+                      const ym = b.start_date ? b.start_date.slice(0, 7) : 'inconnu'
+                      if (!groups[ym]) groups[ym] = []
+                      groups[ym].push(b)
+                    })
+                    const sortedMonths = Object.keys(groups).sort().reverse()
+                    return sortedMonths.flatMap(ym => {
+                      const [y, m] = ym.split('-')
+                      const monthName = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+                      return [
+                        <div key={ym} className="px-4 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{monthName}</div>,
+                        ...groups[ym].map(bonus => (
+                          <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
+                            className="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all">
+                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[11px] font-bold">
+                              {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</p>
+                              <p className="text-[11px] text-gray-400">{bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}</p>
+                            </div>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
+                              {bonus.status}
+                            </span>
+                            <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
+                          </Link>
+                        )),
+                        <div key={`${ym}-sep`} className="border-b border-gray-50 mx-3 last:border-0" />
+                      ]
+                    })
+                  })()
                 )}
               </div>
             </>
