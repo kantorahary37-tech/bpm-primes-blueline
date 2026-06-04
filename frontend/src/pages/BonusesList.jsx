@@ -36,11 +36,11 @@ const BonusesList = () => {
 
   useEffect(() => {
     fetchBonuses();
-  }, [statusFilter]);
+  }, []);
 
   const fetchBonuses = async () => {
     try {
-      const data = await getBonuses(statusFilter || null);
+      const data = await getBonuses();
       setBonuses(data);
       setLoading(false);
     } catch (error) {
