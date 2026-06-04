@@ -209,15 +209,24 @@ const BonusesList = () => {
             <DownloadIcon className="w-4 h-4" />
             Exporter
           </button>
-          <a
-            href="/api/v1/bonuses/export/sage"
+          <button onClick={() => {
+            const token = localStorage.getItem('token')
+            fetch('/api/v1/bonuses/export/sage', { headers: { Authorization: `Bearer ${token}` } })
+              .then(r => r.blob())
+              .then(blob => {
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'export_sage_paie.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              })
+          }}
             className="btn btn-outline btn-success"
-            target="_blank"
-            rel="noopener noreferrer"
           >
             <DownloadIcon className="w-4 h-4" />
             Export SAGE
-          </a>
+          </button>
         </div>
       </div>
 

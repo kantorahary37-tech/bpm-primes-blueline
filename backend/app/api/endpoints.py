@@ -85,6 +85,85 @@ async def list_bonuses(
     if end_date: query = query.filter(end_date__lte=end_date)
     return await query
 
+
+@router.get("/bonuses/export")
+async def export_bonuses(
+    status: Optional[str] = None,
+    employee_id: Optional[int] = None,
+    bonus_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    department: Optional[str] = None,
+):
+    query = Bonus.all().prefetch_related('employee', 'created_by')
+    if status: query = query.filter(status=status)
+    if employee_id: query = query.filter(employee_id=employee_id)
+    if bonus_type: query = query.filter(bonus_type=bonus_type)
+    if start_date: query = query.filter(start_date__gte=start_date)
+    if end_date: query = query.filter(end_date__lte=end_date)
+    if department: query = query.filter(employee__department=department)
+
+    bonuses = await query.order_by('-start_date')
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Matricule", "Nom", "Departement", "TypePrime",
+        "DateDebut", "DateFin", "Montant", "Statut",
+        "CreePar", "DateCreation"
+    ])
+    for b in bonuses:
+        writer.writerow([
+            b.employee.matricule,
+            b.employee.name,
+            b.employee.department.value,
+            b.bonus_type.value,
+            b.start_date.isoformat(),
+            b.end_date.isoformat(),
+            str(b.total_amount),
+            b.status.value,
+            b.created_by.name if b.created_by else '',
+            b.created_at.isoformat() if b.created_at else '',
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=export_primes_{datetime.now().strftime('%Y%m%d')}.csv"}
+    )
+
+
+@router.get("/bonuses/export/sage")
+async def export_sage():
+    bonuses = await Bonus.filter(status=ValidationStatus.VALIDE).prefetch_related('employee')
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Matricule", "Nom", "Departement", "TypePrime",
+        "DateDebut", "DateFin", "Montant", "Statut"
+    ])
+    for b in bonuses:
+        writer.writerow([
+            b.employee.matricule,
+            b.employee.name,
+            b.employee.department.value,
+            b.bonus_type.value,
+            b.start_date.isoformat(),
+            b.end_date.isoformat(),
+            str(b.total_amount),
+            b.status.value
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=export_sage_paie.csv"}
+    )
+
+
 # Route GET pour une prime spécifique
 @router.get("/bonuses/{bonus_id}", response_model=BonusResponse)
 async def get_bonus(bonus_id: int):
@@ -180,81 +259,3 @@ async def validate_bonus(
     # Sauvegarde de la prime
     await bonus.save()
     return {"message": "OK", "status": bonus.status}
-
-
-@router.get("/bonuses/export")
-async def export_bonuses(
-    status: Optional[str] = None,
-    employee_id: Optional[int] = None,
-    bonus_type: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    department: Optional[str] = None,
-):
-    query = Bonus.all().prefetch_related('employee', 'created_by')
-    if status: query = query.filter(status=status)
-    if employee_id: query = query.filter(employee_id=employee_id)
-    if bonus_type: query = query.filter(bonus_type=bonus_type)
-    if start_date: query = query.filter(start_date__gte=start_date)
-    if end_date: query = query.filter(end_date__lte=end_date)
-    if department: query = query.filter(employee__department=department)
-
-    bonuses = await query.order_by('-start_date')
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "Montant", "Statut",
-        "CreePar", "DateCreation"
-    ])
-    for b in bonuses:
-        writer.writerow([
-            b.employee.matricule,
-            b.employee.name,
-            b.employee.department.value,
-            b.bonus_type.value,
-            b.start_date.isoformat(),
-            b.end_date.isoformat(),
-            str(b.total_amount),
-            b.status.value,
-            b.created_by.name if b.created_by else '',
-            b.created_at.isoformat() if b.created_at else '',
-        ])
-
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=export_primes_{datetime.now().strftime('%Y%m%d')}.csv"}
-    )
-
-
-@router.get("/bonuses/export/sage")
-async def export_sage():
-    bonuses = await Bonus.filter(status=ValidationStatus.VALIDE).prefetch_related('employee')
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "Montant", "Statut"
-    ])
-    for b in bonuses:
-        writer.writerow([
-            b.employee.matricule,
-            b.employee.name,
-            b.employee.department.value,
-            b.bonus_type.value,
-            b.start_date.isoformat(),
-            b.end_date.isoformat(),
-            str(b.total_amount),
-            b.status.value
-        ])
-
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=export_sage_paie.csv"}
-    )
