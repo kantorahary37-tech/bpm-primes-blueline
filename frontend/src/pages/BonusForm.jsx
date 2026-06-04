@@ -92,7 +92,7 @@ export default function BonusForm() {
     { key: 1, employee_id: '', nombre: 1 },
   ])
   const [interventions, setInterventions] = useState([
-    { key: 2, employee_id: '', date: '', heure: '', motif: '', ticket: '' },
+    { key: 2, employee_id: '', date: '', heure: '', motif: '', ticket: '', type: 'intervention' },
   ])
   const [additionalPrimes, setAdditionalPrimes] = useState({ exceptionnelle: 0, ponctuelle: 0 })
   const [perEmployeeAdditional, setPerEmployeeAdditional] = useState({})
@@ -114,7 +114,13 @@ export default function BonusForm() {
   })
 
   useEffect(() => {
-    getEmployees().then(setEmployees).catch(() => {})
+    getEmployees().then(all => {
+      if (connectedUser?.is_dg || connectedUser?.is_drh) {
+        setEmployees(all)
+      } else {
+        setEmployees(all.filter(e => e.department === connectedUser?.department))
+      }
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -216,7 +222,7 @@ export default function BonusForm() {
   }
 
   const addIntervRow = () => {
-    setInterventions([...interventions, { key: Date.now(), employee_id: '', date: '', heure: '', motif: '', ticket: '' }])
+    setInterventions([...interventions, { key: Date.now(), employee_id: '', date: '', heure: '', motif: '', ticket: '', type: 'intervention' }])
   }
 
   const removeIntervRow = (index) => {
@@ -283,10 +289,12 @@ export default function BonusForm() {
             })),
             interventions: empIntervs.map(i => ({
               employee_id: i.employee_id, employee_name: empName(i.employee_id),
-              date: i.date, heure: i.heure, motif: i.motif, ticket: i.ticket,
+              date: i.date, heure: i.heure, motif: i.motif, type: i.type || 'intervention', ticket: i.ticket,
             })),
             total_dispo: totalDispo,
-            total_interv: totalInterv,
+            total_interv: empIntervs.length * astreinteConfig.interventionRate,
+            total_interv_exceptionnelle: empIntervs.filter(i => i.type === 'exceptionnelle').length * astreinteConfig.interventionRate,
+            total_interv_ponctuelle: empIntervs.filter(i => i.type === 'ponctuelle').length * astreinteConfig.interventionRate,
             exceptionnelle: empAdd.exceptionnelle || 0,
             ponctuelle: empAdd.ponctuelle || 0,
           },
@@ -464,10 +472,10 @@ export default function BonusForm() {
   )
 
   const sharedHeader = (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-      <div className="card-blueline p-6">
-        <h2 className="font-semibold text-base-content mb-4">{editType === 'astreinte' ? 'Responsable' : "Informations de l'employé"}</h2>
-        <div className="space-y-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div className="card-blueline p-4">
+        <h2 className="font-semibold text-base-content mb-3 text-sm">{editType === 'astreinte' ? 'Responsable' : "Informations de l'employé"}</h2>
+        <div className="space-y-2">
           {editType === 'astreinte' ? (
             <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2">
               Les employés sont définis dans les tableaux ci-dessous. Une prime sera créée par employé.
@@ -503,13 +511,13 @@ export default function BonusForm() {
         </div>
       </div>
 
-      <div className="card-blueline p-6">
-        <h2 className="font-semibold text-base-content mb-4">Responsable & Période</h2>
-        <div className="space-y-3">
+      <div className="card-blueline p-4">
+        <h2 className="font-semibold text-base-content mb-3 text-sm">Responsable & Période</h2>
+        <div className="space-y-2">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-1">Nom du responsable</label>
-              <input type="text" value={manager.name || connectedUser?.name || ''} onChange={(e) => setManager({ ...manager, name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+              <input type="text" value={connectedUser?.name || ''} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
             </div>
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-1">Rôle</label>
@@ -518,7 +526,7 @@ export default function BonusForm() {
           </div>
           <div>
             <label className="block text-sm font-medium text-base-content/70 mb-1">Fonction</label>
-            <input type="text" value={manager.function || connectedUser?.poste || ''} onChange={(e) => setManager({ ...manager, function: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            <input type="text" value={connectedUser?.poste || ''} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -563,16 +571,16 @@ export default function BonusForm() {
     const totalCommission = sales.reduce((s, row) => s + (parseFloat(row.nombre) || 0) * commissionConfig.rate, 0)
 
     return (
-      <div className="page-container max-w-5xl">
+      <div className="page-container !px-2 max-w-full">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
           <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Commission par vente</p></div></div>
         </div>
-        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
-        <form onSubmit={handleSubmitCommission} className="space-y-6">
+        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+        <form onSubmit={handleSubmitCommission} className="space-y-3">
           {sharedHeader}
-          <div className="card-blueline p-6">
-            <h2 className="font-semibold text-base-content mb-4">Configuration commission</h2>
+          <div className="card-blueline p-4">
+            <h2 className="font-semibold text-base-content text-sm mb-2">Configuration commission</h2>
             <div className="max-w-xs">
               <label className="block text-sm font-medium text-base-content/70 mb-1">Commission par vente (Ar)</label>
               <input type="number" value={commissionConfig.rate} onChange={(e) => handleCommissionConfigChange('rate', e.target.value)}
@@ -667,34 +675,37 @@ export default function BonusForm() {
     disponibilites.forEach(d => {
       if (!d.employee_id) return
       const emp = employees.find(e => e.id === d.employee_id)
-      if (!employeeTotals[d.employee_id]) employeeTotals[d.employee_id] = { name: emp ? emp.name : `#${d.employee_id}`, dispo: 0, interv: 0 }
+      if (!employeeTotals[d.employee_id]) employeeTotals[d.employee_id] = { name: emp ? emp.name : `#${d.employee_id}`, dispo: 0, interv: 0, exceptionnelle: 0, ponctuelle: 0 }
       employeeTotals[d.employee_id].dispo += (parseFloat(d.nombre) || 0) * astreinteConfig.weeklyMax
     })
     interventions.forEach(iv => {
       if (!iv.employee_id) return
       const emp = employees.find(e => e.id === iv.employee_id)
-      if (!employeeTotals[iv.employee_id]) employeeTotals[iv.employee_id] = { name: emp ? emp.name : `#${iv.employee_id}`, dispo: 0, interv: 0 }
-      employeeTotals[iv.employee_id].interv += astreinteConfig.interventionRate
+      if (!employeeTotals[iv.employee_id]) employeeTotals[iv.employee_id] = { name: emp ? emp.name : `#${iv.employee_id}`, dispo: 0, interv: 0, exceptionnelle: 0, ponctuelle: 0 }
+      const t = (iv.type || 'intervention')
+      if (t === 'exceptionnelle') employeeTotals[iv.employee_id].exceptionnelle += astreinteConfig.interventionRate
+      else if (t === 'ponctuelle') employeeTotals[iv.employee_id].ponctuelle += astreinteConfig.interventionRate
+      else employeeTotals[iv.employee_id].interv += astreinteConfig.interventionRate
     })
     Object.keys(employeeTotals).forEach(id => {
       const add = perEmployeeAdditional[id] || {}
-      employeeTotals[id].exceptionnelle = add.exceptionnelle || 0
-      employeeTotals[id].ponctuelle = add.ponctuelle || 0
+      employeeTotals[id].exceptionnelle += add.exceptionnelle || 0
+      employeeTotals[id].ponctuelle += add.ponctuelle || 0
     })
 
     return (
-      <div className="page-container max-w-5xl">
+      <div className="page-container !px-2 max-w-full">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
           <div className="flex items-center gap-2"><MoonIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime d'Astreinte</h1><p className="text-sm text-base-content/50">Gestion des astreintes et interventions</p></div></div>
         </div>
-        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
-        <form onSubmit={handleSubmitAstreinte} className="space-y-6">
+        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+        <form onSubmit={handleSubmitAstreinte} className="space-y-3">
           {sharedHeader}
 
-          <div className="card-blueline p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-base-content">Disponibilité</h2>
+          <div className="card-blueline p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-semibold text-base-content text-sm">Disponibilité</h2>
               <button type="button" onClick={addDispoRow} className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0">+ Ajouter</button>
             </div>
             <div className="overflow-x-auto">
@@ -742,10 +753,10 @@ export default function BonusForm() {
             </div>
           </div>
 
-          <div className="card-blueline p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="card-blueline p-4">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <h2 className="font-semibold text-base-content">Interventions</h2>
+                <h2 className="font-semibold text-base-content text-sm">Interventions</h2>
                 <p className="text-xs text-base-content/50">Taux : {Number(astreinteConfig.interventionRate).toLocaleString('fr-FR')} Ar / intervention</p>
               </div>
               <button type="button" onClick={addIntervRow} className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0">+ Ajouter</button>
@@ -758,6 +769,7 @@ export default function BonusForm() {
                     <th className="text-center py-2 px-2 font-medium text-base-content/60">Date</th>
                     <th className="text-center py-2 px-2 font-medium text-base-content/60">Heure</th>
                     <th className="text-left py-2 px-2 font-medium text-base-content/60">Motif</th>
+                    <th className="text-center py-2 px-2 font-medium text-base-content/60">Type</th>
                     <th className="text-center py-2 px-2 font-medium text-base-content/60">Ticket</th>
                     <th className="text-right py-2 px-2 font-medium text-base-content/60">Montant (Ar)</th>
                     <th className="w-10"></th>
@@ -786,6 +798,14 @@ export default function BonusForm() {
                           className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Motif de l'appel" />
                       </td>
                       <td className="py-1 px-2">
+                        <select value={iv.type || 'intervention'} onChange={(e) => handleIntervChange(i, 'type', e.target.value)}
+                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
+                          <option value="intervention">Intervention</option>
+                          <option value="exceptionnelle">Exceptionnelle</option>
+                          <option value="ponctuelle">Ponctuelle</option>
+                        </select>
+                      </td>
+                      <td className="py-1 px-2">
                         <input type="text" value={iv.ticket} onChange={(e) => handleIntervChange(i, 'ticket', e.target.value)}
                           className="w-24 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="N° ticket" />
                       </td>
@@ -800,7 +820,7 @@ export default function BonusForm() {
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold border-t-2 border-brand-200">
-                    <td colSpan="5" className="py-2 px-2 text-right">Total Interventions</td>
+                    <td colSpan="6" className="py-2 px-2 text-right">Total Interventions</td>
                     <td className="py-2 px-2 text-right text-brand-600">{totalInterv.toLocaleString('fr-FR')} Ar</td>
                     <td></td>
                   </tr>
@@ -809,8 +829,8 @@ export default function BonusForm() {
             </div>
           </div>
 
-          <div className="card-blueline p-6">
-            <h2 className="font-semibold text-base-content mb-4">Récapitulatif par employé <span className="text-sm font-normal text-base-content/50">(1 prime par employé)</span></h2>
+          <div className="card-blueline p-4">
+            <h2 className="font-semibold text-base-content text-sm mb-2">Récapitulatif par employé <span className="text-xs font-normal text-base-content/50">(1 prime par employé)</span></h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -829,17 +849,9 @@ export default function BonusForm() {
                       <td className="py-2 px-2 font-medium">{e.name}</td>
                       <td className="py-2 px-2 text-right">{e.dispo.toLocaleString('fr-FR')} Ar</td>
                       <td className="py-2 px-2 text-right">{e.interv.toLocaleString('fr-FR')} Ar</td>
-                      <td className="py-2 px-2 text-right">
-                        <input type="number" value={perEmployeeAdditional[id]?.exceptionnelle || 0}
-                          onChange={(e) => handleEmpAdditional(id, 'exceptionnelle', e.target.value)}
-                          className="w-24 px-2 py-1 rounded border border-base-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        <input type="number" value={perEmployeeAdditional[id]?.ponctuelle || 0}
-                          onChange={(e) => handleEmpAdditional(id, 'ponctuelle', e.target.value)}
-                          className="w-24 px-2 py-1 rounded border border-base-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
-                      </td>
-                      <td className="py-2 px-2 text-right font-semibold">{(e.dispo + e.interv + (e.exceptionnelle || 0) + (e.ponctuelle || 0)).toLocaleString('fr-FR')} Ar</td>
+                      <td className="py-2 px-2 text-right">{e.exceptionnelle.toLocaleString('fr-FR')} Ar</td>
+                      <td className="py-2 px-2 text-right">{e.ponctuelle.toLocaleString('fr-FR')} Ar</td>
+                      <td className="py-2 px-2 text-right font-semibold">{(e.dispo + e.interv + e.exceptionnelle + e.ponctuelle).toLocaleString('fr-FR')} Ar</td>
                     </tr>
                   ))}
                 </tbody>
@@ -863,13 +875,13 @@ export default function BonusForm() {
   }
 
   return (
-    <div className="page-container max-w-5xl">
+    <div className="page-container !px-2 max-w-full">
       <div className="flex items-center gap-3 mb-6">
         <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
         <div className="flex items-center gap-2"><CalendarIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Mensuelle</h1><p className="text-sm text-base-content/50">Établissement des primes mensuelles</p></div></div>
       </div>
 
-      {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-6 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+      {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
 
       <form onSubmit={handleSubmitMensuel}>
         {sharedHeader}
@@ -880,9 +892,11 @@ export default function BonusForm() {
           </div>
         )}
 
-        <div className="card-blueline p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-base-content">Évaluation Quantitative</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+
+        <div className="card-blueline p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-base-content text-sm">Évaluation Quantitative</h2>
             <span className="text-xs text-base-content/50">{totalQuantiEval.toFixed(1)}%</span>
           </div>
           <div className="overflow-x-auto">
@@ -976,9 +990,9 @@ export default function BonusForm() {
           </div>
         </div>
 
-        <div className="card-blueline p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-base-content">Évaluation Qualitative</h2>
+        <div className="card-blueline p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-base-content text-sm">Évaluation Qualitative</h2>
             <span className="text-xs text-base-content/50">{totalQualiEval.toFixed(1)}% / 100%</span>
           </div>
           <div className="overflow-x-auto">
@@ -1071,15 +1085,14 @@ export default function BonusForm() {
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="card-blueline p-6 mb-6">
-          <div className="flex flex-col gap-4">
-            <p className="text-base-content/60 text-sm">Note de calcul : Total = total valeur quantitative + total valeur qualitative</p>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-base-content/60">Période : {params.startDate} → {params.endDate}</span>
-            </div>
+        <div className="card-blueline p-4 mb-3">
+          <div className="flex flex-col gap-2">
+            <p className="text-base-content/50 text-xs">Note de calcul : Total = total valeur quantitative + total valeur qualitative</p>
+            <p className="text-[10px] text-base-content/40">Période : {params.startDate} → {params.endDate}</p>
 
-            <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-4 mb-2">
               <div className="flex-1">
                 <div className="flex justify-between text-xs text-base-content/50 mb-1">
                   <span>Quantitatif</span>
@@ -1112,10 +1125,10 @@ export default function BonusForm() {
 
         </div>
 
-        <div className="card-blueline p-6">
-          <div className="space-y-4">
+        <div className="card-blueline p-4 border-l-4 border-l-blue-500 bg-blue-50/40">
+          <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-base-content/70 mb-2">Appliquer ce modèle à :</label>
+              <label className="block text-base font-bold text-gray-900 mb-2">Appliquer ce modèle à :</label>
               {!selectedEmp ? (
                 <p className="text-xs text-base-content/40">Sélectionnez d'abord un employé.</p>
               ) : sameDeptEmployees.length === 0 ? (

@@ -224,48 +224,36 @@ const BonusesList = () => {
                       <Link
                         key={bonus.id}
                         to={`/bonuses/${bonus.id}`}
-                        className="block p-4 rounded-xl border border-gray-200 bg-white hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all group"
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm transition-all group"
                       >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                              <Icon className="w-4 h-4" />
-                            </div>
-                            <span className="text-sm font-medium text-gray-900">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</span>
-                          </div>
-                          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                            {bonus.status}
-                          </span>
+                        <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                          {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
                         </div>
-
-                        <p className="font-semibold text-gray-900 mb-1">{bonus.employee?.name || 'N/A'}</p>
-                        <p className="text-xs text-gray-400 mb-3">
-                          {bonus.start_date && bonus.end_date
-                            ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}`
-                            : 'Période non définie'}
-                        </p>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                          <span className="text-sm font-bold text-blue-600">{bonus.total_amount} Ar</span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => navigate(`/bonuses/${bonus.id}`)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Voir le détail">
-                              <EyeIcon className="w-4 h-4" />
+                        <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
+                          <span className="font-medium">{bonus.employee?.name || 'N/A'}</span>
+                        </span>
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
+                          {bonus.status}
+                        </span>
+                        <span className="text-[10px] font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
+                        <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => navigate(`/bonuses/${bonus.id}`)} className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-blue-600" title="Voir le détail">
+                            <EyeIcon className="w-3 h-3" />
+                          </button>
+                          {step && !bonus.was_rejected && (
+                            <button
+                              className="p-1 rounded hover:bg-emerald-50 text-gray-300 hover:text-emerald-600"
+                              onClick={() => handleValidate(bonus.id, step)}
+                              title="Valider"
+                            >
+                              <CheckIcon className="w-3 h-3" />
                             </button>
-                            {step && !bonus.was_rejected && (
-                              <button
-                                className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600"
-                                onClick={() => handleValidate(bonus.id, step)}
-                                title="Valider"
-                              >
-                                <CheckIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                            {step && bonus.was_rejected && (
-                              <button onClick={() => navigate(`/bonuses/edit/${bonus.id}`)} className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600" title="Modifier">
-                                <EditIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
+                          )}
+                          {step && bonus.was_rejected && (
+                            <button onClick={() => navigate(`/bonuses/edit/${bonus.id}`)} className="p-1 rounded hover:bg-amber-50 text-gray-300 hover:text-amber-600" title="Modifier">
+                              <EditIcon className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       </Link>
                     )

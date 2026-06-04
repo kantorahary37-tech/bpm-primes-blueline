@@ -210,27 +210,19 @@ const Employees = () => {
             ) : empBonuses.length === 0 ? (
               <p className="text-center text-gray-400 py-6 text-sm">Aucune prime pour cet employé</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
                 {empBonuses.map((bonus) => {
-                  const Icon = typeIcons[bonus.bonus_type] || ClipboardIcon;
                   return (
                     <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
-                      className="block p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
-                            <Icon className="w-3 h-3" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</span>
-                        </div>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                          {bonus.status}
-                        </span>
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all">
+                      <div className="w-4 h-4 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[8px] font-bold">
+                        {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
                       </div>
-                      <p className="text-xs text-gray-400 mb-1">
-                        {bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}
-                      </p>
-                      <p className="text-sm font-bold text-blue-600">{bonus.total_amount} Ar</p>
+                      <span className="text-[10px] text-gray-500 truncate min-w-0 flex-1">{bonus.employee?.name || 'N/A'}</span>
+                      <span className={`text-[9px] font-medium px-1 py-0.5 rounded-full ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
+                        {bonus.status}
+                      </span>
+                      <span className="text-[10px] font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
                     </Link>
                   );
                 })}

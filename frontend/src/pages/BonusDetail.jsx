@@ -377,6 +377,7 @@ const BonusDetail = () => {
                         <th className="text-center py-2 font-medium text-gray-400 text-xs">Date</th>
                         <th className="text-center py-2 font-medium text-gray-400 text-xs">Heure</th>
                         <th className="text-left py-2 font-medium text-gray-400 text-xs">Motif</th>
+                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Type</th>
                         <th className="text-center py-2 font-medium text-gray-400 text-xs">Ticket</th>
                         <th className="text-right py-2 font-medium text-gray-400 text-xs">Montant (Ar)</th>
                       </tr>
@@ -388,12 +389,15 @@ const BonusDetail = () => {
                           <td className="py-1.5 text-center text-gray-500 text-xs">{iv.date || '—'}</td>
                           <td className="py-1.5 text-center text-gray-500 text-xs">{iv.heure || '—'}</td>
                           <td className="py-1.5 text-gray-500 text-xs">{iv.motif || '—'}</td>
+                          <td className="py-1.5 text-center text-xs">
+                            {iv.type === 'exceptionnelle' ? 'Exceptionnelle' : iv.type === 'ponctuelle' ? 'Ponctuelle' : 'Intervention'}
+                          </td>
                           <td className="py-1.5 text-center text-xs">{iv.ticket || '—'}</td>
                           <td className="py-1.5 text-right font-medium">{formatAr(bonus.details.intervention_rate)}</td>
                         </tr>
                       ))}
                       <tr className="font-semibold bg-gray-50">
-                        <td colSpan={5} className="py-1.5 text-gray-900">Total Interventions</td>
+                        <td colSpan={6} className="py-1.5 text-gray-900">Total Interventions</td>
                         <td className="py-1.5 text-right text-violet-600">{formatAr(bonus.details.total_interv)} Ar</td>
                       </tr>
                     </tbody>
