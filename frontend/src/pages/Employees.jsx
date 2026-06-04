@@ -49,6 +49,9 @@ const Employees = () => {
   const [empBonuses, setEmpBonuses] = useState([]);
   const [bonusesLoading, setBonusesLoading] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [bonusSearch, setBonusSearch] = useState('');
+  const [bonusDateStart, setBonusDateStart] = useState('');
+  const [bonusDateEnd, setBonusDateEnd] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -83,6 +86,9 @@ const Employees = () => {
 
   const loadEmployeeBonuses = async (emp) => {
     setSelectedEmp(emp);
+    setBonusSearch('');
+    setBonusDateStart('');
+    setBonusDateEnd('');
     if (!user?.is_dg && !user?.is_drh && user?.department && emp.department !== user.department) {
       setEmpBonuses([]);
       setBonusesLoading(false);
@@ -206,36 +212,67 @@ const Employees = () => {
                 <XMarkIcon className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-4 overflow-y-auto">
-              {bonusesLoading ? (
-                <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm" /></div>
-              ) : !user?.is_dg && !user?.is_drh && selectedEmp.department !== user?.department ? (
-                <p className="text-center text-gray-400 py-6 text-sm">Vous ne pouvez voir que les primes des employés de votre département</p>
-              ) : empBonuses.length === 0 ? (
-                <p className="text-center text-gray-400 py-6 text-sm">Aucune prime pour cet employé</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {empBonuses.map((bonus) => {
-                    return (
-                      <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all">
-                        <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                          {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</p>
-                          <p className="text-[11px] text-gray-400">{bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}</p>
-                        </div>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                          {bonus.status}
-                        </span>
-                        <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
-                      </Link>
-                    );
-                  })}
+            <>
+              {!bonusesLoading && empBonuses.length > 0 && (
+                <div className="px-4 pt-3 pb-2 border-b border-gray-100 space-y-2">
+                  <input type="text" value={bonusSearch} onChange={(e) => setBonusSearch(e.target.value)}
+                    placeholder="Rechercher par type ou statut..."
+                    className="w-full px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+                  <div className="flex gap-2">
+                    <input type="date" value={bonusDateStart} onChange={(e) => setBonusDateStart(e.target.value)}
+                      className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+                    <span className="text-gray-400 self-center text-xs">→</span>
+                    <input type="date" value={bonusDateEnd} onChange={(e) => setBonusDateEnd(e.target.value)}
+                      className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+                  </div>
                 </div>
               )}
-            </div>
+              <div className="p-4 overflow-y-auto">
+                {bonusesLoading ? (
+                  <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm" /></div>
+                ) : !user?.is_dg && !user?.is_drh && selectedEmp.department !== user?.department ? (
+                  <p className="text-center text-gray-400 py-6 text-sm">Vous ne pouvez voir que les primes des employés de votre département</p>
+                ) : empBonuses.length === 0 ? (
+                  <p className="text-center text-gray-400 py-6 text-sm">Aucune prime pour cet employé</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {empBonuses.filter(b => {
+                      const q = bonusSearch.toLowerCase()
+                      if (q && !(typeLabels[b.bonus_type] || b.bonus_type).toLowerCase().includes(q) && !b.status.toLowerCase().includes(q)) return false
+                      if (bonusDateStart && b.end_date && b.end_date < bonusDateStart) return false
+                      if (bonusDateEnd && b.start_date && b.start_date > bonusDateEnd) return false
+                      return true
+                    }).map((bonus) => {
+                      return (
+                        <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all">
+                          <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                            {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</p>
+                            <p className="text-[11px] text-gray-400">{bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}</p>
+                          </div>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
+                            {bonus.status}
+                          </span>
+                          <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
+                        </Link>
+                      );
+                    })}
+                    {empBonuses.filter(b => {
+                      const q = bonusSearch.toLowerCase()
+                      if (q && !(typeLabels[b.bonus_type] || b.bonus_type).toLowerCase().includes(q) && !b.status.toLowerCase().includes(q)) return false
+                      if (bonusDateStart && b.end_date && b.end_date < bonusDateStart) return false
+                      if (bonusDateEnd && b.start_date && b.start_date > bonusDateEnd) return false
+                      return true
+                    }).length === 0 && (
+                      <p className="text-center text-gray-400 py-6 text-sm">Aucune prime ne correspond aux filtres</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
           </div>
         </div>
       )}
