@@ -42,7 +42,8 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
             status_code=409,
             detail=f"Une prime de type '{bonus.bonus_type.value}' existe déjà sur cette période pour cet employé."
         )
-    obj = await Bonus.create(**bonus.dict(), created_by_id=user.id)
+    initial_status = ValidationStatus.EN_ATTENTE_DIRECTEUR if user.is_directeur else ValidationStatus.INITIALISE
+    obj = await Bonus.create(**bonus.dict(), created_by_id=user.id, status=initial_status)
     return await Bonus.get(id=obj.id).prefetch_related('employee')
 
 # Route PUT pour modifier une prime (seulement si statut = Initialisé)
@@ -50,8 +51,8 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
 async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
-    if bonus.status != ValidationStatus.INITIALISE:
-        raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé'")
+    if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
+        raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé' ou 'En attente Directeur'")
 
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
