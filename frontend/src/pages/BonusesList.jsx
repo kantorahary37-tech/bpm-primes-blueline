@@ -23,6 +23,7 @@ const BonusesList = () => {
   const [bonuses, setBonuses] = useState([]);
   const [viewMode, setViewMode] = useState('status');
   const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [loading, setLoading] = useState(true);
@@ -120,6 +121,7 @@ const BonusesList = () => {
   const filteredBonuses = useMemo(() => {
     return bonuses.filter((b) => {
       if (typeFilter && b.bonus_type !== typeFilter) return false;
+      if (statusFilter && b.status !== statusFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const name = b.employee?.name?.toLowerCase() || '';
@@ -160,6 +162,7 @@ const BonusesList = () => {
   const exportUrl = useMemo(() => {
     const p = new URLSearchParams()
     if (typeFilter) p.set('bonus_type', typeFilter)
+    if (statusFilter) p.set('status', statusFilter)
     if (searchQuery) p.set('search', searchQuery)
     if (monthFilter) {
       const [y, m] = monthFilter.split('-')
@@ -169,7 +172,7 @@ const BonusesList = () => {
     }
     const qs = p.toString()
     return `/api/v1/bonuses/export${qs ? '?' + qs : ''}`
-  }, [typeFilter, searchQuery, monthFilter])
+  }, [typeFilter, statusFilter, searchQuery, monthFilter])
 
   if (loading) {
     return (
@@ -240,13 +243,23 @@ const BonusesList = () => {
           <option value="astreinte">Astreinte</option>
           <option value="commission">Commission</option>
         </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+          <option value="">Tous statuts</option>
+          <option value="Initialisé">Initialisé</option>
+          <option value="En attente N+1">En attente N+1</option>
+          <option value="En attente Directeur">En attente Directeur</option>
+          <option value="En attente DG">En attente DG</option>
+          <option value="Prime validée">Validée</option>
+          <option value="Prime rejetée">Rejetée</option>
+        </select>
         <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Rechercher un employé..."
           className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 w-48" />
         <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}
           className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
-        {(typeFilter || searchQuery || monthFilter) && (
-          <button onClick={() => { setTypeFilter(''); setSearchQuery(''); setMonthFilter(''); }}
+        {(typeFilter || statusFilter || searchQuery || monthFilter) && (
+          <button onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearchQuery(''); setMonthFilter(''); }}
             className="px-3 py-1.5 rounded-lg text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100">
             Réinitialiser
           </button>
