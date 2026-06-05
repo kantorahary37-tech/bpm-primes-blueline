@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getEmployees, getBonuses, createEmployee, getUsers } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon } from '../components/Icons';
+import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon } from '../components/Icons';
 
 const DEPARTMENTS = [
   'Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation',
@@ -212,9 +212,35 @@ const Employees = () => {
                 <ClipboardIcon className="w-4 h-4 text-blue-600" />
                 <h3 className="font-semibold text-gray-900 text-sm">Primes de {selectedEmp.name}</h3>
               </div>
-              <button onClick={() => setSelectedEmp(null)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-                <XMarkIcon className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => {
+                  const p = new URLSearchParams({ employee_id: selectedEmp.id })
+                  if (bonusSearch) p.set('search', bonusSearch)
+                  if (bonusStatusFilter) p.set('status', bonusStatusFilter)
+                  if (bonusMonthFilter) {
+                    const [y, m] = bonusMonthFilter.split('-')
+                    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+                    p.set('start_date', `${bonusMonthFilter}-01`)
+                    p.set('end_date', `${bonusMonthFilter}-${String(lastDay).padStart(2, '0')}`)
+                  }
+                  const token = localStorage.getItem('token')
+                  fetch(`/api/v1/bonuses/export?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+                    .then(r => r.blob())
+                    .then(blob => {
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `export_${selectedEmp.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    })
+                }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Exporter">
+                  <DownloadIcon className="w-4 h-4" />
+                </button>
+                <button onClick={() => setSelectedEmp(null)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <>
               {!bonusesLoading && empBonuses.length > 0 && (
