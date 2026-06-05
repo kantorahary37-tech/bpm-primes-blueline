@@ -75,7 +75,7 @@ export default function BonusTypeSelect() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
         {types.map((t) => {
           const Icon = t.icon
           const allowed = isTypeAllowed(t.id)
