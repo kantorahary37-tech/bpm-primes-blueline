@@ -3,6 +3,7 @@ import { getEmployees, getBonuses, createEmployee, getUsers } from '../services/
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon } from '../components/Icons';
+import Modal from '../components/Modal';
 
 const DEPARTMENTS = [
   'Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation',
@@ -45,6 +46,8 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
+const EXPORT_EMPLOYEE_COLUMNS = ["Matricule", "Nom", "Departement", "Manager", "DateCreation"];
+
 const Employees = () => {
   const { user } = useAuth();
   const [employees, setEmployees] = useState([]);
@@ -60,6 +63,8 @@ const Employees = () => {
   const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [bonusStatusFilter, setBonusStatusFilter] = useState('');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportColumns, setExportColumns] = useState(EXPORT_EMPLOYEE_COLUMNS);
 
   useEffect(() => {
     if (user?.department && !departmentFilter) setDepartmentFilter(user.department);
@@ -131,19 +136,8 @@ const Employees = () => {
           <PlusIcon className="w-4 h-4" /> Nouvel employé
         </button>
         <button onClick={() => {
-          const p = new URLSearchParams()
-          if (departmentFilter) p.set('department', departmentFilter)
-          const token = localStorage.getItem('token')
-          fetch(`/api/v1/employees/export?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.blob())
-            .then(blob => {
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `export_employes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-            })
+          setExportColumns(EXPORT_EMPLOYEE_COLUMNS)
+          setShowExportModal(true)
         }} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5" title="Exporter les employés">
           <DownloadIcon className="w-4 h-4" /> Exporter
         </button>
@@ -364,6 +358,45 @@ const Employees = () => {
           </div>
         </div>
       )}
+
+      <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Exporter les employés — choisir les colonnes" size="sm">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Sélectionnez les colonnes à inclure dans l'export :</p>
+          <div className="space-y-1.5">
+            {EXPORT_EMPLOYEE_COLUMNS.map(col => (
+              <label key={col} className="flex items-center gap-2 py-1 cursor-pointer">
+                <input type="checkbox" checked={exportColumns.includes(col)} onChange={() => {
+                  setExportColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])
+                }} className="checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+                <span className="text-sm text-gray-700">{col}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+            <span className="text-xs text-gray-400">{exportColumns.length} colonne(s) sélectionnée(s)</span>
+            <div className="flex gap-2">
+              <button onClick={() => setShowExportModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+              <button onClick={() => {
+                const p = new URLSearchParams()
+                if (departmentFilter) p.set('department', departmentFilter)
+                p.set('columns', exportColumns.join(','))
+                const token = localStorage.getItem('token')
+                fetch(`/api/v1/employees/export?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+                  .then(r => r.blob())
+                  .then(blob => {
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `export_employes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                    setShowExportModal(false)
+                  })
+              }} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Exporter</button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

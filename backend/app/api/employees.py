@@ -32,6 +32,7 @@ async def list_employees(
 @router.get("/export")
 async def export_employees(
     department: Optional[str] = None,
+    columns: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
     query = Employee.all().prefetch_related('manager')
@@ -39,17 +40,25 @@ async def export_employees(
         query = query.filter(department=department)
     employees = await query
 
+    all_columns = ["Matricule", "Nom", "Departement", "Manager", "DateCreation"]
+    if columns:
+        selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
+    else:
+        selected = all_columns[:]
+
+    extractors = {
+        "Matricule": lambda e: e.matricule,
+        "Nom": lambda e: e.name,
+        "Departement": lambda e: e.department.value,
+        "Manager": lambda e: e.manager.name if e.manager else '',
+        "DateCreation": lambda e: e.created_at.isoformat() if e.created_at else '',
+    }
+
     output = io.StringIO()
     writer = csv.writer(output, delimiter=';')
-    writer.writerow(["Matricule", "Nom", "Departement", "Manager", "DateCreation"])
+    writer.writerow(selected)
     for e in employees:
-        writer.writerow([
-            e.matricule,
-            e.name,
-            e.department.value,
-            e.manager.name if e.manager else '',
-            e.created_at.isoformat() if e.created_at else '',
-        ])
+        writer.writerow([extractors[col](e) for col in selected])
 
     output.seek(0)
     return StreamingResponse(
