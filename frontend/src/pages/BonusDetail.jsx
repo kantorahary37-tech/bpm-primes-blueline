@@ -26,7 +26,7 @@ const EXPORT_COLUMNS = {
   ],
   mensuel: ["Score", "Quantitatif", "Qualitatif"],
   astreinte: ["NbDisponibilite", "TotalDisponibilite", "TotalInterventions", "Exceptionnelle", "Ponctuelle"],
-  commission: ["CommissionParVente"],
+  commission: ["NbVentes"],
 }
 
 const BonusDetail = () => {

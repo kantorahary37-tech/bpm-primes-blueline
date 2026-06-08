@@ -189,7 +189,7 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
     type_cols = {
         'mensuel': ["Score", "Quantitatif", "Qualitatif"],
         'astreinte': ["NbDisponibilite", "TotalDisponibilite", "TotalInterventions", "Exceptionnelle", "Ponctuelle"],
-        'commission': ["CommissionParVente"],
+        'commission': ["NbVentes"],
     }
     all_possible = common + type_cols.get(bonus.bonus_type.value, [])
 
@@ -224,7 +224,7 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
         "TotalInterventions": lambda b: str((b.details or {}).get('total_interv', '')),
         "Exceptionnelle": lambda b: str((b.details or {}).get('exceptionnelle', '')),
         "Ponctuelle": lambda b: str((b.details or {}).get('ponctuelle', '')),
-        "CommissionParVente": lambda b: str(b.taux_commission or (b.details or {}).get('rate', '')),
+        "NbVentes": lambda b: str(sum(int(s.get('nombre', 0)) for s in (b.details or {}).get('sales', []))),
     }
 
     row = [extractors[col](bonus) for col in selected]
