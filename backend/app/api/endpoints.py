@@ -176,7 +176,7 @@ async def export_sage():
 
 # Route GET pour l'export d'une prime spécifique
 @router.get("/bonuses/{bonus_id}/export")
-async def export_bonus_detail(bonus_id: int):
+async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee', 'created_by')
     if not bonus:
         raise HTTPException(404, "Bonus not found")
@@ -187,50 +187,47 @@ async def export_bonus_detail(bonus_id: int):
         "DejaRejete", "CreePar", "DateCreation"
     ]
     type_cols = {
-        'mensuel': ["PerformanceScore", "Absences", "Retard", "PrimeMensuelle"],
-        'astreinte': ["NbJoursAstreinte", "TauxJournalier", "PrimeAstreinte"],
-        'commission': ["CA_Realise", "CA_Objectif", "TauxCommission", "CommissionAmount"],
+        'mensuel': ["Score", "Quantitatif", "Qualitatif"],
+        'astreinte': ["Semaines", "PrimeMaxSemaine", "TauxIntervention", "TotalDisponibilite", "TotalInterventions", "Exceptionnelle", "Ponctuelle"],
+        'commission': ["CommissionParVente"],
     }
-    extra = type_cols.get(bonus.bonus_type.value, [])
-    headers = common + extra
+    all_possible = common + type_cols.get(bonus.bonus_type.value, [])
+
+    if columns:
+        selected = [c.strip() for c in columns.split(',') if c.strip() in all_possible]
+    else:
+        selected = all_possible[:]
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=';')
-    writer.writerow(headers)
+    writer.writerow(selected)
 
-    row = [
-        bonus.employee.matricule,
-        bonus.employee.name,
-        bonus.employee.department.value,
-        bonus.bonus_type.value,
-        bonus.start_date.isoformat(),
-        bonus.end_date.isoformat(),
-        str(bonus.total_amount),
-        bonus.status.value,
-        "Oui" if bonus.was_rejected else "Non",
-        bonus.created_by.name if bonus.created_by else '',
-        bonus.created_at.isoformat() if bonus.created_at else '',
-    ]
-    if bonus.bonus_type.value == 'mensuel':
-        row += [
-            str(bonus.performance_score or ''),
-            str(bonus.absences or ''),
-            str(bonus.retard or ''),
-            str(bonus.prime_mensuel_amount or ''),
-        ]
-    elif bonus.bonus_type.value == 'astreinte':
-        row += [
-            str(bonus.nb_jours_astreinte or ''),
-            str(bonus.taux_jour or ''),
-            str(bonus.prime_astreinte_amount or ''),
-        ]
-    elif bonus.bonus_type.value == 'commission':
-        row += [
-            str(bonus.ca_realise or ''),
-            str(bonus.ca_objectif or ''),
-            str(bonus.taux_commission or ''),
-            str(bonus.commission_amount or ''),
-        ]
+    extractors = {
+        "Matricule": lambda b: b.employee.matricule,
+        "Nom": lambda b: b.employee.name,
+        "Departement": lambda b: b.employee.department.value,
+        "TypePrime": lambda b: b.bonus_type.value,
+        "DateDebut": lambda b: b.start_date.isoformat(),
+        "DateFin": lambda b: b.end_date.isoformat(),
+        "MontantTotal": lambda b: str(b.total_amount),
+        "Statut": lambda b: b.status.value,
+        "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
+        "CreePar": lambda b: b.created_by.name if b.created_by else '',
+        "DateCreation": lambda b: b.created_at.isoformat() if b.created_at else '',
+        "Score": lambda b: str(b.performance_score or ''),
+        "Quantitatif": lambda b: str(sum(i.get('evaluation', 0) for i in (b.details or {}).get('quantitative', []))),
+        "Qualitatif": lambda b: str(sum(i.get('evaluation', 0) for i in (b.details or {}).get('qualitative', []))),
+        "Semaines": lambda b: str((b.details or {}).get('weeks', '')),
+        "PrimeMaxSemaine": lambda b: str((b.details or {}).get('weekly_max', '')),
+        "TauxIntervention": lambda b: str((b.details or {}).get('intervention_rate', '')),
+        "TotalDisponibilite": lambda b: str((b.details or {}).get('total_dispo', '')),
+        "TotalInterventions": lambda b: str((b.details or {}).get('total_interv', '')),
+        "Exceptionnelle": lambda b: str((b.details or {}).get('exceptionnelle', '')),
+        "Ponctuelle": lambda b: str((b.details or {}).get('ponctuelle', '')),
+        "CommissionParVente": lambda b: str(b.taux_commission or (b.details or {}).get('rate', '')),
+    }
+
+    row = [extractors[col](bonus) for col in selected]
     writer.writerow(row)
 
     output.seek(0)

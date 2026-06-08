@@ -18,6 +18,17 @@ const typeColors = {
   commission: 'emerald',
 }
 
+const EXPORT_COLUMNS = {
+  common: [
+    "Matricule", "Nom", "Departement", "TypePrime",
+    "DateDebut", "DateFin", "MontantTotal", "Statut",
+    "DejaRejete", "CreePar", "DateCreation",
+  ],
+  mensuel: ["Score", "Quantitatif", "Qualitatif"],
+  astreinte: ["Semaines", "PrimeMaxSemaine", "TauxIntervention", "TotalDisponibilite", "TotalInterventions", "Exceptionnelle", "Ponctuelle"],
+  commission: ["CommissionParVente"],
+}
+
 const BonusDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -26,6 +37,8 @@ const BonusDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportColumns, setExportColumns] = useState([]);
   const [motifRejet, setMotifRejet] = useState('');
   const [toast, setToast] = useState(null);
 
@@ -248,17 +261,9 @@ const BonusDetail = () => {
           {bonus.status}
         </span>
         <button onClick={() => {
-          const token = localStorage.getItem('token')
-          fetch(`/api/v1/bonuses/${bonus.id}/export`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.blob())
-            .then(blob => {
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `prime_${bonus.id}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-            })
+          const allCols = [...EXPORT_COLUMNS.common, ...(EXPORT_COLUMNS[bonus.bonus_type] || [])]
+          setExportColumns(allCols)
+          setShowExportModal(true)
         }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Exporter cette prime">
           <DownloadIcon className="w-5 h-5" />
         </button>
@@ -551,6 +556,51 @@ const BonusDetail = () => {
         <div className="flex gap-2 justify-end">
           <button onClick={() => setShowValidateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
           <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
+        </div>
+      </Modal>
+      <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Exporter la prime — choisir les colonnes" size="lg">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Sélectionnez les colonnes à inclure dans l'export :</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+            {EXPORT_COLUMNS.common.map(col => (
+              <label key={col} className="flex items-center gap-2 py-1 cursor-pointer">
+                <input type="checkbox" checked={exportColumns.includes(col)} onChange={() => {
+                  setExportColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])
+                }} className="checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+                <span className="text-sm text-gray-700">{col}</span>
+              </label>
+            ))}
+            <div className="col-span-2 border-t border-gray-100 my-1" />
+            {(EXPORT_COLUMNS[bonus?.bonus_type] || []).map(col => (
+              <label key={col} className="flex items-center gap-2 py-1 cursor-pointer">
+                <input type="checkbox" checked={exportColumns.includes(col)} onChange={() => {
+                  setExportColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])
+                }} className="checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+                <span className="text-sm font-medium text-gray-700">{col}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+            <span className="text-xs text-gray-400">{exportColumns.length} colonne(s) sélectionnée(s)</span>
+            <div className="flex gap-2">
+              <button onClick={() => setShowExportModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+              <button onClick={() => {
+                const token = localStorage.getItem('token')
+                const cols = exportColumns.join(',')
+                fetch(`/api/v1/bonuses/${bonus.id}/export?columns=${encodeURIComponent(cols)}`, { headers: { Authorization: `Bearer ${token}` } })
+                  .then(r => r.blob())
+                  .then(blob => {
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `prime_${bonus.id}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                    setShowExportModal(false)
+                  })
+              }} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Exporter</button>
+            </div>
+          </div>
         </div>
       </Modal>
     </div>
