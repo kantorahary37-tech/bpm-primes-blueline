@@ -133,7 +133,7 @@ const Dashboard = () => {
           const data = stats.byType[key] || { count: 0, amount: 0 };
           const Icon = cfg.icon;
           return (
-            <div key={key} className={`bg-white rounded-xl border ${cfg.border} p-4 flex items-center gap-3`}>
+            <Link key={key} to={`/kanban/${key}`} className={`bg-white rounded-xl border ${cfg.border} p-4 flex items-center gap-3 hover:shadow-md transition-all`}>
               <div className={`w-10 h-10 rounded-lg ${cfg.bg} ${cfg.color} flex items-center justify-center shrink-0`}>
                 <Icon className="w-5 h-5" />
               </div>
@@ -145,6 +145,7 @@ const Dashboard = () => {
                 <p className="text-sm font-bold text-gray-900">{formatAmount(data.amount)}</p>
               </div>
             </div>
+            </Link>
           );
         })}
       </div>
