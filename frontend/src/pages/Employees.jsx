@@ -47,6 +47,7 @@ const currentYear = new Date().getFullYear();
 const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
 const EXPORT_EMPLOYEE_COLUMNS = ["Matricule", "Nom", "Departement", "Manager", "DateCreation"];
+const EXPORT_EMP_BONUS_COLUMNS = ["Matricule", "Nom", "Departement", "TypePrime", "DateDebut", "DateFin", "Montant", "Statut", "DejaRejete", "CreePar", "DateCreation"];
 
 const Employees = () => {
   const { user } = useAuth();
@@ -65,6 +66,8 @@ const Employees = () => {
   const [bonusStatusFilter, setBonusStatusFilter] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportColumns, setExportColumns] = useState(EXPORT_EMPLOYEE_COLUMNS);
+  const [showEmpBonusExportModal, setShowEmpBonusExportModal] = useState(false);
+  const [empBonusExportColumns, setEmpBonusExportColumns] = useState(EXPORT_EMP_BONUS_COLUMNS);
 
   useEffect(() => {
     if (user?.department && !departmentFilter) setDepartmentFilter(user.department);
@@ -236,25 +239,8 @@ const Employees = () => {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => {
-                  const p = new URLSearchParams({ employee_id: selectedEmp.id })
-                  if (bonusTypeFilter) p.set('bonus_type', bonusTypeFilter)
-                  if (bonusStatusFilter) p.set('status', bonusStatusFilter)
-                  if (filterMonth && filterYear) {
-                    const lastDay = new Date(parseInt(filterYear), parseInt(filterMonth), 0).getDate()
-                    p.set('start_date', `${filterYear}-${filterMonth}-01`)
-                    p.set('end_date', `${filterYear}-${filterMonth}-${String(lastDay).padStart(2, '0')}`)
-                  }
-                  const token = localStorage.getItem('token')
-                  fetch(`/api/v1/bonuses/export?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
-                    .then(r => r.blob())
-                    .then(blob => {
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `export_${selectedEmp.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
-                      a.click()
-                      URL.revokeObjectURL(url)
-                    })
+                  setEmpBonusExportColumns(EXPORT_EMP_BONUS_COLUMNS)
+                  setShowEmpBonusExportModal(true)
                 }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Exporter">
                   <DownloadIcon className="w-4 h-4" />
                 </button>
@@ -391,6 +377,50 @@ const Employees = () => {
                     a.click()
                     URL.revokeObjectURL(url)
                     setShowExportModal(false)
+                  })
+              }} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Exporter</button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+      <Modal open={showEmpBonusExportModal} onClose={() => setShowEmpBonusExportModal(false)} title="Exporter les primes — choisir les colonnes" size="md">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Sélectionnez les colonnes à inclure dans l'export :</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+            {EXPORT_EMP_BONUS_COLUMNS.map(col => (
+              <label key={col} className="flex items-center gap-2 py-1 cursor-pointer">
+                <input type="checkbox" checked={empBonusExportColumns.includes(col)} onChange={() => {
+                  setEmpBonusExportColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])
+                }} className="checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+                <span className="text-sm text-gray-700">{col}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+            <span className="text-xs text-gray-400">{empBonusExportColumns.length} colonne(s) sélectionnée(s)</span>
+            <div className="flex gap-2">
+              <button onClick={() => setShowEmpBonusExportModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+              <button onClick={() => {
+                const p = new URLSearchParams({ employee_id: selectedEmp.id })
+                if (bonusTypeFilter) p.set('bonus_type', bonusTypeFilter)
+                if (bonusStatusFilter) p.set('status', bonusStatusFilter)
+                if (filterMonth && filterYear) {
+                  const lastDay = new Date(parseInt(filterYear), parseInt(filterMonth), 0).getDate()
+                  p.set('start_date', `${filterYear}-${filterMonth}-01`)
+                  p.set('end_date', `${filterYear}-${filterMonth}-${String(lastDay).padStart(2, '0')}`)
+                }
+                p.set('columns', empBonusExportColumns.join(','))
+                const token = localStorage.getItem('token')
+                fetch(`/api/v1/bonuses/export?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+                  .then(r => r.blob())
+                  .then(blob => {
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `export_${selectedEmp.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                    setShowEmpBonusExportModal(false)
                   })
               }} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Exporter</button>
             </div>
