@@ -17,6 +17,12 @@ const typeLabels = {
   commission: 'Commission',
 }
 
+const EXPORT_COLUMNS_LIST = [
+  "Matricule", "Nom", "Departement", "TypePrime",
+  "DateDebut", "DateFin", "Montant", "Statut",
+  "DejaRejete", "CreePar", "DateCreation",
+]
+
 const MONTHS = [
   'Janvier','Février','Mars','Avril','Mai','Juin',
   'Juillet','Août','Septembre','Octobre','Novembre','Décembre',
@@ -37,6 +43,8 @@ const BonusesList = () => {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [confirmBonus, setConfirmBonus] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportColumns, setExportColumns] = useState(EXPORT_COLUMNS_LIST);
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -168,20 +176,6 @@ const BonusesList = () => {
     })
   }, [filteredBonuses]);
 
-  const exportUrl = useMemo(() => {
-    const p = new URLSearchParams()
-    if (typeFilter) p.set('bonus_type', typeFilter)
-    if (statusFilter) p.set('status', statusFilter)
-    if (searchQuery) p.set('search', searchQuery)
-    if (filterMonth && filterYear) {
-      const lastDay = new Date(parseInt(filterYear), parseInt(filterMonth), 0).getDate()
-      p.set('start_date', `${filterYear}-${filterMonth}-01`)
-      p.set('end_date', `${filterYear}-${filterMonth}-${String(lastDay).padStart(2, '0')}`)
-    }
-    const qs = p.toString()
-    return `/api/v1/bonuses/export${qs ? '?' + qs : ''}`
-  }, [typeFilter, statusFilter, searchQuery, filterMonth, filterYear])
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -204,17 +198,8 @@ const BonusesList = () => {
         <div className="flex gap-2">
           <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
           <button onClick={() => {
-            const token = localStorage.getItem('token')
-            fetch(exportUrl, { headers: { Authorization: `Bearer ${token}` } })
-              .then(r => r.blob())
-              .then(blob => {
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `export_primes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
-                a.click()
-                URL.revokeObjectURL(url)
-              })
+            setExportColumns(EXPORT_COLUMNS_LIST)
+            setShowExportModal(true)
           }}
             className="btn btn-outline btn-sm"
           >
@@ -412,6 +397,51 @@ const BonusesList = () => {
         <div className="flex gap-2 justify-end">
           <button onClick={() => setConfirmBonus(null)} className="btn btn-sm btn-ghost">Annuler</button>
           <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
+        </div>
+      </Modal>
+      <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Exporter les primes — choisir les colonnes" size="md">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Sélectionnez les colonnes à inclure dans l'export :</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+            {EXPORT_COLUMNS_LIST.map(col => (
+              <label key={col} className="flex items-center gap-2 py-1 cursor-pointer">
+                <input type="checkbox" checked={exportColumns.includes(col)} onChange={() => {
+                  setExportColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])
+                }} className="checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+                <span className="text-sm text-gray-700">{col}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+            <span className="text-xs text-gray-400">{exportColumns.length} colonne(s) sélectionnée(s)</span>
+            <div className="flex gap-2">
+              <button onClick={() => setShowExportModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+              <button onClick={() => {
+                const p = new URLSearchParams()
+                if (typeFilter) p.set('bonus_type', typeFilter)
+                if (statusFilter) p.set('status', statusFilter)
+                if (searchQuery) p.set('search', searchQuery)
+                if (filterMonth && filterYear) {
+                  const lastDay = new Date(parseInt(filterYear), parseInt(filterMonth), 0).getDate()
+                  p.set('start_date', `${filterYear}-${filterMonth}-01`)
+                  p.set('end_date', `${filterYear}-${filterMonth}-${String(lastDay).padStart(2, '0')}`)
+                }
+                p.set('columns', exportColumns.join(','))
+                const token = localStorage.getItem('token')
+                fetch(`/api/v1/bonuses/export?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+                  .then(r => r.blob())
+                  .then(blob => {
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `export_primes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                    setShowExportModal(false)
+                  })
+              }} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Exporter</button>
+            </div>
+          </div>
         </div>
       </Modal>
     </div>

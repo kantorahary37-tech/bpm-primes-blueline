@@ -96,6 +96,7 @@ async def export_bonuses(
     end_date: Optional[str] = None,
     department: Optional[str] = None,
     search: Optional[str] = None,
+    columns: Optional[str] = None,
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
     if status: query = query.filter(status=status)
@@ -115,26 +116,35 @@ async def export_bonuses(
 
     bonuses = await query.order_by('-start_date')
 
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=';')
-    writer.writerow([
+    all_columns = [
         "Matricule", "Nom", "Departement", "TypePrime",
         "DateDebut", "DateFin", "Montant", "Statut",
-        "CreePar", "DateCreation"
-    ])
+        "DejaRejete", "CreePar", "DateCreation"
+    ]
+    if columns:
+        selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
+    else:
+        selected = all_columns[:]
+
+    extractors = {
+        "Matricule": lambda b: b.employee.matricule,
+        "Nom": lambda b: b.employee.name,
+        "Departement": lambda b: b.employee.department.value,
+        "TypePrime": lambda b: b.bonus_type.value,
+        "DateDebut": lambda b: b.start_date.isoformat(),
+        "DateFin": lambda b: b.end_date.isoformat(),
+        "Montant": lambda b: str(b.total_amount),
+        "Statut": lambda b: b.status.value,
+        "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
+        "CreePar": lambda b: b.created_by.name if b.created_by else '',
+        "DateCreation": lambda b: b.created_at.isoformat() if b.created_at else '',
+    }
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';')
+    writer.writerow(selected)
     for b in bonuses:
-        writer.writerow([
-            b.employee.matricule,
-            b.employee.name,
-            b.employee.department.value,
-            b.bonus_type.value,
-            b.start_date.isoformat(),
-            b.end_date.isoformat(),
-            str(b.total_amount),
-            b.status.value,
-            b.created_by.name if b.created_by else '',
-            b.created_at.isoformat() if b.created_at else '',
-        ])
+        writer.writerow([extractors[col](b) for col in selected])
 
     output.seek(0)
     return StreamingResponse(
