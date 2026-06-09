@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { getEmployees, getBonuses, createEmployee, getUsers } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
@@ -68,11 +68,16 @@ const Employees = () => {
   const [showEmpBonusExportModal, setShowEmpBonusExportModal] = useState(false);
   const [empBonusExportColumns, setEmpBonusExportColumns] = useState(EXPORT_EMP_BONUS_COLUMNS);
 
-  useEffect(() => {
-    if (user?.department && !departmentFilter) setDepartmentFilter(user.department);
-  }, [user?.department, departmentFilter]);
+  const initRef = useRef(false);
 
   useEffect(() => {
+    if (!user) return;
+    if (!initRef.current && user.department && !departmentFilter) {
+      initRef.current = true;
+      setDepartmentFilter(user.department);
+      return;
+    }
+    initRef.current = true;
     const fetchData = async () => {
       try {
         const [emps, users] = await Promise.all([
@@ -88,7 +93,7 @@ const Employees = () => {
       }
     };
     fetchData();
-  }, [departmentFilter]);
+  }, [departmentFilter, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

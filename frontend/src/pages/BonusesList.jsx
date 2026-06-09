@@ -34,7 +34,7 @@ const BonusesList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [bonuses, setBonuses] = useState([]);
-  const [viewMode, setViewMode] = useState('status');
+  const [viewMode, setViewMode] = useState('date');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -260,12 +260,12 @@ const BonusesList = () => {
             setExportColumns(EXPORT_COLUMNS_LIST)
             setShowExportModal(true)
           }}
-            className="btn btn-outline btn-sm"
+            className="btn btn-outline btn-success"
           >
             <DownloadIcon className="w-4 h-4" />
-            Exporter
+            Exporter Excel
           </button>
-          <button onClick={() => {
+          {/* <button onClick={() => {
             const token = localStorage.getItem('token')
             fetch('/api/v1/bonuses/export/sage', { headers: { Authorization: `Bearer ${token}` } })
               .then(r => r.blob())
@@ -282,7 +282,7 @@ const BonusesList = () => {
           >
             <DownloadIcon className="w-4 h-4" />
             Export SAGE
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -356,7 +356,7 @@ const BonusesList = () => {
               </div>
             ) : (
               <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3">
                   {items.map((bonus) => {
                     const step = getValidStep(bonus)
                     const selected = selectedBonuses.has(bonus.id)
@@ -378,7 +378,9 @@ const BonusesList = () => {
                           {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
                         </div>
                         <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-                          <span className="font-medium">{bonus.employee?.name || 'N/A'}</span>
+                          <span className="font-medium" title={bonus.employee?.name || 'N/A'}>
+                            {bonus.employee?.name || 'N/A'}
+                          </span>
                         </span>
                         <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                           {bonus.status}
@@ -418,7 +420,7 @@ const BonusesList = () => {
             <span className="ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
           </div>
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3">
               {items.map((bonus) => {
                 const step = getValidStep(bonus)
                 const selected = selectedBonuses.has(bonus.id)

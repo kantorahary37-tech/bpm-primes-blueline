@@ -1087,7 +1087,7 @@ export default function BonusForm() {
         </div>
       </div>
 
-        <div className="card-blueline p-4 mb-3">
+        <div className="card-blueline p-4 mb-0">
           <div className="flex flex-col gap-2">
             <p className="text-base-content/50 text-xs">Note de calcul : Total = total valeur quantitative + total valeur qualitative</p>
             <p className="text-[10px] text-base-content/40">Période : {params.startDate} → {params.endDate}</p>
