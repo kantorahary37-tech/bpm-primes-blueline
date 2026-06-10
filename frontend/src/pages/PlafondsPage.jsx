@@ -48,7 +48,7 @@ const PlafondsPage = () => {
   const openRateModal = (dept) => {
     setRateModalDept(dept);
     setRateModalValue('');
-    setRateModalSelected([]);
+    if (rateModalDept !== dept) setRateModalSelected([]);
     setShowRateModal(true);
   };
 
@@ -58,7 +58,8 @@ const PlafondsPage = () => {
 
   const applyRate = async () => {
     const rate = rateModalValue === '' ? null : parseInt(rateModalValue);
-    await Promise.all(rateModalSelected.map(id => updateEmployee(id, { astreinte_rate: rate })));
+    const deptEmps = astrEmployees.filter(e => e.department === rateModalDept);
+    await Promise.all(deptEmps.map(e => updateEmployee(e.id, { astreinte_rate: rateModalSelected.includes(e.id) ? rate : null })));
     setShowRateModal(false);
     fetchAstrEmployees();
   };
@@ -285,6 +286,13 @@ const PlafondsPage = () => {
           </div>
           <div>
             <label className="label"><span className="label-text font-medium">Appliquer à :</span></label>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-400">{rateModalSelected.length} employé(s) sélectionné(s)</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setRateModalSelected(astrEmployees.filter(e => e.department === rateModalDept).map(e => e.id))} className="btn btn-xs btn-ghost text-violet-600">Tout sélectionner</button>
+                <button type="button" onClick={() => setRateModalSelected([])} className="btn btn-xs btn-ghost text-gray-500">Tout désélectionner</button>
+              </div>
+            </div>
             <div className="space-y-1 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-2">
               {astrEmployees.filter(e => e.department === rateModalDept).map(emp => (
                 <label key={emp.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${rateModalSelected.includes(emp.id) ? 'bg-violet-50 border border-violet-200' : 'hover:bg-gray-50 border border-transparent'}`}>
@@ -298,7 +306,7 @@ const PlafondsPage = () => {
           </div>
           <div className="flex gap-3 justify-end pt-2">
             <button onClick={() => setShowRateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
-            <button onClick={applyRate} disabled={rateModalSelected.length === 0} className="btn btn-sm bg-violet-600 hover:bg-violet-700 text-white border-0 flex items-center gap-1">
+            <button onClick={applyRate} className="btn btn-sm bg-violet-600 hover:bg-violet-700 text-white border-0 flex items-center gap-1">
               <CheckIcon className="w-4 h-4" /> Appliquer
             </button>
           </div>
