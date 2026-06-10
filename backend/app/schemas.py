@@ -61,9 +61,14 @@ class EmployeeBase(BaseModel):
     name: str
     department: DepartmentType
     manager_id: int
+    astreinte_rate: Optional[int] = None
 
 # Schéma de création d'employé
 class EmployeeCreate(EmployeeBase): pass
+
+# Schéma de mise à jour d'employé (champs optionnels)
+class EmployeeUpdate(BaseModel):
+    astreinte_rate: Optional[int] = None
 
 # Schéma de réponse employé
 class EmployeeResponse(EmployeeBase):

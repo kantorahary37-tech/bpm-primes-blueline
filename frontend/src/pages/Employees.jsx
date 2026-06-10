@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { getEmployees, getBonuses, createEmployee, getUsers } from '../services/api';
+import { getEmployees, getBonuses, createEmployee, updateEmployee, getUsers } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon } from '../components/Icons';
@@ -225,6 +225,23 @@ const Employees = () => {
                 <div className="text-right text-xs">
                   <div className="text-gray-400">Manager</div>
                   <div className="font-medium text-gray-700">{mgr?.name || 'N/A'}</div>
+                </div>
+                <div className="text-right text-xs">
+                  <div className="text-gray-400">Taux astreinte</div>
+                  <input type="number" value={emp.astreinte_rate ?? ''} placeholder="70000"
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? null : parseInt(e.target.value)
+                      const updated = [...employees]
+                      const idx = updated.findIndex(x => x.id === emp.id)
+                      updated[idx] = { ...emp, astreinte_rate: val }
+                      setEmployees(updated)
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value === '' ? null : parseInt(e.target.value)
+                      if (val !== emp.astreinte_rate) updateEmployee(emp.id, { astreinte_rate: val })
+                    }}
+                    className="w-20 px-1 py-0.5 rounded border border-gray-200 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500"
+                  />
                 </div>
               </button>
             );

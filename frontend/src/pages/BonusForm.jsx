@@ -62,6 +62,10 @@ export default function BonusForm() {
     const days = Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1
     return Math.max(1, Math.ceil(days / 7))
   }
+  const getRate = (empId) => {
+    const emp = employees.find(e => e.id === empId)
+    return emp?.astreinte_rate ?? astreinteConfig.weeklyMax
+  }
 
   const saveBonus = isEditing ? (data) => updateBonus(id, data) : createBonus;
   const navigateAfterSave = () => {
@@ -121,6 +125,7 @@ export default function BonusForm() {
   const [additionalPrimes, setAdditionalPrimes] = useState({ exceptionnelle: 0, ponctuelle: 0 })
   const [perEmployeeAdditional, setPerEmployeeAdditional] = useState({})
   const importFileRef = useRef(null)
+  const [importedFileName, setImportedFileName] = useState('')
   const [importFeedback, setImportFeedback] = useState('')
   const [importError, setImportError] = useState('')
 
@@ -187,15 +192,24 @@ export default function BonusForm() {
           ticket: ticketCol ? String(row[ticketCol] || '') : '',
           demandeur: demCol ? String(row[demCol] || '') : '',
           service: servCol ? String(row[servCol] || '') : '',
+          _imported: true,
         }
       })
       setInterventions(prev => [...prev, ...parsed])
+      setImportedFileName(`${file.name} (${parsed.length} lignes)`)
       const detected = [dateCol && `date[${dateCol}]`, heureCol && `heure[${heureCol}]`, respCol && `employé[${respCol}]`, motifCol && `motif[${motifCol}]`, demCol && `demandeur[${demCol}]`, servCol && `service[${servCol}]`, ticketCol && `ticket[${ticketCol}]`].filter(Boolean)
       setImportFeedback(`${parsed.length} intervention(s) importée(s). Colonnes: ${detected.join(', ')}. Debug: ${debugInfo}`)
     } catch (err) {
       setImportError('Erreur lors de la lecture du fichier : ' + err.message)
     }
     e.target.value = ''
+  }
+
+  const clearImported = () => {
+    setInterventions(prev => prev.filter(i => !i._imported))
+    setImportedFileName('')
+    setImportFeedback('')
+    setImportError('')
   }
 
   const handleEmpAdditional = (empId, field, value) => {
@@ -367,7 +381,7 @@ export default function BonusForm() {
       await Promise.all(allEmpIds.map(employee_id => {
         const empDispos = disponibilites.filter(d => d.employee_id === employee_id)
         const empIntervs = interventions.filter(i => i.employee_id === employee_id)
-        const totalDispo = empDispos.reduce((s, d) => s + (parseFloat(d.nombre) || 0) * astreinteConfig.weeklyMax, 0)
+        const totalDispo = empDispos.reduce((s, d) => s + (parseFloat(d.nombre) || 0) * getRate(d.employee_id), 0)
         const totalInterv = empIntervs.length * astreinteConfig.interventionRate
         const empAdd = perEmployeeAdditional[employee_id] || {}
         const amount = totalDispo + totalInterv + (empAdd.exceptionnelle || 0) + (empAdd.ponctuelle || 0)
@@ -769,7 +783,7 @@ export default function BonusForm() {
 
   if (type === 'astreinte') {
     const weeks = calcWeeks(params.startDate, params.endDate)
-    const totalDispo = disponibilites.reduce((s, d) => s + (parseFloat(d.nombre) || 0) * astreinteConfig.weeklyMax, 0)
+    const totalDispo = disponibilites.reduce((s, d) => s + (parseFloat(d.nombre) || 0) * getRate(d.employee_id), 0)
     const totalInterv = interventions.filter(i => i.employee_id).length * astreinteConfig.interventionRate
     const totalGeneral = totalDispo + totalInterv + Object.values(perEmployeeAdditional).reduce((s, v) => s + (v.exceptionnelle || 0) + (v.ponctuelle || 0), 0)
     const primeCount = [...new Set([...disponibilites.map(d => d.employee_id), ...interventions.map(i => i.employee_id)])].filter(Boolean).length
@@ -778,7 +792,7 @@ export default function BonusForm() {
       if (!d.employee_id) return
       const emp = employees.find(e => e.id === d.employee_id)
       if (!employeeTotals[d.employee_id]) employeeTotals[d.employee_id] = { name: emp ? emp.name : `#${d.employee_id}`, dispo: 0, interv: 0, exceptionnelle: 0, ponctuelle: 0 }
-      employeeTotals[d.employee_id].dispo += (parseFloat(d.nombre) || 0) * astreinteConfig.weeklyMax
+      employeeTotals[d.employee_id].dispo += (parseFloat(d.nombre) || 0) * getRate(d.employee_id)
     })
     interventions.forEach(iv => {
       if (!iv.employee_id) return
@@ -836,7 +850,7 @@ export default function BonusForm() {
                         {(parseFloat(d.nombre) || 0) > weeks && <span className="text-red-500 text-xs block">max {weeks}</span>}
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
-                        {((parseFloat(d.nombre) || 0) * astreinteConfig.weeklyMax).toLocaleString('fr-FR')}
+                        {((parseFloat(d.nombre) || 0) * getRate(d.employee_id)).toLocaleString('fr-FR')}
                       </td>
                       <td className="py-1 px-2 text-center">
                         <button type="button" onClick={() => removeDispoRow(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
@@ -861,8 +875,9 @@ export default function BonusForm() {
                 <h2 className="font-semibold text-base-content text-sm">Interventions</h2>
                 <p className="text-xs text-base-content/50">Taux : {Number(astreinteConfig.interventionRate).toLocaleString('fr-FR')} Ar / intervention</p>
               </div>
-              <div className="flex gap-2">
-                {importFeedback && <span className="text-xs text-green-600 self-center">{importFeedback}</span>}
+              <div className="flex gap-2 items-center">
+                {importedFileName && <span className="text-xs text-base-content/70 flex items-center gap-1 bg-base-200 px-2 py-1 rounded"><span className="truncate max-32">{importedFileName}</span><button type="button" onClick={clearImported} className="text-red-500 hover:text-red-700 text-sm leading-none">✕</button></span>}
+                {importFeedback && !importedFileName && <span className="text-xs text-green-600 self-center">{importFeedback}</span>}
                 {importError && <span className="text-xs text-red-600 self-center">{importError}</span>}
                 <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel} />
                 <button type="button" onClick={() => importFileRef.current?.click()} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Importer Excel</button>
@@ -955,6 +970,7 @@ export default function BonusForm() {
                   <tr className="border-b border-base-200">
                     <th className="text-left py-2 px-2 font-medium text-base-content/60">Employé</th>
                     <th className="text-right py-2 px-2 font-medium text-base-content/60">Disponibilité</th>
+                    <th className="text-center py-2 px-2 font-medium text-base-content/60">Taux</th>
                     <th className="text-right py-2 px-2 font-medium text-base-content/60">Interventions</th>
                     <th className="text-right py-2 px-2 font-medium text-base-content/60">Exceptionnelle</th>
                     <th className="text-right py-2 px-2 font-medium text-base-content/60">Ponctuelle</th>
@@ -962,16 +978,21 @@ export default function BonusForm() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(employeeTotals).map(([id, e]) => (
+                  {Object.entries(employeeTotals).map(([id, e]) => {
+                    const rate = getRate(parseInt(id))
+                    const isCustom = rate !== astreinteConfig.weeklyMax
+                    return (
                     <tr key={id} className="border-b border-base-100">
                       <td className="py-2 px-2 font-medium">{e.name}</td>
                       <td className="py-2 px-2 text-right">{e.dispo.toLocaleString('fr-FR')} Ar</td>
+                      <td className="py-2 px-2 text-center text-xs">{isCustom ? <span className="text-blue-600 font-medium">{rate.toLocaleString('fr-FR')}</span> : <span className="text-gray-400">{rate.toLocaleString('fr-FR')}</span>}</td>
                       <td className="py-2 px-2 text-right">{e.interv.toLocaleString('fr-FR')} Ar</td>
                       <td className="py-2 px-2 text-right">{e.exceptionnelle.toLocaleString('fr-FR')} Ar</td>
                       <td className="py-2 px-2 text-right">{e.ponctuelle.toLocaleString('fr-FR')} Ar</td>
                       <td className="py-2 px-2 text-right font-semibold">{(e.dispo + e.interv + e.exceptionnelle + e.ponctuelle).toLocaleString('fr-FR')} Ar</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

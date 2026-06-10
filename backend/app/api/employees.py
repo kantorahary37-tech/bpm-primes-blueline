@@ -71,3 +71,13 @@ async def export_employees(
 @router.get("/{emp_id}", response_model=EmployeeResponse)
 async def get_employee(emp_id: int):
     return await Employee.get(id=emp_id)
+
+
+@router.put("/{emp_id}", response_model=EmployeeResponse)
+async def update_employee(emp_id: int, data: EmployeeUpdate):
+    emp = await Employee.get(id=emp_id)
+    update_data = data.dict(exclude_unset=True)
+    if update_data:
+        await emp.update_from_dict(update_data)
+        await emp.save()
+    return await Employee.get(id=emp_id)

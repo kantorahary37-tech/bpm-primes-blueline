@@ -57,6 +57,11 @@ export const createEmployee = async (employeeData) => {
   return data;
 };
 
+export const updateEmployee = async (id, employeeData) => {
+  const { data } = await api.put(`/employees/${id}`, employeeData);
+  return data;
+};
+
 export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null) => {
   const params = {};
   if (status) params.status = status;

@@ -79,6 +79,8 @@ class Employee(models.Model):
     department = fields.CharEnumField(DepartmentType)
     # Relation vers le manager (User) : un manager a plusieurs employés
     manager = fields.ForeignKeyField('models.User', related_name='employees')
+    # Taux astreinte personnalisé (Ar/semaine), null = taux par défaut
+    astreinte_rate = fields.IntField(null=True, default=None)
     # Date de création
     created_at = fields.DatetimeField(auto_now_add=True)
 
