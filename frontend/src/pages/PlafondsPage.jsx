@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getPrimeMax, createPrimeMax, updatePrimeMax, deletePrimeMax, getEmployees, updateEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { PlusIcon, EditIcon, XCircleIcon, LockIcon, MoonIcon } from '../components/Icons';
+import { PlusIcon, EditIcon, XCircleIcon, LockIcon, MoonIcon, CheckIcon } from '../components/Icons';
+import Modal from '../components/Modal';
 
 const BONUS_TYPES = [
   { value: 'mensuel', label: 'Mensuel' },
@@ -19,7 +20,10 @@ const PlafondsPage = () => {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ department: user?.department || 'Clientèle', bonus_type: 'mensuel', amount: '' });
   const [astrEmployees, setAstrEmployees] = useState([]);
-  const [astrLoading, setAstrLoading] = useState(false);
+  const [showRateModal, setShowRateModal] = useState(false);
+  const [rateModalDept, setRateModalDept] = useState('');
+  const [rateModalValue, setRateModalValue] = useState('');
+  const [rateModalSelected, setRateModalSelected] = useState([]);
 
   const fetchPlafonds = async () => {
     try {
@@ -33,26 +37,30 @@ const PlafondsPage = () => {
   };
 
   const fetchAstrEmployees = async () => {
-    setAstrLoading(true);
     try {
       const all = await getEmployees();
       setAstrEmployees(all.filter(e => ASTR_DEPARTMENTS.includes(e.department)));
     } catch (err) {
       console.error(err);
-    } finally {
-      setAstrLoading(false);
     }
   };
 
-  const handleRateChange = (empId, value) => {
-    setAstrEmployees(prev => prev.map(e => e.id === empId ? { ...e, astreinte_rate: value === '' ? null : parseInt(value) } : e))
+  const openRateModal = (dept) => {
+    setRateModalDept(dept);
+    setRateModalValue('');
+    setRateModalSelected([]);
+    setShowRateModal(true);
   };
 
-  const handleRateSave = (empId, rate) => {
-    updateEmployee(empId, { astreinte_rate: rate }).catch(err => {
-      console.error(err);
-      fetchAstrEmployees();
-    });
+  const toggleRateSelected = (id) => {
+    setRateModalSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const applyRate = async () => {
+    const rate = rateModalValue === '' ? null : parseInt(rateModalValue);
+    await Promise.all(rateModalSelected.map(id => updateEmployee(id, { astreinte_rate: rate })));
+    setShowRateModal(false);
+    fetchAstrEmployees();
   };
 
   useEffect(() => {
@@ -232,44 +240,70 @@ const PlafondsPage = () => {
       {(user?.is_dg || user?.is_drh) && (
         <div className="mt-10 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3 font-semibold text-sm bg-violet-50 text-violet-600 border-b border-violet-200 flex items-center gap-2">
-            <MoonIcon className="w-4 h-4" /> Taux astreinte spéciaux
-            <span className="text-xs font-normal text-violet-400">— Appliquer un taux personnalisé par employé (vide = taux par défaut)</span>
+            <MoonIcon className="w-4 h-4" /> Astreinte — Taux spéciaux
+            <span className="text-xs font-normal text-violet-400">— Configurer un taux personnalisé par département</span>
           </div>
-          {astrLoading ? (
-            <div className="flex justify-center py-6"><span className="loading loading-spinner loading-sm" /></div>
-          ) : astrEmployees.length === 0 ? (
-            <p className="text-center text-gray-400 py-6 text-sm">Aucun employé dans les départements d'astreinte</p>
-          ) : (
-            <table className="table table-zebra w-full">
-              <thead>
-                <tr>
-                  <th>Employé</th>
-                  <th>Département</th>
-                  <th className="w-48">Taux personnalisé (Ar/semaine)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {astrEmployees.map((emp) => (
-                  <tr key={emp.id}>
-                    <td className="font-medium text-gray-900">{emp.name}</td>
-                    <td className="text-gray-500 text-sm">{emp.department}</td>
+          <table className="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th>Département</th>
+                <th>Employés avec taux spécial</th>
+                <th className="w-40">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ASTR_DEPARTMENTS.map((dept) => {
+                const deptEmps = astrEmployees.filter(e => e.department === dept);
+                const specials = deptEmps.filter(e => e.astreinte_rate != null);
+                return (
+                  <tr key={dept}>
+                    <td className="font-medium text-gray-900">{dept}</td>
+                    <td className="text-sm text-gray-500">
+                      {specials.length === 0
+                        ? <span className="text-gray-400">Aucun</span>
+                        : specials.map(e => `${e.name} (${e.astreinte_rate.toLocaleString('fr-FR')} Ar)`).join(', ')
+                      }
+                    </td>
                     <td>
-                      <input type="number" value={emp.astreinte_rate ?? ''} placeholder="70000 (défaut)"
-                        onChange={(e) => handleRateChange(emp.id, e.target.value)}
-                        onBlur={(e) => {
-                          const val = e.target.value === '' ? null : parseInt(e.target.value)
-                          if (val !== emp.astreinte_rate) handleRateSave(emp.id, val)
-                        }}
-                        className="w-36 px-2 py-1 rounded border border-gray-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500"
-                      />
+                      <button onClick={() => openRateModal(dept)} className="btn btn-sm bg-violet-600 hover:bg-violet-700 text-white border-0">Configurer</button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
+
+      <Modal open={showRateModal} onClose={() => setShowRateModal(false)} title={`Configurer — ${rateModalDept}`} size="lg">
+        <div className="space-y-4">
+          <div>
+            <label className="label"><span className="label-text font-medium">Taux spécial (Ar/semaine)</span></label>
+            <input type="number" value={rateModalValue} onChange={(e) => setRateModalValue(e.target.value)}
+              placeholder="70000 (défaut)"
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500" />
+          </div>
+          <div>
+            <label className="label"><span className="label-text font-medium">Appliquer à :</span></label>
+            <div className="space-y-1 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-2">
+              {astrEmployees.filter(e => e.department === rateModalDept).map(emp => (
+                <label key={emp.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${rateModalSelected.includes(emp.id) ? 'bg-violet-50 border border-violet-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                  <input type="checkbox" checked={rateModalSelected.includes(emp.id)} onChange={() => toggleRateSelected(emp.id)}
+                    className="checkbox checkbox-sm checkbox-violet-600" />
+                  <span className="flex-1 text-sm font-medium">{emp.name}</span>
+                  {emp.astreinte_rate != null && <span className="text-xs text-violet-600 bg-violet-100 px-2 py-0.5 rounded">Actuel: {emp.astreinte_rate.toLocaleString('fr-FR')} Ar</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end pt-2">
+            <button onClick={() => setShowRateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+            <button onClick={applyRate} disabled={rateModalSelected.length === 0} className="btn btn-sm bg-violet-600 hover:bg-violet-700 text-white border-0 flex items-center gap-1">
+              <CheckIcon className="w-4 h-4" /> Appliquer
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
