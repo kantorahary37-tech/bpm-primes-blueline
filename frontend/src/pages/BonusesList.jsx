@@ -263,6 +263,27 @@ const BonusesList = () => {
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
           <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
+          {(user?.is_drh || user?.is_dg) && (
+            <button onClick={() => {
+              const token = localStorage.getItem('token')
+              fetch(`/api/v1/bonuses/export?status=Prime%20valid%C3%A9e&columns=${EXPORT_COLUMNS_LIST.join(',')}`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.blob())
+                .then(blob => {
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `export_validees_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                })
+            }}
+              className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+              title="Export rapide de toutes les primes validées"
+            >
+              <DownloadIcon className="w-4 h-4" />
+              Export validées
+            </button>
+          )}
           <button onClick={() => {
             setExportColumns(EXPORT_COLUMNS_LIST)
             setShowExportModal(true)
