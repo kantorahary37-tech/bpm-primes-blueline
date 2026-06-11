@@ -155,7 +155,10 @@ const Dashboard = () => {
         <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-blue-600 text-white">
           <EyeIcon className="w-4 h-4" />
           <h2 className="font-semibold">À valider par vous</h2>
-          <span className="ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-blue-700">
+          <Link to="/bonuses" className="ml-auto text-[10px] font-medium text-blue-200 hover:text-white transition-colors underline underline-offset-2">
+            Voir tout
+          </Link>
+          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-blue-700">
             {myPending.length}
           </span>
         </div>
