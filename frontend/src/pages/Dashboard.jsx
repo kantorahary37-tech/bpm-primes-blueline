@@ -77,7 +77,9 @@ const Dashboard = () => {
     if (user.is_validator_n1) myStatuses.push('Initialisé');
     if (user.is_directeur) myStatuses.push('En attente Directeur');
     if (user.is_dg) myStatuses.push('En attente DG');
-    return bonuses.filter(b => myStatuses.includes(b.status));
+    const sorted = [...bonuses.filter(b => myStatuses.includes(b.status))];
+    sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return sorted;
   }, [bonuses, user]);
 
   const formatDate = (dateStr) => {
@@ -164,7 +166,7 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
               {myPending.map((bonus) => {
                 return (
                   <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
