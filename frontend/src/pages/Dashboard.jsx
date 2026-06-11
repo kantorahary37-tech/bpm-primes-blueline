@@ -155,7 +155,7 @@ const Dashboard = () => {
         <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-blue-600 text-white">
           <EyeIcon className="w-4 h-4" />
           <h2 className="font-semibold">À valider par vous</h2>
-          <Link to="/bonuses" className="ml-auto text-[10px] font-medium text-blue-200 hover:text-white transition-colors underline underline-offset-2">
+          <Link to="/bonuses" className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-blue-100 hover:bg-white/30 hover:text-white transition-all">
             Voir tout
           </Link>
           <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-blue-700">
