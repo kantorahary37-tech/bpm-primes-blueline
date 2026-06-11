@@ -512,7 +512,7 @@ const BonusDetail = () => {
 
         {step && (
           <div className="flex gap-3 justify-end pt-2">
-            {bonus.was_rejected ? (
+            {bonus.status === 'Initialisé' && bonus.was_rejected ? (
               <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
                 <EditIcon className="w-4 h-4" /> Modifier
               </Link>

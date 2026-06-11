@@ -138,6 +138,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
+    update_data['was_rejected'] = False
     await bonus.update_from_dict(update_data)
     await bonus.save()
     return await Bonus.get(id=bonus.id).prefetch_related('employee')
