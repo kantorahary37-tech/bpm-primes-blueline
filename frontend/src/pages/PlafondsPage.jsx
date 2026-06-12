@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getPrimeMax, createPrimeMax, updatePrimeMax, deletePrimeMax, getEmployees, updateEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { PlusIcon, EditIcon, XCircleIcon, LockIcon, MoonIcon, CheckIcon } from '../components/Icons';
@@ -79,7 +79,7 @@ const PlafondsPage = () => {
     fetchAstrEmployees();
   }, []);
 
-  const canEdit = (p) => p.department === user?.department;
+  const canEdit = (p) => user?.is_dg || user?.is_drh || p.department === user?.department;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -98,11 +98,14 @@ const PlafondsPage = () => {
     }
   };
 
+  const formRef = useRef(null);
+
   const handleEdit = (p) => {
     if (!canEdit(p)) return;
     setEditing(p.id);
     setForm({ department: p.department, bonus_type: p.bonus_type, amount: p.amount });
     setShowForm(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
   const handleDelete = async (id) => {
@@ -130,7 +133,7 @@ const PlafondsPage = () => {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Plafonds des Primes</h1>
-          <p className="text-sm text-gray-400 mt-1">Vous ne pouvez modifier que les plafonds de votre département ({user?.department})</p>
+          <p className="text-sm text-gray-400 mt-1">{user?.is_dg || user?.is_drh ? 'Accès total — vous pouvez modifier tous les plafonds' : `Vous ne pouvez modifier que les plafonds de votre département (${user?.department})`}</p>
         </div>
         <button onClick={openNewForm} className="btn bg-blue-600 hover:bg-blue-700 text-white border-0 btn-sm flex items-center gap-1.5">
           <PlusIcon className="w-4 h-4" /> Nouveau plafond
@@ -138,7 +141,7 @@ const PlafondsPage = () => {
       </div>
 
       {showForm && (
-        <div className="card bg-white border border-gray-200 shadow-sm mb-6">
+        <div ref={formRef} className="card bg-white border border-gray-200 shadow-sm mb-6">
           <div className="card-body p-6">
             <h3 className="font-semibold text-gray-900 mb-4">{editing ? 'Modifier' : 'Nouveau'} plafond</h3>
             <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
