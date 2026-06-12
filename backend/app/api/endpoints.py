@@ -152,8 +152,11 @@ async def list_bonuses(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     was_rejected: Optional[bool] = None,
+    user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee')
+    if not (user.is_dg or user.is_drh) and user.department:
+        query = query.filter(employee__department=user.department)
     if status: query = query.filter(status=status)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
