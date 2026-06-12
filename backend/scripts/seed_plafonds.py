@@ -19,12 +19,14 @@ DEFAULTS = {
     'mensuel': 150000,
     'astreinte': 70000,
     'commission': 200000,
+    'exceptionnel': 9000,
 }
 
 BONUS_TYPE_DEPARTMENTS = {
     'mensuel': DEPARTMENTS,
     'astreinte': ['BBS', 'DO', 'DSI', 'DT'],
     'commission': ['Commercial GP', 'Commercial entreprise'],
+    'exceptionnel': ['BBS', 'DO', 'DSI', 'DT'],
 }
 
 async def seed():

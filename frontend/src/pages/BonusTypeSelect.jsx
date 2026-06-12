@@ -5,6 +5,7 @@ const BONUS_TYPE_DEPARTMENTS = {
   mensuel: ['Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
   astreinte: ['BBS', 'DO', 'DSI', 'DT'],
   commission: ['Commercial GP', 'Commercial entreprise'],
+  exceptionnel: ['BBS', 'DO', 'DSI', 'DT'],
 }
 
 const CalendarSvg = () => (
@@ -22,6 +23,12 @@ const MoonSvg = () => (
 const ChartSvg = () => (
   <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+  </svg>
+)
+
+const FlashSvg = () => (
+  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
   </svg>
 )
 
@@ -49,6 +56,14 @@ const types = [
     icon: ChartSvg,
     bg: 'bg-amber-50 text-amber-600',
     border: 'hover:border-amber-400',
+  },
+  {
+    id: 'exceptionnel',
+    title: 'Intervention Exceptionnelle',
+    desc: 'Prime pour intervention ponctuelle exceptionnelle',
+    icon: FlashSvg,
+    bg: 'bg-rose-50 text-rose-600',
+    border: 'hover:border-rose-400',
   },
 ]
 

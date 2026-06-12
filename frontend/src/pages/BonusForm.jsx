@@ -44,6 +44,7 @@ const BONUS_TYPE_DEPARTMENTS = {
   mensuel: ['Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
   astreinte: ['BBS', 'DO', 'DSI', 'DT'],
   commission: ['Commercial GP', 'Commercial entreprise'],
+  exceptionnel: ['BBS', 'DO', 'DSI', 'DT'],
 }
 
 export default function BonusForm() {
@@ -484,6 +485,45 @@ export default function BonusForm() {
     }
   }
 
+  const [exceptionnelAmount, setExceptionnelAmount] = useState('')
+
+  const handleSubmitExceptionnel = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    if (!selectedEmp) {
+      setError('Sélectionnez un employé.')
+      setLoading(false); return
+    }
+    if (!exceptionnelAmount || parseFloat(exceptionnelAmount) <= 0) {
+      setError('Saisissez un montant valide.')
+      setLoading(false); return
+    }
+    const allowed = BONUS_TYPE_DEPARTMENTS.exceptionnel
+    if (!allowed.includes(selectedEmp.department)) {
+      setError('Seuls les départements BBS, DO, DSI, DT sont autorisés pour les interventions exceptionnelles.')
+      setLoading(false); return
+    }
+    try {
+      await saveBonus({
+        employee_id: selectedEmp.id,
+        start_date: params.startDate,
+        end_date: params.endDate,
+        bonus_type: 'exceptionnel',
+        total_amount: parseFloat(exceptionnelAmount),
+        details: { motif: exceptionnelMotif },
+      })
+      navigateAfterSave()
+    } catch (err) {
+      setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : `Erreur (${err.response?.status}): ${err.response?.data?.detail || err.message || "inconnue"}`)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const [exceptionnelMotif, setExceptionnelMotif] = useState('')
+
   const handleSimpleChange = (e) => setSimpleForm({ ...simpleForm, [e.target.name]: e.target.value })
 
   const handleSelectEmployee = (e) => {
@@ -492,7 +532,7 @@ export default function BonusForm() {
     if (emp) {
       const allowed = BONUS_TYPE_DEPARTMENTS[editType]
       if (allowed && !allowed.includes(emp.department)) {
-        setError(`Le département "${emp.department}" n'est pas autorisé pour les primes ${editType === 'mensuel' ? 'mensuelles' : editType === 'astreinte' ? "d'astreinte" : 'de commission'}.`)
+        setError(`Le département "${emp.department}" n'est pas autorisé pour les primes ${editType === 'mensuel' ? 'mensuelles' : editType === 'astreinte' ? "d'astreinte" : editType === 'commission' ? 'de commission' : "d'intervention exceptionnelle"}.`)
         setSelectedEmp(null)
         setEmployee({ department: '', service: '', name: '', function: '', matricule: '' })
         return
@@ -1023,6 +1063,41 @@ export default function BonusForm() {
             <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
             <button type="submit" disabled={loading} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
               {loading ? <span className="loading loading-spinner" /> : `Créer les primes (${primeCount})`}
+            </button>
+          </div>
+        </form>
+      </div>
+    )
+  }
+
+  if (editType === 'exceptionnel') {
+    return (
+      <div className="page-container !px-2 max-w-full">
+        <div className="flex items-center gap-3 mb-6">
+          <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
+          <div className="flex items-center gap-2"><span className="w-6 h-6 text-rose-600"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg></span><div><h1 className="page-title">Intervention Exceptionnelle</h1><p className="text-sm text-base-content/50">Prime pour intervention ponctuelle exceptionnelle</p></div></div>
+        </div>
+        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+        <form onSubmit={handleSubmitExceptionnel} className="space-y-3">
+          {sharedHeader}
+          <div className="card-blueline p-4">
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-base-content/70 mb-1">Montant (Ar)</label>
+                <input type="number" value={exceptionnelAmount} onChange={(e) => setExceptionnelAmount(e.target.value)}
+                  className="w-full max-w-xs px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-base-content/70 mb-1">Motif</label>
+                <textarea value={exceptionnelMotif} onChange={(e) => setExceptionnelMotif(e.target.value)}
+                  className="w-full max-w-lg px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 resize-none" rows={2} placeholder="Raison de l'intervention..." />
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end">
+            <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
+            <button type="submit" disabled={loading} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+              {loading ? <span className="loading loading-spinner" /> : 'Valider'}
             </button>
           </div>
         </form>

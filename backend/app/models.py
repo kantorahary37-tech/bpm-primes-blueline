@@ -29,6 +29,7 @@ class BonusType(str, Enum):
     MENSUEL = "mensuel"
     ASTREINTE = "astreinte"
     COMMISSION = "commission"
+    EXCEPTIONNEL = "exceptionnel"
 
 # Enumération des statuts de validation
 class ValidationStatus(str, Enum):
@@ -95,7 +96,7 @@ class Bonus(models.Model):
     # Date de fin de la période
     end_date = fields.DateField()
     # Type de prime (mensuel/astreinte/commission)
-    bonus_type = fields.CharEnumField(BonusType)
+    bonus_type = fields.CharEnumField(BonusType, max_length=20)
     # Score de performance (optionnel)
     performance_score = fields.DecimalField(max_digits=5, decimal_places=2, null=True)
     # Nombre d'absences (optionnel)
@@ -159,7 +160,7 @@ class PrimeMax(models.Model):
     # Département concerné
     department = fields.CharEnumField(DepartmentType)
     # Type de prime concerné
-    bonus_type = fields.CharEnumField(BonusType)
+    bonus_type = fields.CharEnumField(BonusType, max_length=20)
     # Montant maximum de la prime
     amount = fields.DecimalField(max_digits=15, decimal_places=2)
     # Utilisateur ayant défini le montant (optionnel)
