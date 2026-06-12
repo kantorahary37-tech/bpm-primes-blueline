@@ -35,9 +35,12 @@ const BonusesList = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [bonuses, setBonuses] = useState([]);
-  const [viewMode, setViewMode] = useState(() => new URLSearchParams(window.location.search).get('view') === 'status' ? 'status' : 'date');
+  const [viewMode, setViewMode] = useState(() => {
+    const v = new URLSearchParams(window.location.search).get('view');
+    return v === 'status' || v === 'date' ? v : 'date';
+  });
   const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get('status') || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
