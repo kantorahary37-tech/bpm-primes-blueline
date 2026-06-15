@@ -10,6 +10,9 @@ import io
 import csv
 from datetime import datetime
 from tortoise.expressions import Q
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, numbers
+from openpyxl.utils import get_column_letter
 
 # Création du routeur API
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -232,6 +235,118 @@ async def export_bonuses(
         iter(['\ufeff' + output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=export_primes_{datetime.now().strftime('%Y%m%d')}.csv"}
+    )
+
+
+@router.get("/bonuses/export/xlsx")
+async def export_bonuses_xlsx(
+    status: Optional[str] = None,
+    employee_id: Optional[int] = None,
+    bonus_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    department: Optional[str] = None,
+    search: Optional[str] = None,
+    columns: Optional[str] = None,
+    was_rejected: Optional[bool] = None,
+):
+    query = Bonus.all().prefetch_related('employee', 'created_by')
+    if status: query = query.filter(status=status)
+    if employee_id: query = query.filter(employee_id=employee_id)
+    if bonus_type: query = query.filter(bonus_type=bonus_type)
+    if start_date and end_date:
+        query = query.filter(start_date__lte=end_date, end_date__gte=start_date)
+    elif start_date:
+        query = query.filter(start_date__gte=start_date)
+    elif end_date:
+        query = query.filter(end_date__lte=end_date)
+    if department: query = query.filter(employee__department=department)
+    if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
+    if search:
+        query = query.filter(
+            Q(employee__name__icontains=search) | Q(employee__matricule__icontains=search)
+        )
+
+    bonuses = await query.order_by('-start_date')
+
+    all_columns = [
+        "Matricule", "Nom", "Departement", "TypePrime",
+        "DateDebut", "DateFin", "Montant", "Statut",
+        "DejaRejete", "CreePar", "DateCreation"
+    ]
+    if columns:
+        selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
+    else:
+        selected = all_columns[:]
+
+    extractors = {
+        "Matricule": lambda b: b.employee.matricule,
+        "Nom": lambda b: b.employee.name,
+        "Departement": lambda b: b.employee.department.value,
+        "TypePrime": lambda b: b.bonus_type.value,
+        "DateDebut": lambda b: b.start_date.isoformat(),
+        "DateFin": lambda b: b.end_date.isoformat(),
+        "Montant": lambda b: b.total_amount,
+        "Statut": lambda b: b.status.value,
+        "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
+        "CreePar": lambda b: b.created_by.name if b.created_by else '',
+        "DateCreation": lambda b: b.created_at.isoformat() if b.created_at else '',
+    }
+
+    wb = Workbook()
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    number_font = Font(size=11)
+    alt_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+
+    dept_groups = {}
+    for b in bonuses:
+        dept = b.employee.department.value
+        if dept not in dept_groups:
+            dept_groups[dept] = []
+        dept_groups[dept].append(b)
+
+    def write_sheet(ws, title, data):
+        ws.title = title
+        for col_idx, col_name in enumerate(selected, 1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        for row_idx, b in enumerate(data, 2):
+            for col_idx, col_name in enumerate(selected, 1):
+                val = extractors[col_name](b)
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.font = number_font
+                if col_name == "Montant" and isinstance(val, (int, float)):
+                    cell.number_format = '#,##0'
+                if row_idx % 2 == 0:
+                    cell.fill = alt_fill
+        for col_idx in range(1, len(selected) + 1):
+            max_len = len(str(ws.cell(row=1, column=col_idx).value or ''))
+            for row_idx in range(2, min(len(data) + 2, 50)):
+                cell_val = ws.cell(row=row_idx, column=col_idx).value
+                if cell_val:
+                    max_len = max(max_len, len(str(cell_val)))
+            ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 3, 35)
+
+    ws_all = wb.active
+    write_sheet(ws_all, "Toutes", bonuses)
+
+    for dept in sorted(dept_groups.keys()):
+        ws = wb.create_sheet()
+        write_sheet(ws, dept[:31], dept_groups[dept])
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=export_primes_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        }
     )
 
 

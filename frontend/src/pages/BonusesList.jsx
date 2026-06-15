@@ -621,13 +621,13 @@ const BonusesList = () => {
                 }
                 p.set('columns', exportColumns.join(','))
                 const token = localStorage.getItem('token')
-                fetch(`/api/v1/bonuses/export?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+                fetch(`/api/v1/bonuses/export/xlsx?${p.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
                   .then(r => r.blob())
                   .then(blob => {
                     const url = URL.createObjectURL(blob)
                     const a = document.createElement('a')
                     a.href = url
-                    a.download = `export_primes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+                    a.download = `export_primes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`
                     a.click()
                     URL.revokeObjectURL(url)
                     setShowExportModal(false)
