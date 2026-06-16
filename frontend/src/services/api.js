@@ -62,13 +62,14 @@ export const updateEmployee = async (id, employeeData) => {
   return data;
 };
 
-export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null) => {
+export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false) => {
   const params = {};
   if (status) params.status = status;
   if (employeeId) params.employee_id = employeeId;
   if (bonusType) params.bonus_type = bonusType;
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
+  if (showPaid) params.show_paid = true;
   const { data } = await api.get('/bonuses/', { params });
   return data;
 };
@@ -85,6 +86,11 @@ export const updateBonus = async (id, data) => {
 
 export const getBonus = async (id) => {
   const { data } = await api.get(`/bonuses/${id}`);
+  return data;
+};
+
+export const markBonusesPaid = async (payload) => {
+  const { data } = await api.post('/bonuses/mark-paid', payload);
   return data;
 };
 

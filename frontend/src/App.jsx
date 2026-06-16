@@ -9,6 +9,7 @@ import BonusTypeSelect from './pages/BonusTypeSelect'
 import BonusDetail from './pages/BonusDetail'
 import PlafondsPage from './pages/PlafondsPage'
 import ValidatedBonuses from './pages/ValidatedBonuses'
+import ArchivePage from './pages/ArchivePage'
 import Employees from './pages/Employees'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
@@ -19,6 +20,15 @@ function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="flex justify-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
   if (!user) return <Navigate to="/login" />
+  return <Layout>{children}</Layout>
+}
+
+function RestrictedRoute({ children, roles }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="flex justify-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
+  if (!user) return <Navigate to="/login" />
+  const allowed = roles.some(r => user[r])
+  if (!allowed) return <Navigate to="/" />
   return <Layout>{children}</Layout>
 }
 
@@ -37,6 +47,7 @@ function AppContent() {
       <Route path="/bonuses/edit/:id" element={<ProtectedRoute><BonusForm /></ProtectedRoute>} />
       <Route path="/kanban/:type" element={<ProtectedRoute><BonusKanban /></ProtectedRoute>} />
       <Route path="/validated" element={<ProtectedRoute><ValidatedBonuses /></ProtectedRoute>} />
+      <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg']}><ArchivePage /></RestrictedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>

@@ -155,11 +155,16 @@ async def list_bonuses(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     was_rejected: Optional[bool] = None,
+    show_paid: Optional[bool] = False,
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee')
     if not (user.is_dg or user.is_drh) and user.department:
         query = query.filter(employee__department=user.department)
+    if show_paid:
+        query = query.filter(paid_at__isnull=False)
+    else:
+        query = query.filter(paid_at__isnull=True)
     if status: query = query.filter(status=status)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
@@ -539,3 +544,33 @@ async def validate_bonus(
     # Sauvegarde de la prime
     await bonus.save()
     return {"message": "OK", "status": bonus.status}
+
+
+# Route POST pour marquer des primes comme payées
+@router.post("/bonuses/mark-paid")
+async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_current_user)):
+    if not user.is_drh and not user.is_dg:
+        raise HTTPException(403, "Seul le DRH peut marquer les primes comme payées")
+
+    query = Bonus.filter(status=ValidationStatus.VALIDE, paid_at__isnull=True)
+
+    if req.bonus_ids:
+        query = query.filter(id__in=req.bonus_ids)
+    elif req.month and req.year:
+        query = query.filter(
+            start_date__year=int(req.year),
+            start_date__month=int(req.month),
+        )
+    else:
+        raise HTTPException(400, "Fournir bonus_ids ou month+year")
+
+    bonuses = await query
+    if not bonuses:
+        raise HTTPException(404, "Aucune prime validée trouvée à marquer comme payée")
+
+    now = datetime.utcnow()
+    for bonus in bonuses:
+        bonus.paid_at = now
+        await bonus.save()
+
+    return {"message": f"{len(bonuses)} prime(s) marquée(s) comme payée(s)", "count": len(bonuses)}

@@ -104,6 +104,7 @@ class BonusCreate(BonusBase): pass
 class BonusResponse(BonusBase):
     id: int
     status: ValidationStatus
+    paid_at: Optional[datetime] = None
     created_by_id: int
     created_at: datetime
     updated_at: datetime
@@ -133,6 +134,12 @@ class BatchValidateResponse(BaseModel):
     results: List[BatchValidateResult]
     total_success: int
     total_errors: int
+
+# Schéma pour marquer comme payé
+class MarkPaidRequest(BaseModel):
+    bonus_ids: Optional[List[int]] = None
+    month: Optional[str] = None  # format MM
+    year: Optional[str] = None   # format YYYY
 
 # Schéma de réponse validation
 class ValidationResponse(BaseModel):

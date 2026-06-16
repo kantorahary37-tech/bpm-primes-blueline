@@ -1,9 +1,11 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { getBonuses, validateBonus, batchValidateBonuses } from '../services/api';
+import { getBonuses, validateBonus, batchValidateBonuses, markBonusesPaid } from '../services/api';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon, FilterIcon } from '../components/Icons';
+import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon, FilterIcon, ChevronLeftIcon } from '../components/Icons';
 import Modal from '../components/Modal';
+
+const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -48,10 +50,14 @@ const [filterMonth, setFilterMonth] = useState('');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [confirmBonus, setConfirmBonus] = useState(null);
+  const [payConfirm, setPayConfirm] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportColumns, setExportColumns] = useState(EXPORT_COLUMNS_LIST);
   const [selectedBonuses, setSelectedBonuses] = useState(new Set());
   const [batchReject, setBatchReject] = useState(null);
+  const [paying, setPaying] = useState(false);
+  const [datePage, setDatePage] = useState(1);
+  const [sectionExpand, setSectionExpand] = useState({});
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -76,6 +82,8 @@ const [filterMonth, setFilterMonth] = useState('');
       window.history.replaceState({}, '');
     }
   }, []);
+
+  useEffect(() => { setDatePage(1); }, [typeFilter, statusFilter, searchQuery, depFilter, filterMonth, filterYear]);
 
   const handleValidate = async (bonusId, step) => {
     setConfirmBonus({ bonusId, step });
@@ -232,7 +240,14 @@ const [filterMonth, setFilterMonth] = useState('');
     })
   }, [filteredBonuses]);
 
+  const canSelect = (bonus) => {
+    if (user?.is_drh || user?.is_dg) return bonus.status === 'Prime validée';
+    return true;
+  };
+
   const toggleSelect = (id) => {
+    const bonus = bonuses.find(b => b.id === id);
+    if (bonus && !canSelect(bonus)) return;
     setSelectedBonuses(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -241,7 +256,7 @@ const [filterMonth, setFilterMonth] = useState('');
   };
 
   const selectAllFiltered = () => {
-    const ids = filteredBonuses.map(b => b.id);
+    const ids = filteredBonuses.filter(b => canSelect(b)).map(b => b.id);
     setSelectedBonuses(new Set(ids));
   };
 
@@ -405,11 +420,34 @@ const [filterMonth, setFilterMonth] = useState('');
       ) : viewMode === 'status' ? sections.map((section) => {
         const items = grouped[section.key] || [];
         if (items.length === 0 && section.key !== 'myValidation') return null;
+        const showAll = sectionExpand[section.key];
+        const limit = 12;
+        const visible = showAll ? items : items.slice(0, limit);
+        const remaining = items.length - limit;
 
         return (
           <div key={section.key} className="mb-6">
             <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl ${section.highlight ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
               <h2 className="font-semibold">{section.title}</h2>
+              {section.key === 'validated' && (user?.is_drh || user?.is_dg) && items.length > 0 && (
+                <div className="flex gap-1">
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedBonuses(new Set(items.filter(b => canSelect(b)).map(b => b.id)));
+                  }}
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors">
+                    Tout sélectionner
+                  </button>
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    const allIds = items.filter(b => b.status === 'Prime validée').map(b => b.id);
+                    setPayConfirm({ type: 'batch', ids: allIds, count: allIds.length });
+                  }}
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-100 hover:bg-emerald-500/50 transition-colors">
+                    Marquer tout payé
+                  </button>
+                </div>
+              )}
               <span className={`ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full ${section.highlight ? 'bg-white text-blue-700' : 'bg-gray-300 text-gray-700'}`}>
                 {items.length}
               </span>
@@ -422,7 +460,7 @@ const [filterMonth, setFilterMonth] = useState('');
             ) : (
               <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3">
-                  {items.map((bonus) => {
+                  {visible.map((bonus) => {
                     const step = getValidStep(bonus)
                     const selected = selectedBonuses.has(bonus.id)
                     return (
@@ -436,8 +474,11 @@ const [filterMonth, setFilterMonth] = useState('');
                         }`}
                       >
                         <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                          <input type="checkbox" checked={selected} onChange={() => toggleSelect(bonus.id)}
-                            className="checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+                          <input type="checkbox" checked={selected}
+                            disabled={!canSelect(bonus)}
+                            onChange={() => toggleSelect(bonus.id)}
+                            title={!canSelect(bonus) ? "Seules les primes validées peuvent être sélectionnées" : ""}
+                            className={`checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600 ${!canSelect(bonus) ? 'opacity-40 cursor-not-allowed' : ''}`} />
                         </div>
                         <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
                           {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
@@ -474,14 +515,35 @@ const [filterMonth, setFilterMonth] = useState('');
                     )
                   })}
                 </div>
+                {remaining > 0 && (
+                  <button onClick={() => setSectionExpand(prev => ({ ...prev, [section.key]: !showAll }))}
+                    className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">
+                    {showAll ? `Réduire` : `Afficher tout (${items.length})`}
+                  </button>
+                )}
               </div>
             )}
           </div>
         );
-      }) : monthGroups.map(({ ym, monthName, bonuses: items }) => (
+      }) : (() => {
+        const PAGE_SIZE = 4;
+        const totalPages = Math.max(1, Math.ceil(monthGroups.length / PAGE_SIZE));
+        const safePage = Math.min(datePage, totalPages);
+        const visibleGroups = monthGroups.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+        return (
+          <>
+          {visibleGroups.map(({ ym, monthName, bonuses: items }) => {
+        const validatedCount = items.filter(b => b.status === 'Prime validée').length;
+        return (
         <div key={ym} className="mb-6">
           <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
             <h2 className="font-semibold text-sm">{monthName}</h2>
+            {(user?.is_drh || user?.is_dg) && validatedCount > 0 && (
+              <button onClick={() => {
+                const [y, m] = ym.split('-')
+                setPayConfirm({ type: 'month', month: m, year: y, monthName, count: validatedCount })
+              }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Marquer payé ({validatedCount})</button>
+            )}
             <span className="ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
           </div>
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
@@ -497,8 +559,11 @@ const [filterMonth, setFilterMonth] = useState('');
                         : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'
                     }`}>
                     <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                      <input type="checkbox" checked={selected} onChange={() => toggleSelect(bonus.id)}
-                        className="checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+                      <input type="checkbox" checked={selected}
+                        disabled={!canSelect(bonus)}
+                        onChange={() => toggleSelect(bonus.id)}
+                        title={!canSelect(bonus) ? "Seules les primes validées peuvent être sélectionnées" : ""}
+                        className={`checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600 ${!canSelect(bonus) ? 'opacity-40 cursor-not-allowed' : ''}`} />
                     </div>
                     <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
                       {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
@@ -532,7 +597,25 @@ const [filterMonth, setFilterMonth] = useState('');
             </div>
           </div>
         </div>
-      ))}
+      );
+      })}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-2 mb-4">
+          <button disabled={safePage <= 1} onClick={() => setDatePage(p => p - 1)}
+            className="btn btn-sm btn-ghost text-gray-500 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed">
+            <ChevronLeftIcon className="w-4 h-4" /> Précédent
+          </button>
+          <span className="text-xs text-gray-400 font-medium">Page {safePage} / {totalPages}</span>
+          <button disabled={safePage >= totalPages} onClick={() => setDatePage(p => p + 1)}
+            className="btn btn-sm btn-ghost text-gray-500 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed">
+            Suivant <ChevronRightIcon />
+          </button>
+        </div>
+      )}
+      </>
+    );
+  })()
+}
 
       {selectedBonuses.size > 0 && (
         <div className="sticky bottom-4 z-40 flex items-center justify-between gap-3 px-4 py-3 bg-white rounded-xl border border-gray-200 shadow-lg">
@@ -541,6 +624,10 @@ const [filterMonth, setFilterMonth] = useState('');
             <button onClick={selectAllFiltered} className="btn btn-ghost btn-xs">Tout</button>
             <button onClick={clearSelection} className="btn btn-ghost btn-xs text-gray-400">Aucun</button>
             <div className="w-px h-5 bg-gray-200" />
+            {(user?.is_drh || user?.is_dg) && (
+              <button onClick={() => setPayConfirm({ type: 'batch', ids: [...selectedBonuses], count: selectedBonuses.size })}
+                className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Payer ({selectedBonuses.size})</button>
+            )}
             {(() => {
               const step = getCommonStep()
               return step ? (
@@ -651,6 +738,47 @@ const [filterMonth, setFilterMonth] = useState('');
             </div>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={!!payConfirm} onClose={() => { if (!paying) setPayConfirm(null); }} title="Confirmer le paiement" size="sm">
+        {paying ? (
+          <div className="flex items-center justify-center gap-3 py-6">
+            <span className="loading loading-spinner loading-sm text-emerald-600" />
+            <span className="text-sm text-gray-600">Marquage en cours...</span>
+          </div>
+        ) : payConfirm?.type === 'month' ? (
+          <>
+            <p className="text-sm text-gray-600 mb-6">
+              Marquer toutes les primes validées de <strong>{payConfirm.monthName}</strong> comme payées ?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setPayConfirm(null)} className="btn btn-sm btn-ghost">Annuler</button>
+              <button onClick={() => {
+                setPaying(true)
+                markBonusesPaid({ month: payConfirm.month, year: payConfirm.year })
+                  .then(r => { showToast('success', r.message); fetchBonuses(); setPayConfirm(null) })
+                  .catch(e => showToast('error', e.response?.data?.detail || 'Erreur'))
+                  .finally(() => setPaying(false))
+              }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 mb-6">
+              Marquer les <strong>{payConfirm?.count}</strong> prime(s) sélectionnée(s) comme payées ?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setPayConfirm(null)} className="btn btn-sm btn-ghost">Annuler</button>
+              <button onClick={() => {
+                setPaying(true)
+                markBonusesPaid({ bonus_ids: payConfirm.ids })
+                  .then(r => { showToast('success', r.message); clearSelection(); fetchBonuses(); setPayConfirm(null) })
+                  .catch(e => showToast('error', e.response?.data?.detail || 'Erreur'))
+                  .finally(() => setPaying(false))
+              }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>
+            </div>
+          </>
+        )}
       </Modal>
     </div>
   );

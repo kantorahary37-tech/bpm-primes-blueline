@@ -127,6 +127,8 @@ class Bonus(models.Model):
     details = fields.JSONField(null=True)
     # Indique si la prime a déjà été rejetée
     was_rejected = fields.BooleanField(default=False)
+    # Date de paiement (null = pas encore payée)
+    paid_at = fields.DatetimeField(null=True)
     # Statut de validation de la prime
     status = fields.CharEnumField(ValidationStatus, default=ValidationStatus.INITIALISE)
     # Créateur de la prime (relation vers User)
