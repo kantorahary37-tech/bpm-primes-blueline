@@ -241,8 +241,10 @@ const [filterMonth, setFilterMonth] = useState('');
   }, [filteredBonuses]);
 
   const canSelect = (bonus) => {
-    if (user?.is_drh || user?.is_dg) return bonus.status === 'Prime validée';
-    return true;
+    const step = getValidStep(bonus);
+    if (step) return true;
+    if ((user?.is_drh || user?.is_dg) && bonus.status === 'Prime validée') return true;
+    return false;
   };
 
   const toggleSelect = (id) => {
