@@ -58,17 +58,24 @@ const Dashboard = () => {
     const totalAmount = bonuses.reduce((s, b) => s + (parseFloat(b.total_amount) || 0), 0);
 
     const byType = {};
+    const validatedByType = {};
     for (const b of bonuses) {
       const tp = b.bonus_type || 'inconnu';
       if (!byType[tp]) byType[tp] = { count: 0, amount: 0 };
       byType[tp].count++;
       byType[tp].amount += parseFloat(b.total_amount) || 0;
+
+      if (b.status === 'Prime validée') {
+        if (!validatedByType[tp]) validatedByType[tp] = { count: 0, amount: 0 };
+        validatedByType[tp].count++;
+        validatedByType[tp].amount += parseFloat(b.total_amount) || 0;
+      }
     }
 
     const pending = bonuses.filter(b => b.status !== 'Validé' && b.status !== 'Rejeté' && b.status !== 'Prime validée' && b.status !== 'Prime rejetée').length;
     const validated = bonuses.filter(b => b.status === 'Validé' || b.status === 'Prime validée').length;
 
-    return { total, totalAmount, pending, validated, byType, employees: employees.length };
+    return { total, totalAmount, pending, validated, byType, validatedByType, employees: employees.length };
   }, [bonuses, employees]);
 
   const myPending = useMemo(() => {
@@ -133,19 +140,29 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
         {Object.entries(typeConfig).map(([key, cfg]) => {
           const data = stats.byType[key] || { count: 0, amount: 0 };
+          const valData = stats.validatedByType[key] || { count: 0, amount: 0 };
           const Icon = cfg.icon;
           return (
-            <Link key={key} to={`/kanban/${key}`} className={`bg-white rounded-xl border ${cfg.border} p-4 flex items-center gap-3 hover:shadow-md transition-all`}>
-              <div className={`w-10 h-10 rounded-lg ${cfg.bg} ${cfg.color} flex items-center justify-center shrink-0`}>
-                <Icon className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0 flex items-center justify-between">
-                <div>
+            <Link key={key} to={`/kanban/${key}`} className={`bg-white rounded-xl border ${cfg.border} p-4 hover:shadow-md transition-all`}>
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-lg ${cfg.bg} ${cfg.color} flex items-center justify-center shrink-0`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900">{cfg.label}</p>
-                  <p className="text-xs text-gray-400">{data.count} prime{data.count !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-gray-400">{data.count} total</p>
                 </div>
                 <p className="text-sm font-bold text-gray-900">{formatAmount(data.amount)}</p>
               </div>
+              {valData.count > 0 && (
+                <div className="flex items-center justify-between px-1 pt-2 border-t border-gray-100">
+                  <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    {valData.count} validée{valData.count > 1 ? 's' : ''}
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-600">{formatAmount(valData.amount)}</span>
+                </div>
+              )}
             </Link>
           );
         })}
