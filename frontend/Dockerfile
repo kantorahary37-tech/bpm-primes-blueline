@@ -1,11 +1,11 @@
-# Frontend Dockerfile with Bun
-FROM oven/bun:1-alpine
+# Frontend Dockerfile with Node 22
+FROM node:22-alpine
 
 WORKDIR /app
 
-# Install dependencies with Bun
-COPY package.json ./
-RUN bun install
+# Install dependencies with npm
+COPY package.json package-lock.json ./
+RUN npm install
 
 # Copy the rest of the application
 COPY . .
@@ -13,5 +13,5 @@ COPY . .
 # Expose the port
 EXPOSE 3000
 
-# Run the development server with Bun
-CMD ["bun", "run", "dev", "--", "--host", "0.0.0.0"]
+# Run the development server
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
