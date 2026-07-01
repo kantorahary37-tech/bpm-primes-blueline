@@ -1,5 +1,5 @@
 # Frontend Dockerfile with Bun
-FROM oven/bun:latest
+FROM oven/bun:1-alpine
 
 WORKDIR /app
 
