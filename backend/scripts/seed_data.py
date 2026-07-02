@@ -18,10 +18,10 @@ async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
 
     # Nettoyage
-    await Bonus.all().delete()
-    await Employee.all().delete()
-    await User.all().delete()
-    await PrimeMax.all().delete()
+    # await Bonus.all().delete()
+    # await Employee.all().delete()
+    # await User.all().delete()
+    # await PrimeMax.all().delete()
 
     # Création des utilisateurs
     users_data = [
@@ -35,6 +35,8 @@ async def seed():
              poste="DG", department="DG", is_dg=True),
         dict(email="rindra.razafimbelo@blueline-business.mg", name="RAZAFIMBELO Faliharinohatra Rindra",
              poste="DA", department="BBS", is_validator_n1=True),
+        dict(email="natana.randriambololona@blueline-business.mg", name="RANDRIAMBOLONOLONA Natana",
+             poste="Commercial GP", department="Commercial GP", is_validator_n1=True),
     ]
 
     users = []
