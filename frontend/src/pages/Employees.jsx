@@ -190,14 +190,18 @@ const Employees = () => {
       )}
 
       <div className="flex items-center gap-2 mb-4">
-        <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
-          <option value="">Tous les départements</option>
-          {user?.department && <option value={user.department}>Mon département ({user.department})</option>}
-          {deptNames.filter(d => d !== user?.department).map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
+        {user?.is_dg || user?.is_drh ? (
+          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+            <option value="">Tous les départements</option>
+            {user?.department && <option value={user.department}>Mon département ({user.department})</option>}
+            {deptNames.filter(d => d !== user?.department).map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-sm text-gray-600">Département : <strong>{user?.department}</strong></span>
+        )}
         <span className="text-xs text-gray-400">{employees.length} employé(s)</span>
       </div>
 

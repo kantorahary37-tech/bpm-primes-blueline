@@ -23,8 +23,11 @@ async def list_employees(
 ):
     query = Employee.all()
 
-    if department:
-        query = query.filter(dept_str=department)
+    if user.is_dg or user.is_drh:
+        if department:
+            query = query.filter(dept_str=department)
+    else:
+        query = query.filter(dept_str=user.department)
 
     return await query
 
