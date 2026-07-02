@@ -41,9 +41,9 @@ const DEFAULT_QUALI_CRITERIA = [
 ]
 
 const BONUS_TYPE_DEPARTMENTS = {
-  mensuel: ['Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
+  mensuel: ['Clientèle', 'Commerciale', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
   astreinte: ['BBS', 'DO', 'DSI', 'DT'],
-  commission: ['Commercial GP', 'Commercial entreprise'],
+  commission: ['Commerciale'],
 }
 
 export default function BonusForm() {

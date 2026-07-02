@@ -6,8 +6,7 @@ from enum import Enum
 # Enumération des départements de l'entreprise
 class DepartmentType(str, Enum):
     CLIENTELE = "Clientèle"
-    COMMERCIAL_GP = "Commercial GP"
-    COMMERCIAL_ENTREPRISE = "Commercial entreprise"
+    COMMERCIALE = "Commerciale"
     ADV = "ADV"
     FIDELISATION = "Fidélisation"
     AUDITEUR_INTERNE = "Auditeur interne"

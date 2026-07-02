@@ -10,7 +10,7 @@ from tortoise import Tortoise, run_async
 from app.models import PrimeMax, Department
 
 DEPARTMENTS = [
-    'Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation',
+    'Clientèle', 'Commerciale', 'ADV', 'Fidélisation',
     'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat',
     'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG',
 ]
@@ -27,7 +27,7 @@ DEFAULTS = {
 BONUS_TYPE_DEPARTMENTS = {
     'mensuel': DEPARTMENTS,
     'astreinte': ['BBS', 'DO', 'DSI', 'DT'],
-    'commission': ['Commercial GP', 'Commercial entreprise'],
+    'commission': ['Commerciale'],
     'intervention': ['BBS', 'DO', 'DSI', 'DT'],
     'ponctuelle': ['BBS', 'DO', 'DSI', 'DT'],
     'exceptionnel': ['BBS', 'DO', 'DSI', 'DT'],

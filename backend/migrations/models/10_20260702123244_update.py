@@ -10,7 +10,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     "name" VARCHAR(50) NOT NULL UNIQUE
 );
         INSERT INTO "department" ("name") VALUES
-            ('Clientèle'), ('Commercial GP'), ('Commercial entreprise'),
+            ('Clientèle'), ('Commerciale'),
             ('ADV'), ('Fidélisation'), ('Auditeur interne'),
             ('DAF Contrôleur'), ('DAF CDG'), ('CTB'), ('RH'),
             ('Achat'), ('BBS'), ('Communication & Mktg'), ('DO'),
@@ -36,9 +36,9 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
         ALTER TABLE "user" DROP COLUMN "department_id";
         ALTER TABLE "employee" DROP COLUMN "department_id";
         ALTER TABLE "primemax" DROP COLUMN "department_id";
-        COMMENT ON COLUMN "user"."department" IS 'CLIENTELE: Clientèle\nCOMMERCIAL_GP: Commercial GP\nCOMMERCIAL_ENTREPRISE: Commercial entreprise\nADV: ADV\nFIDELISATION: Fidélisation\nAUDITEUR_INTERNE: Auditeur interne\nDAF_CONTROLEUR: DAF Contrôleur\nDAF_CDG: DAF CDG\nCTB: CTB\nRH: RH\nACHAT: Achat\nBBS: BBS\nCOMM_MKTG: Communication & Mktg\nDO: DO\nDSI: DSI\nDT: DT\nLOGISTIQUE: Logistique\nDG: DG';
-COMMENT ON COLUMN "employee"."department" IS 'CLIENTELE: Clientèle\nCOMMERCIAL_GP: Commercial GP\nCOMMERCIAL_ENTREPRISE: Commercial entreprise\nADV: ADV\nFIDELISATION: Fidélisation\nAUDITEUR_INTERNE: Auditeur interne\nDAF_CONTROLEUR: DAF Contrôleur\nDAF_CDG: DAF CDG\nCTB: CTB\nRH: RH\nACHAT: Achat\nBBS: BBS\nCOMM_MKTG: Communication & Mktg\nDO: DO\nDSI: DSI\nDT: DT\nLOGISTIQUE: Logistique\nDG: DG';
-COMMENT ON COLUMN "primemax"."department" IS 'CLIENTELE: Clientèle\nCOMMERCIAL_GP: Commercial GP\nCOMMERCIAL_ENTREPRISE: Commercial entreprise\nADV: ADV\nFIDELISATION: Fidélisation\nAUDITEUR_INTERNE: Auditeur interne\nDAF_CONTROLEUR: DAF Contrôleur\nDAF_CDG: DAF CDG\nCTB: CTB\nRH: RH\nACHAT: Achat\nBBS: BBS\nCOMM_MKTG: Communication & Mktg\nDO: DO\nDSI: DSI\nDT: DT\nLOGISTIQUE: Logistique\nDG: DG';
+        COMMENT ON COLUMN "user"."department" IS 'CLIENTELE: Clientèle\nCOMMERCIALE: Commerciale\nADV: ADV\nFIDELISATION: Fidélisation\nAUDITEUR_INTERNE: Auditeur interne\nDAF_CONTROLEUR: DAF Contrôleur\nDAF_CDG: DAF CDG\nCTB: CTB\nRH: RH\nACHAT: Achat\nBBS: BBS\nCOMM_MKTG: Communication & Mktg\nDO: DO\nDSI: DSI\nDT: DT\nLOGISTIQUE: Logistique\nDG: DG';
+COMMENT ON COLUMN "employee"."department" IS 'CLIENTELE: Clientèle\nCOMMERCIALE: Commerciale\nADV: ADV\nFIDELISATION: Fidélisation\nAUDITEUR_INTERNE: Auditeur interne\nDAF_CONTROLEUR: DAF Contrôleur\nDAF_CDG: DAF CDG\nCTB: CTB\nRH: RH\nACHAT: Achat\nBBS: BBS\nCOMM_MKTG: Communication & Mktg\nDO: DO\nDSI: DSI\nDT: DT\nLOGISTIQUE: Logistique\nDG: DG';
+COMMENT ON COLUMN "primemax"."department" IS 'CLIENTELE: Clientèle\nCOMMERCIALE: Commerciale\nADV: ADV\nFIDELISATION: Fidélisation\nAUDITEUR_INTERNE: Auditeur interne\nDAF_CONTROLEUR: DAF Contrôleur\nDAF_CDG: DAF CDG\nCTB: CTB\nRH: RH\nACHAT: Achat\nBBS: BBS\nCOMM_MKTG: Communication & Mktg\nDO: DO\nDSI: DSI\nDT: DT\nLOGISTIQUE: Logistique\nDG: DG';
         DROP TABLE IF EXISTS "department";"""
 
 

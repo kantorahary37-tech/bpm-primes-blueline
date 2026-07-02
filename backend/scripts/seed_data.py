@@ -36,7 +36,7 @@ async def seed():
         dict(email="rindra.razafimbelo@blueline-business.mg", name="RAZAFIMBELO Faliharinohatra Rindra",
              poste="DA", department="BBS", is_validator_n1=True),
         dict(email="natana.randriambololona@blueline-business.mg", name="RANDRIAMBOLONOLONA Natana",
-             poste="Commercial GP", department="Commercial GP", is_validator_n1=True),
+             poste="Commerciale", department="Commerciale", is_validator_n1=True),
         dict(email="rija.rakoto@staff.blueline.mg", name="Rija Rakoto",
              poste="DSI", department="DSI"),
         dict(email="mahery.andria@staff.blueline.mg", name="Mahery Andria",
@@ -88,7 +88,7 @@ async def seed():
              manager=users_map["rija.rakoto@staff.blueline.mg"]),
         dict(matricule="EMP005", name="Mahery Andria", department="DSI",
              manager=users_map["mahery.andria@staff.blueline.mg"]),
-        dict(matricule="EMP006", name="RANDRIAMBOLONOLONA Natana", department="Commercial GP",
+        dict(matricule="EMP006", name="RANDRIAMBOLONOLONA Natana", department="Commerciale",
              manager=users_map["natana.randriambololona@blueline-business.mg"]),
     ]
 
@@ -120,7 +120,7 @@ async def seed():
     plafonds = [
         dict(department="DSI", bonus_type="mensuel", amount=200000),
         dict(department="BBS", bonus_type="mensuel", amount=150000),
-        dict(department="Commercial GP", bonus_type="mensuel", amount=150000),
+        dict(department="Commerciale", bonus_type="mensuel", amount=150000),
     ]
     for p in plafonds:
         dept_obj = await get_dept(p["department"])

@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 # Import de datetime pour les dates
 from datetime import datetime, date
 # Import des enums depuis les modèles
-from app.models import DepartmentType, BonusType, ValidationStatus
+from app.models import BonusType, ValidationStatus
 
 
 def dept_to_str(v):

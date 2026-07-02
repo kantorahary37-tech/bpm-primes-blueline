@@ -13,12 +13,12 @@ from datetime import date, datetime
 random.seed(42)
 
 MENSUEL_DEPTS = [
-    'Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation',
+    'Clientèle', 'Commerciale', 'ADV', 'Fidélisation',
     'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat',
     'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG',
 ]
 ASTREINTE_DEPTS = ['BBS', 'DO', 'DSI', 'DT']
-COMMISSION_DEPTS = ['Commercial GP', 'Commercial entreprise']
+COMMISSION_DEPTS = ['Commerciale']
 
 QUANTI_CRITERIA = [
     'Planification du travail', 'Respect des deadlines',

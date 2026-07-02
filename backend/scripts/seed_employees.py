@@ -7,21 +7,16 @@ sys.path.append('.')
 
 from app.db_config import TORTOISE_ORM
 from tortoise import Tortoise, run_async
-from app.models import User, Employee, DepartmentType, Department
+from app.models import User, Employee, Department
 from app.auth import get_password_hash
 
-
-DEPARTMENTS = [d.value for d in DepartmentType]
 
 MANAGERS_PER_DEPT = {
     "Clientèle": [
         ("clientele.manager@blueline.mg", "Rakoto Harilala", "Responsable Clientèle", True),
     ],
-    "Commercial GP": [
-        ("comgp.manager@blueline.mg", "Razafy Mamy", "Responsable Commercial GP", True),
-    ],
-    "Commercial entreprise": [
-        ("coment.manager@blueline.mg", "Rabe Nirina", "Responsable Commercial Entreprise", True),
+    "Commerciale": [
+        ("commerciale.manager@blueline.mg", "Razafy Mamy", "Responsable Commerciale", True),
     ],
     "ADV": [
         ("adv.manager@blueline.mg", "Raharinirina Fy", "Responsable ADV", True),
@@ -79,14 +74,12 @@ EMPLOYEES_PER_DEPT = {
         ("CLT005", "Rakotoniaina Holy"),
         ("CLT006", "Rabeharisoa Nivo"),
     ],
-    "Commercial GP": [
+    "Commerciale": [
         ("CGP001", "Razafy Faniry"),
         ("CGP002", "Randrianarison Tahiry"),
         ("CGP003", "Rakotozafy Hery"),
         ("CGP004", "Andrianjafy Nambinina"),
         ("CGP005", "Ranaivosoa Tafita"),
-    ],
-    "Commercial entreprise": [
         ("CEN001", "Rabeantoandro Sarobidy"),
         ("CEN002", "Razafindrakoto Fitahiana"),
         ("CEN003", "Randriatsarafara Rivo"),
