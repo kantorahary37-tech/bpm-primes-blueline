@@ -82,9 +82,9 @@ async def seed():
         dict(matricule="EMP003", name="Vonjy Rakotoniaina", department="DSI",
              manager=users_map["rivo@gulfsat.mg"]),
         dict(matricule="EMP004", name="Rija Rakoto", department="DSI",
-             manager=users_map["rija@gulfsat.mg"]),
+             manager=users_map["rija.rakoto@staff.blueline.mg"]),
         dict(matricule="EMP005", name="Mahery Andria", department="DSI",
-             manager=users_map["mahery@gulfsat.mg"]),
+             manager=users_map["mahery.andria@staff.blueline.mg"]),
         dict(matricule="EMP006", name="RANDRIAMBOLONOLONA Natana", department="Commercial GP",
              manager=users_map["natana.randriambololona@blueline-business.mg"]),
     ]
