@@ -185,8 +185,8 @@ const BonusDetail = () => {
     return (
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-sm text-gray-700">{label}</h4>
-          <span className="text-xs text-gray-400">{totalEval}%</span>
+          <h4 className="font-semibold text-sm text-gray-900">{label}</h4>
+          <span className="text-xs text-gray-600">{totalEval}%</span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
           <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -194,20 +194,20 @@ const BonusDetail = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left py-2 pr-2 font-medium text-gray-400 text-xs">Critères</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-400 text-xs">Objectif</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-400 text-xs">Note</th>
-                <th className="text-right py-2 pl-2 font-medium text-gray-400 text-xs">Valeur (Ar)</th>
+              <tr className="border-b border-gray-300">
+                <th className="text-left py-2 pr-2 font-medium text-gray-600 text-xs">Critères</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Objectif</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Note</th>
+                <th className="text-right py-2 pl-2 font-medium text-gray-600 text-xs">Valeur (Ar)</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
-                <tr key={i} className="border-b border-gray-50">
+                <tr key={i} className="border-b border-gray-200">
                   <td className="py-2 pr-2 text-gray-900">{item.criteria}</td>
-                  <td className="py-2 px-2 text-center text-gray-500">{item.objective}</td>
-                  <td className="py-2 px-2 text-center font-medium text-gray-700">{item.evaluation ?? 0}</td>
-                  <td className="py-2 pl-2 text-right font-medium text-gray-700">{formatAr(item.value)}</td>
+                  <td className="py-2 px-2 text-center text-gray-800">{item.objective}</td>
+                  <td className="py-2 px-2 text-center font-medium text-gray-900">{item.evaluation ?? 0}</td>
+                  <td className="py-2 pl-2 text-right font-medium text-gray-900">{formatAr(item.value)}</td>
                 </tr>
               ))}
               <tr className="font-semibold bg-gray-50">
@@ -298,15 +298,15 @@ const BonusDetail = () => {
               <p className="text-2xl font-bold text-blue-700">{bonus.total_amount} Ar</p>
             </div>
             {bonus.bonus_type === 'mensuel' && bonus.details?.prime_max && (
-              <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-200">
-                <p className="text-xs text-gray-500 font-medium mb-1">Prime maximum</p>
-                <p className="text-2xl font-bold text-gray-700">{formatAr(bonus.details.prime_max)} Ar</p>
+              <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-700 font-medium mb-1">Prime maximum</p>
+                <p className="text-2xl font-bold text-gray-900">{formatAr(bonus.details.prime_max)} Ar</p>
               </div>
             )}
             {bonus.performance_score && (
-              <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-200">
-                <p className="text-xs text-gray-500 font-medium mb-1">Score</p>
-                <p className="text-2xl font-bold text-gray-700">{bonus.performance_score}%</p>
+              <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-700 font-medium mb-1">Score</p>
+                <p className="text-2xl font-bold text-gray-900">{bonus.performance_score}%</p>
               </div>
             )}
           </div>
@@ -323,7 +323,7 @@ const BonusDetail = () => {
                 primeMax={bonus.details.prime_max || bonus.total_amount}
                 color="bg-blue-500"
               />
-              <div className="border-t border-gray-100" />
+              <div className="border-t border-gray-300" />
               <EvaluationTable
                 label="Qualitatif"
                 items={bonus.details.qualitative}
@@ -345,16 +345,16 @@ const BonusDetail = () => {
         {bonus.bonus_type === 'astreinte' && bonus.details && (
           <Section title="Détails astreinte" icon={MoonIcon}>
             <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                <p className="text-xs text-gray-400">Semaines</p>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Semaines</p>
                 <p className="font-semibold text-gray-900">{bonus.details.weeks || '—'}</p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                <p className="text-xs text-gray-400">Prime max / semaine</p>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Prime max / semaine</p>
                 <p className="font-semibold text-gray-900">{formatAr(bonus.details.weekly_max)} Ar</p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                <p className="text-xs text-gray-400">Taux / intervention</p>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Taux / intervention</p>
                 <p className="font-semibold text-gray-900">{formatAr(bonus.details.intervention_rate)} Ar</p>
               </div>
             </div>
@@ -365,10 +365,10 @@ const BonusDetail = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-2 font-medium text-gray-400 text-xs">Employé</th>
-                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Nombre</th>
-                        <th className="text-right py-2 font-medium text-gray-400 text-xs">Montant (Ar)</th>
+                      <tr className="border-b border-gray-300">
+                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Employé</th>
+                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Nombre</th>
+                        <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -397,23 +397,23 @@ const BonusDetail = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-2 font-medium text-gray-400 text-xs">Employé</th>
-                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Date</th>
-                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Heure</th>
-                        <th className="text-left py-2 font-medium text-gray-400 text-xs">Motif</th>
-                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Type</th>
-                        <th className="text-center py-2 font-medium text-gray-400 text-xs">Ticket</th>
-                        <th className="text-right py-2 font-medium text-gray-400 text-xs">Montant (Ar)</th>
+                      <tr className="border-b border-gray-300">
+                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Employé</th>
+                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Date</th>
+                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Heure</th>
+                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Motif</th>
+                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Type</th>
+                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Ticket</th>
+                        <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bonus.details.interventions.map((iv, i) => (
-                        <tr key={i} className="border-b border-gray-50">
+                        <tr key={i} className="border-b border-gray-200">
                           <td className="py-1.5 text-gray-900">{iv.employee_name || `#${iv.employee_id}`}</td>
-                          <td className="py-1.5 text-center text-gray-500 text-xs">{iv.date || '—'}</td>
-                          <td className="py-1.5 text-center text-gray-500 text-xs">{iv.heure || '—'}</td>
-                          <td className="py-1.5 text-gray-500 text-xs">{iv.motif || '—'}</td>
+                          <td className="py-1.5 text-center text-gray-800 text-xs">{iv.date || '—'}</td>
+                          <td className="py-1.5 text-center text-gray-800 text-xs">{iv.heure || '—'}</td>
+                          <td className="py-1.5 text-gray-800 text-xs">{iv.motif || '—'}</td>
                           <td className="py-1.5 text-center text-xs">
                             {iv.type === 'exceptionnelle' ? 'Exceptionnelle' : iv.type === 'ponctuelle' ? 'Ponctuelle' : 'Intervention'}
                           </td>
@@ -451,8 +451,8 @@ const BonusDetail = () => {
         {bonus.bonus_type === 'commission' && (
           <Section title="Détails commission" icon={ChartIcon}>
             <div className="grid grid-cols-2 gap-3 mb-5">
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                <p className="text-xs text-gray-400">Commission par vente</p>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Commission par vente</p>
                 <p className="font-semibold text-gray-900">{formatAr(bonus.taux_commission ?? bonus.details?.rate ?? 0)} Ar</p>
               </div>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
@@ -465,21 +465,21 @@ const BonusDetail = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-2 font-medium text-gray-400 text-xs">Désignation</th>
-                      <th className="text-center py-2 font-medium text-gray-400 text-xs">Nombre</th>
-                      <th className="text-left py-2 font-medium text-gray-400 text-xs">Description</th>
-                      <th className="text-right py-2 font-medium text-gray-400 text-xs">Montant (Ar)</th>
+                    <tr className="border-b border-gray-300">
+                      <th className="text-left py-2 font-medium text-gray-600 text-xs">Désignation</th>
+                      <th className="text-center py-2 font-medium text-gray-600 text-xs">Nombre</th>
+                      <th className="text-left py-2 font-medium text-gray-600 text-xs">Description</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bonus.details.sales.map((sale, i) => {
                       const montant = (parseFloat(sale.nombre) || 0) * (bonus.details.rate || 0);
                       return (
-                        <tr key={i} className="border-b border-gray-50">
+                        <tr key={i} className="border-b border-gray-200">
                           <td className="py-1.5 text-gray-900">{sale.designation || '—'}</td>
                           <td className="py-1.5 text-center">{sale.nombre ?? 0}</td>
-                          <td className="py-1.5 text-gray-500 text-xs">{sale.description || '—'}</td>
+                          <td className="py-1.5 text-gray-800 text-xs">{sale.description || '—'}</td>
                           <td className="py-1.5 text-right font-medium">{formatAr(montant)}</td>
                         </tr>
                       );
