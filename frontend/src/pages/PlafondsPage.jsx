@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPrimeMax, createPrimeMax, updatePrimeMax, deletePrimeMax, getEmployees, updateEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { MoonIcon, CheckIcon, XCircleIcon, LockIcon } from '../components/Icons';
+import { MoonIcon, CalendarIcon, CheckIcon, XCircleIcon, LockIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 
 const ALL_TYPES = [
@@ -26,6 +26,11 @@ const PlafondsPage = () => {
   const [rateModalInitial, setRateModalInitial] = useState([]);
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [mensuelEmployees, setMensuelEmployees] = useState([]);
+  const [showMensuelRateModal, setShowMensuelRateModal] = useState(false);
+  const [mensuelRateModalDept, setMensuelRateModalDept] = useState('');
+  const [mensuelRateModalValues, setMensuelRateModalValues] = useState({});
+  const [mensuelRateModalInitial, setMensuelRateModalInitial] = useState([]);
 
   const fetchPlafonds = async () => {
     try {
@@ -47,6 +52,15 @@ const PlafondsPage = () => {
     }
   };
 
+  const fetchAllEmployees = async () => {
+    try {
+      const all = await getEmployees();
+      setMensuelEmployees(all);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -60,6 +74,7 @@ const PlafondsPage = () => {
     };
     load();
     fetchAstrEmployees();
+    fetchAllEmployees();
   }, []);
 
   const canEdit = (p) => user?.is_dg || user?.is_drh || p.department === user?.department;
@@ -124,6 +139,33 @@ const PlafondsPage = () => {
     }));
     setShowRateModal(false);
     fetchAstrEmployees();
+  };
+
+  const openMensuelRateModal = (dept) => {
+    setMensuelRateModalDept(dept);
+    const values = {};
+    mensuelEmployees.filter(e => e.department === dept).forEach(e => {
+      if (e.mensuel_rate != null) values[e.id] = e.mensuel_rate.toString();
+    });
+    setMensuelRateModalValues(values);
+    setMensuelRateModalInitial(mensuelEmployees.filter(e => e.department === dept && e.mensuel_rate != null).map(e => e.id));
+    setShowMensuelRateModal(true);
+  };
+
+  const applyMensuelRate = async () => {
+    const deptEmps = mensuelEmployees.filter(e => e.department === mensuelRateModalDept);
+    await Promise.all(deptEmps.map(e => {
+      const val = mensuelRateModalValues[e.id];
+      if (val !== undefined && val !== '') {
+        return updateEmployee(e.id, { mensuel_rate: parseInt(val) });
+      }
+      if (val !== undefined && val === '' && mensuelRateModalInitial.includes(e.id)) {
+        return updateEmployee(e.id, { mensuel_rate: null });
+      }
+      return Promise.resolve();
+    }));
+    setShowMensuelRateModal(false);
+    fetchAllEmployees();
   };
 
   if (loading) {
@@ -246,6 +288,48 @@ const PlafondsPage = () => {
             </table>
           </div>
         )}
+
+        {(user?.is_dg || user?.is_drh) && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-2 flex items-center gap-2 border-b bg-amber-50 text-amber-700 border-amber-200">
+              <CalendarIcon className="w-4 h-4" />
+              <span className="font-semibold text-sm">Mensuel — Taux spéciaux</span>
+              <span className="text-xs font-normal opacity-60">— Configurer un montant personnalisé par employé</span>
+            </div>
+            <table className="table table-sm table-zebra w-full">
+              <thead>
+                <tr>
+                  <th className="text-gray-500 font-medium text-xs uppercase tracking-wider">Département</th>
+                  <th className="text-gray-500 font-medium text-xs uppercase tracking-wider">Employés avec taux spécial</th>
+                  <th className="w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...new Set(mensuelEmployees.map(e => e.department))].sort().map((dept) => {
+                  const deptEmps = mensuelEmployees.filter(e => e.department === dept);
+                  const specials = deptEmps.filter(e => e.mensuel_rate != null);
+                  return (
+                    <tr key={dept}>
+                      <td className="font-medium text-gray-900">{dept}</td>
+                      <td className="text-sm text-gray-500">
+                        {specials.length === 0
+                          ? <span className="text-gray-400 italic">Aucun</span>
+                          : specials.map(e => `${e.name} (${e.mensuel_rate.toLocaleString('fr-FR')} Ar)`).join(', ')
+                        }
+                      </td>
+                      <td>
+                        <button onClick={() => openMensuelRateModal(dept)}
+                          className="btn btn-xs bg-amber-600 hover:bg-amber-700 text-white border-0">
+                          Configurer
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <Modal open={showRateModal} onClose={() => setShowRateModal(false)} title={`Taux spéciaux — ${rateModalDept}`} size="lg">
@@ -296,6 +380,60 @@ const PlafondsPage = () => {
           <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
             <button onClick={() => setShowRateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
             <button onClick={applyRate} className="btn btn-sm bg-violet-600 hover:bg-violet-700 text-white border-0 flex items-center gap-1 shadow-sm hover:shadow">
+              <CheckIcon className="w-4 h-4" /> Appliquer
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={showMensuelRateModal} onClose={() => setShowMensuelRateModal(false)} title={`Taux spéciaux Mensuel — ${mensuelRateModalDept}`} size="lg">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <input type="number" id="bulkMensuelRate" placeholder="Montant commun"
+              className="w-28 px-2 py-1 rounded border border-gray-200 text-sm text-center focus:outline-none focus:ring-2 focus:ring-amber-500/30" />
+            <button onClick={() => {
+              const v = document.getElementById('bulkMensuelRate').value;
+              if (!v) return;
+              setMensuelRateModalValues(prev => {
+                const next = { ...prev };
+                mensuelEmployees.filter(e => e.department === mensuelRateModalDept).forEach(e => {
+                  if (!next[e.id] || next[e.id] === '') next[e.id] = v;
+                });
+                return next;
+              });
+              document.getElementById('bulkMensuelRate').value = '';
+            }} className="btn btn-xs bg-amber-100 text-amber-700 hover:bg-amber-200 border-0">Remplir les vides</button>
+            <button onClick={() => {
+              setMensuelRateModalValues(prev => {
+                const next = { ...prev };
+                mensuelEmployees.filter(e => e.department === mensuelRateModalDept).forEach(e => { next[e.id] = ''; });
+                return next;
+              });
+            }} className="btn btn-xs btn-ghost text-gray-500">Tout effacer</button>
+          </div>
+          <div className="space-y-1 max-h-72 overflow-y-auto border border-gray-200 rounded-lg p-1">
+            {mensuelEmployees.filter(e => e.department === mensuelRateModalDept).map(emp => {
+              const val = mensuelRateModalValues[emp.id];
+              const hasVal = val !== undefined && val !== '';
+              return (
+                <div key={emp.id}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${hasVal ? 'bg-amber-50 border border-amber-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                  <span className="text-sm font-medium flex-1">{emp.name}</span>
+                  <input type="number" value={val || ''}
+                    onChange={(e) => setMensuelRateModalValues(prev => ({ ...prev, [emp.id]: e.target.value }))}
+                    placeholder="Défaut"
+                    className="w-24 px-2 py-1 rounded border border-gray-200 text-sm text-center focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500" />
+                  {val === '' && emp.mensuel_rate != null &&
+                    <span className="text-xs text-red-400 w-16 text-right">effacé</span>}
+                  {hasVal &&
+                    <span className="text-xs text-amber-600 w-16 text-right">{parseInt(val).toLocaleString('fr-FR')} Ar</span>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
+            <button onClick={() => setShowMensuelRateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+            <button onClick={applyMensuelRate} className="btn btn-sm bg-amber-600 hover:bg-amber-700 text-white border-0 flex items-center gap-1 shadow-sm hover:shadow">
               <CheckIcon className="w-4 h-4" /> Appliquer
             </button>
           </div>

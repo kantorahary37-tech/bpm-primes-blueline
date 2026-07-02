@@ -9,7 +9,7 @@ sys.path.append('.')
 
 from app.db_config import TORTOISE_ORM
 from tortoise import Tortoise, run_async
-from app.models import User, Employee, Bonus, PrimeMax
+from app.models import User, Employee, Bonus, PrimeMax, Department
 from app.auth import get_password_hash
 from datetime import date
 
@@ -17,11 +17,11 @@ from datetime import date
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
 
-    # Nettoyage
-    # await Bonus.all().delete()
-    # await Employee.all().delete()
-    # await User.all().delete()
-    # await PrimeMax.all().delete()
+    dept_cache = {}
+    async def get_dept(name):
+        if name not in dept_cache:
+            dept_cache[name] = await Department.get_or_none(name=name)
+        return dept_cache[name]
 
     # Création des utilisateurs
     users_data = [
@@ -45,12 +45,14 @@ async def seed():
 
     users_map = {}
     for u in users_data:
+        dept_obj = await get_dept(u["department"])
         user, created = await User.get_or_create(
             email=u["email"],
             defaults={
                 "name": u["name"],
                 "poste": u["poste"],
-                "department": u["department"],
+                "dept_str": u["department"],
+                "dept": dept_obj,
                 "is_validator_n1": u.get("is_validator_n1", False),
                 "is_directeur": u.get("is_directeur", False),
                 "is_drh": u.get("is_drh", False),
@@ -62,7 +64,8 @@ async def seed():
             await user.update_from_dict({
                 "name": u["name"],
                 "poste": u["poste"],
-                "department": u["department"],
+                "dept_str": u["department"],
+                "dept": dept_obj,
                 "is_validator_n1": u.get("is_validator_n1", False),
                 "is_directeur": u.get("is_directeur", False),
                 "is_drh": u.get("is_drh", False),
@@ -91,18 +94,21 @@ async def seed():
 
     employees = []
     for e in employees_data:
+        dept_obj = await get_dept(e["department"])
         emp, created = await Employee.get_or_create(
             matricule=e["matricule"],
             defaults={
                 "name": e["name"],
-                "department": e["department"],
+                "dept_str": e["department"],
+                "dept": dept_obj,
                 "manager": e["manager"],
             }
         )
         if not created:
             await emp.update_from_dict({
                 "name": e["name"],
-                "department": e["department"],
+                "dept_str": e["department"],
+                "dept": dept_obj,
                 "manager": e["manager"],
             }).save()
             print(f"  ~ Employé mis à jour : {emp.name} ({emp.matricule})")
@@ -117,17 +123,19 @@ async def seed():
         dict(department="Commercial GP", bonus_type="mensuel", amount=150000),
     ]
     for p in plafonds:
+        dept_obj = await get_dept(p["department"])
         pm, created = await PrimeMax.get_or_create(
-            department=p["department"],
+            dept_str=p["department"],
             bonus_type=p["bonus_type"],
-            defaults={"amount": p["amount"]}
+            defaults={"amount": p["amount"], "dept": dept_obj}
         )
         if not created:
             pm.amount = p["amount"]
+            pm.dept = dept_obj
             await pm.save()
-            print(f"  ~ Plafond mis à jour : {pm.department} / {pm.bonus_type} = {pm.amount} Ar")
+            print(f"  ~ Plafond mis à jour : {pm.dept_str} / {pm.bonus_type} = {pm.amount} Ar")
         else:
-            print(f"  ✓ Plafond créé : {pm.department} / {pm.bonus_type} = {pm.amount} Ar")
+            print(f"  ✓ Plafond créé : {pm.dept_str} / {pm.bonus_type} = {pm.amount} Ar")
 
     # Création d'une prime de test
     bonus = await Bonus.create(

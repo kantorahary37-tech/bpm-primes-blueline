@@ -11,6 +11,12 @@ const typeLabels = {
   commission: 'Commission',
 };
 
+const statusLabel = (bonus) => {
+  if (!bonus) return '';
+  if (bonus.status === 'En attente Directeur') return `En attente Directeur ${bonus.employee?.department || ''}`;
+  return bonus.status;
+};
+
 const getBadgeClass = (status) => {
   const map = {
     'Initialisé': 'bg-orange-100 text-orange-700',
@@ -80,7 +86,7 @@ const BonusKanban = () => {
                       <span className="font-medium">{b.employee?.name || 'N/A'}</span>
                     </span>
                     <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(b.status)} ${b.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                      {b.status}
+                      {statusLabel(b)}
                     </span>
                     <span className="text-[10px] font-semibold text-blue-600 shrink-0">{b.total_amount} Ar</span>
                   </Link>

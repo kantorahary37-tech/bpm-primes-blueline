@@ -126,6 +126,12 @@ const BonusDetail = () => {
     return null;
   };
 
+    const statusLabel = (bonus) => {
+      if (!bonus) return '';
+      if (bonus.status === 'En attente Directeur') return `En attente Directeur ${bonus.employee?.department || ''}`;
+      return bonus.status;
+    };
+
     const getBadgeClass = (status) => {
       const map = {
         'Initialisé': 'bg-orange-100 text-orange-700',
@@ -257,7 +263,7 @@ const BonusDetail = () => {
           </div>
         </div>
         <span className={`ml-auto text-xs font-medium px-2.5 py-1 rounded-full ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-          {bonus.status}
+          {statusLabel(bonus)}
         </span>
         <button onClick={() => {
           const allCols = [...EXPORT_COLUMNS.common, ...(EXPORT_COLUMNS[bonus.bonus_type] || [])]

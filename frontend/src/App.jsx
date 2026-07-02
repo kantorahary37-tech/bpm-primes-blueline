@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { DepartmentsProvider } from './contexts/DepartmentsContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import BonusesList from './pages/BonusesList'
@@ -58,7 +59,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppContent />
+        <DepartmentsProvider>
+          <AppContent />
+        </DepartmentsProvider>
       </AuthProvider>
     </BrowserRouter>
   )

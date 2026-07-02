@@ -67,6 +67,11 @@ export default function BonusForm() {
     return emp?.astreinte_rate ?? astreinteConfig.weeklyMax
   }
 
+  const getMensuelRate = (empId) => {
+    const emp = employees.find(e => e.id === empId)
+    return emp?.mensuel_rate ?? null
+  }
+
   const saveBonus = isEditing ? (data) => updateBonus(id, data) : createBonus;
   const navigateAfterSave = () => {
     const msg = isEditing ? 'Prime modifiée avec succès' : 'Prime créée avec succès';
@@ -517,10 +522,12 @@ export default function BonusForm() {
       setError('Un ou plusieurs employés sélectionnés ne sont pas autorisés pour les primes mensuelles.')
       setLoading(false); return
     }
-    const amount = Math.min(totalValue, params.maxPrime)
     try {
-      await Promise.all(allEmpIds.map(employee_id =>
-        saveBonus({
+      await Promise.all(allEmpIds.map(employee_id => {
+        const empMaxRate = getMensuelRate(employee_id)
+        const maxPrime = empMaxRate ?? params.maxPrime
+        const amount = Math.min(totalValue, maxPrime)
+        return saveBonus({
           employee_id,
           start_date: params.startDate,
           end_date: params.endDate,
@@ -528,7 +535,7 @@ export default function BonusForm() {
           performance_score: totalEvalPct,
           total_amount: amount,
           details: {
-            prime_max: params.maxPrime,
+            prime_max: maxPrime,
             quantitative: quantitative.map((c) => ({
               criteria: c.criteria, description: c.description,
               objective: c.objective, evaluation: c.evaluation, value: c.value,
@@ -542,7 +549,7 @@ export default function BonusForm() {
             total_evaluation: totalValue,
           },
         })
-      ))
+      }))
       navigateAfterSave()
     } catch (err) {
       setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : `Erreur (${err.response?.status}): ${err.response?.data?.detail || err.message || "inconnue"}`)

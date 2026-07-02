@@ -25,7 +25,7 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
 
     if bonus.bonus_type != BonusType.ASTREINTE:
         primemax = await PrimeMax.filter(
-            department=employee.department,
+            dept_str=employee.dept_str,
             bonus_type=bonus.bonus_type
         ).first()
         if primemax and bonus.total_amount > primemax.amount:
@@ -33,7 +33,7 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
                 status_code=400,
                 detail=f"Le montant ({bonus.total_amount} Ar) dépasse le plafond "
                        f"autorisé ({primemax.amount} Ar) pour "
-                       f"'{bonus.bonus_type.value}' dans le département '{employee.department.value}'."
+                       f"'{bonus.bonus_type.value}' dans le département '{employee.dept_str}'."
             )
 
     existing = await Bonus.filter(
@@ -135,7 +135,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
         employee = await Employee.get(id=bonus.employee_id)
-        primemax = await PrimeMax.filter(department=employee.department, bonus_type=bonus.bonus_type).first()
+        primemax = await PrimeMax.filter(dept_str=employee.dept_str, bonus_type=bonus.bonus_type).first()
         if primemax and update_data['total_amount'] > primemax.amount:
             raise HTTPException(400, f"Le montant dépasse le plafond autorisé ({primemax.amount} Ar)")
     if 'employee_id' in update_data:
@@ -160,7 +160,7 @@ async def list_bonuses(
 ):
     query = Bonus.all().prefetch_related('employee')
     if not (user.is_dg or user.is_drh) and user.department:
-        query = query.filter(employee__department=user.department)
+        query = query.filter(employee__dept_str=user.department)
     if show_paid:
         query = query.filter(paid_at__isnull=False)
     else:
@@ -196,7 +196,7 @@ async def export_bonuses(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
-    if department: query = query.filter(employee__department=department)
+    if department: query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -218,11 +218,11 @@ async def export_bonuses(
     extractors = {
         "Matricule": lambda b: b.employee.matricule,
         "Nom": lambda b: b.employee.name,
-        "Departement": lambda b: b.employee.department.value,
+        "Departement": lambda b: b.employee.department if b.employee.department else '',
         "TypePrime": lambda b: b.bonus_type.value,
         "DateDebut": lambda b: b.start_date.isoformat(),
         "DateFin": lambda b: b.end_date.isoformat(),
-        "Montant": lambda b: str(b.total_amount),
+        "Montant": lambda b: str(int(b.total_amount)),
         "Statut": lambda b: b.status.value,
         "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
         "CreePar": lambda b: b.created_by.name if b.created_by else '',
@@ -265,7 +265,7 @@ async def export_bonuses_xlsx(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
-    if department: query = query.filter(employee__department=department)
+    if department: query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -287,7 +287,7 @@ async def export_bonuses_xlsx(
     extractors = {
         "Matricule": lambda b: b.employee.matricule,
         "Nom": lambda b: b.employee.name,
-        "Departement": lambda b: b.employee.department.value,
+        "Departement": lambda b: b.employee.department,
         "TypePrime": lambda b: b.bonus_type.value,
         "DateDebut": lambda b: b.start_date.isoformat(),
         "DateFin": lambda b: b.end_date.isoformat(),
@@ -306,7 +306,7 @@ async def export_bonuses_xlsx(
 
     dept_groups = {}
     for b in bonuses:
-        dept = b.employee.department.value
+        dept = b.employee.department if b.employee.department else 'N/A'
         if dept not in dept_groups:
             dept_groups[dept] = []
         dept_groups[dept].append(b)
@@ -369,11 +369,11 @@ async def export_sage():
         writer.writerow([
             b.employee.matricule,
             b.employee.name,
-            b.employee.department.value,
+            b.employee.department,
             b.bonus_type.value,
             b.start_date.isoformat(),
             b.end_date.isoformat(),
-            str(b.total_amount),
+            str(int(b.total_amount)),
             b.status.value
         ])
 
@@ -416,11 +416,11 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
     extractors = {
         "Matricule": lambda b: b.employee.matricule,
         "Nom": lambda b: b.employee.name,
-        "Departement": lambda b: b.employee.department.value,
+        "Departement": lambda b: b.employee.department,
         "TypePrime": lambda b: b.bonus_type.value,
         "DateDebut": lambda b: b.start_date.isoformat(),
         "DateFin": lambda b: b.end_date.isoformat(),
-        "MontantTotal": lambda b: str(b.total_amount),
+        "Montant": lambda b: str(int(b.total_amount)),
         "Statut": lambda b: b.status.value,
         "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
         "CreePar": lambda b: b.created_by.name if b.created_by else '',
