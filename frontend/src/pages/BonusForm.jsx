@@ -954,7 +954,7 @@ export default function BonusForm() {
                           className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Service" />
                       </td>
                       <td className="py-1 px-2">
-                        <input type="text" value={iv.motif} onChange={(e) => handleIntervChange(i, 'motif', e.target.value)}
+                        <input type="text" value={iv.motif} title={iv.motif} onChange={(e) => handleIntervChange(i, 'motif', e.target.value)}
                           className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Motif de l'appel" />
                       </td>
                       <td className="py-1 px-2">
