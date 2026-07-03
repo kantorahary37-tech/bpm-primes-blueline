@@ -63,6 +63,7 @@ const [filterMonth, setFilterMonth] = useState('');
     if (!new URLSearchParams(window.location.search).get('status')) {
       if (user?.is_dg) setStatusFilter('En attente DG');
       else if (user?.is_directeur) setStatusFilter('En attente Directeur');
+      else if (user?.is_drh) setStatusFilter('Prime validée');
     }
   }, [user?.is_dg, user?.is_directeur]);
 
@@ -185,6 +186,12 @@ const [filterMonth, setFilterMonth] = useState('');
 
   const sections = useMemo(() => {
     if (!user) return [];
+
+    if (user.is_drh) {
+      return [
+        { key: 'validated', title: 'Validées', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
+      ];
+    }
 
     const myStatuses = [];
     if (user.is_validator_n1) myStatuses.push('Initialisé');
@@ -468,12 +475,12 @@ const [filterMonth, setFilterMonth] = useState('');
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
           className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
-          {!user?.is_dg && !user?.is_directeur && <option value="">Tous statuts</option>}
-          {!user?.is_dg && !user?.is_directeur && <option value="Initialisé">Initialisé</option>}
-          {!user?.is_dg && <option value="En attente Directeur">En attente Directeur</option>}
-          {!user?.is_directeur && <option value="En attente DG">En attente DG</option>}
+          {!user?.is_dg && !user?.is_directeur && !user?.is_drh && <option value="">Tous statuts</option>}
+          {!user?.is_dg && !user?.is_directeur && !user?.is_drh && <option value="Initialisé">Initialisé</option>}
+          {!user?.is_dg && !user?.is_drh && <option value="En attente Directeur">En attente Directeur</option>}
+          {!user?.is_directeur && !user?.is_drh && <option value="En attente DG">En attente DG</option>}
           <option value="Prime validée">Validée</option>
-          <option value="Prime rejetée">Rejetée</option>
+          {!user?.is_drh && <option value="Prime rejetée">Rejetée</option>}
         </select>
         <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Rechercher un employé..."
