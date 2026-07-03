@@ -252,9 +252,12 @@ export default function BonusForm() {
   useEffect(() => {
     if (!selectedEmp || !editType) return
     getPrimeMax(selectedEmp.department, editType).then(data => {
-      if (Array.isArray(data) && data.length > 0 && data[0].amount != null) {
-        setParams(p => ({ ...p, maxPrime: parseFloat(data[0].amount) }))
-      }
+      const deptMax = Array.isArray(data) && data.length > 0 && data[0].amount != null
+        ? parseFloat(data[0].amount)
+        : 150000
+      const emp = employees.find(e => e.id === selectedEmp.id)
+      const empMax = editType === 'mensuel' ? (emp?.mensuel_rate ?? null) : null
+      setParams(p => ({ ...p, maxPrime: empMax ?? deptMax }))
     }).catch(() => {})
   }, [selectedEmp?.id, editType])
 
