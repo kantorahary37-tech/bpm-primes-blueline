@@ -267,7 +267,7 @@ const [filterMonth, setFilterMonth] = useState('');
   const canSelect = (bonus) => {
     const step = getValidStep(bonus);
     if (step) return true;
-    if ((user?.is_drh || user?.is_dg) && bonus.status === 'Prime validée') return true;
+    if (user?.is_drh && bonus.status === 'Prime validée') return true;
     return false;
   };
 
@@ -557,7 +557,7 @@ const [filterMonth, setFilterMonth] = useState('');
                   </button>
                 </div>
               )}
-              {section.key === 'validated' && (user?.is_drh || user?.is_dg) && items.length > 0 && (
+              {section.key === 'validated' && user?.is_drh && items.length > 0 && (
                 <div className="flex gap-1">
                   <button onClick={(e) => {
                     e.stopPropagation();
@@ -606,7 +606,7 @@ const [filterMonth, setFilterMonth] = useState('');
         <div key={ym} className="mb-6">
           <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
             <h2 className="font-semibold text-sm">{monthName}</h2>
-            {(user?.is_drh || user?.is_dg) && validatedCount > 0 && (
+            {user?.is_drh && validatedCount > 0 && (
               <button onClick={() => {
                 const [y, m] = ym.split('-')
                 setPayConfirm({ type: 'month', month: m, year: y, monthName, count: validatedCount })
@@ -647,7 +647,7 @@ const [filterMonth, setFilterMonth] = useState('');
             <button onClick={selectAllFiltered} className="btn btn-ghost btn-xs">Tout</button>
             <button onClick={clearSelection} className="btn btn-ghost btn-xs text-gray-400">Aucun</button>
             <div className="w-px h-5 bg-gray-200" />
-            {(user?.is_drh || user?.is_dg) && (
+            {user?.is_drh && (
               <button onClick={() => setPayConfirm({ type: 'batch', ids: [...selectedBonuses], count: selectedBonuses.size })}
                 className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Payer ({selectedBonuses.size})</button>
             )}
@@ -674,7 +674,7 @@ const [filterMonth, setFilterMonth] = useState('');
             <p className="text-sm text-gray-600 mb-6">Valider les <strong>{selectedBonuses.size}</strong> prime(s) sélectionnée(s) ?</p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setConfirmBonus(null); }} className="btn btn-sm btn-ghost">Annuler</button>
-              <button onClick={confirmBatchValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider tout</button>
+              <button onClick={confirmBatchValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
             </div>
           </>
         ) : (
