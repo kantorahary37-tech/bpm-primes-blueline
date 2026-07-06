@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status
 from fastapi import Depends
-from app.models import User
+from app.models import User, Department
 from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.email_service import send_reset_email
@@ -14,12 +14,16 @@ async def signup(data: SignUpRequest):
     existing = await User.get_or_none(email=data.email)
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+    dept_obj = None
+    if data.department:
+        dept_obj = await Department.get_or_none(name=data.department)
     user = await User.create(
         email=data.email,
         name=data.name,
         password_hash=get_password_hash(data.password),
         poste=data.poste,
-        department=data.department,
+        dept_str=data.department,
+        department=dept_obj,
     )
     
     return {

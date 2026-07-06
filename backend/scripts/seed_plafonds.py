@@ -7,10 +7,10 @@ sys.path.append('.')
 
 from app.db_config import TORTOISE_ORM
 from tortoise import Tortoise, run_async
-from app.models import PrimeMax
+from app.models import PrimeMax, Department
 
 DEPARTMENTS = [
-    'Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation',
+    'Clientèle', 'Commerciale', 'ADV', 'Fidélisation',
     'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat',
     'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG',
 ]
@@ -27,7 +27,7 @@ DEFAULTS = {
 BONUS_TYPE_DEPARTMENTS = {
     'mensuel': DEPARTMENTS,
     'astreinte': ['BBS', 'DO', 'DSI', 'DT'],
-    'commission': ['Commercial GP', 'Commercial entreprise'],
+    'commission': ['Commerciale'],
     'intervention': ['BBS', 'DO', 'DSI', 'DT'],
     'ponctuelle': ['BBS', 'DO', 'DSI', 'DT'],
     'exceptionnel': ['BBS', 'DO', 'DSI', 'DT'],
@@ -39,10 +39,12 @@ async def seed():
     created = 0
     for bonus_type, depts in BONUS_TYPE_DEPARTMENTS.items():
         for dept in depts:
-            exists = await PrimeMax.filter(department=dept, bonus_type=bonus_type).first()
+            exists = await PrimeMax.filter(dept_str=dept, bonus_type=bonus_type).first()
             if not exists:
+                dept_obj = await Department.get_or_none(name=dept)
                 await PrimeMax.create(
-                    department=dept,
+                    dept_str=dept,
+                    dept=dept_obj,
                     bonus_type=bonus_type,
                     amount=DEFAULTS[bonus_type],
                 )

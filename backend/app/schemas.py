@@ -1,11 +1,17 @@
 # Import de Pydantic pour la validation des données
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 # Imports de typage
 from typing import Optional, List, Dict, Any
 # Import de datetime pour les dates
 from datetime import datetime, date
 # Import des enums depuis les modèles
-from app.models import DepartmentType, BonusType, ValidationStatus
+from app.models import BonusType, ValidationStatus
+
+
+def dept_to_str(v):
+    if hasattr(v, 'name'):
+        return v.name
+    return v
 
 # Schémas pour l'authentification
 class Token(BaseModel):
@@ -28,7 +34,9 @@ class SignUpRequest(BaseModel):
     name: str
     password: str
     poste: Optional[str] = None
-    department: Optional[DepartmentType] = None
+    department: Optional[str] = None
+
+    _dept = field_validator('department', mode='before')(dept_to_str)
     
     
 # Schéma de base pour les utilisateurs
@@ -36,11 +44,13 @@ class UserBase(BaseModel):
     email: str
     name: str
     poste: Optional[str] = None
-    department: Optional[DepartmentType] = None
+    department: Optional[str] = None
     is_validator_n1: Optional[bool] = False
     is_directeur: Optional[bool] = False
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
+
+    _dept = field_validator('department', mode='before')(dept_to_str)
 
 # Schéma pour la création d'utilisateur (hérite de UserBase)
 class UserCreate(UserBase): pass
@@ -59,9 +69,12 @@ class SignUpResponse(BaseModel):
 class EmployeeBase(BaseModel):
     matricule: str
     name: str
-    department: DepartmentType
+    department: str
     manager_id: int
     astreinte_rate: Optional[int] = None
+    mensuel_rate: Optional[int] = None
+
+    _dept = field_validator('department', mode='before')(dept_to_str)
 
 # Schéma de création d'employé
 class EmployeeCreate(EmployeeBase): pass
@@ -69,6 +82,7 @@ class EmployeeCreate(EmployeeBase): pass
 # Schéma de mise à jour d'employé (champs optionnels)
 class EmployeeUpdate(BaseModel):
     astreinte_rate: Optional[int] = None
+    mensuel_rate: Optional[int] = None
 
 # Schéma de réponse employé
 class EmployeeResponse(EmployeeBase):
@@ -156,9 +170,11 @@ class ValidationResponse(BaseModel):
 
 # Schéma de base pour Prime Max
 class PrimeMaxBase(BaseModel):
-    department: DepartmentType
+    department: str
     bonus_type: BonusType
     amount: float
+
+    _dept = field_validator('department', mode='before')(dept_to_str)
 
 # Schéma de création Prime Max
 class PrimeMaxCreate(PrimeMaxBase): pass
