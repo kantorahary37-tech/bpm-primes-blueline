@@ -6,8 +6,7 @@ from enum import Enum
 # Enumération des départements de l'entreprise
 class DepartmentType(str, Enum):
     CLIENTELE = "Clientèle"
-    COMMERCIAL_GP = "Commercial GP"
-    COMMERCIAL_ENTREPRISE = "Commercial entreprise"
+    COMMERCIALE = "Commerciale"
     ADV = "ADV"
     FIDELISATION = "Fidélisation"
     AUDITEUR_INTERNE = "Auditeur interne"
@@ -41,6 +40,14 @@ class ValidationStatus(str, Enum):
     VALIDE = "Prime validée"
     REJETE = "Prime rejetée"
 
+# Modèle Département (table "department")
+class Department(models.Model):
+    id = fields.IntField(pk=True)
+    name = fields.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+
 # Modèle Utilisateur (table "user")
 class User(models.Model):
     # Clé primaire auto-incrémentée
@@ -51,8 +58,10 @@ class User(models.Model):
     name = fields.CharField(max_length=255)
     # Poste occupé (optionnel)
     poste = fields.CharField(max_length=255, null=True)
-    # Département de l'utilisateur (optionnel)
-    department = fields.CharEnumField(DepartmentType, null=True)
+    # Département (colonne temporaire pour transition)
+    dept_str = fields.CharField(max_length=50, null=True, source_field='department')
+    # Département (FK vers Department)
+    dept = fields.ForeignKeyField('models.Department', related_name='users', null=True, source_field='department_id')
     # Boolean : est validateur N+1 ?
     is_validator_n1 = fields.BooleanField(default=False)
     # Boolean : est directeur ?
@@ -70,6 +79,10 @@ class User(models.Model):
     # Date de création automatique
     created_at = fields.DatetimeField(auto_now_add=True)
 
+    @property
+    def department(self):
+        return self.dept_str
+
 # Modèle Employé (table "employee")
 class Employee(models.Model):
     # Clé primaire
@@ -78,14 +91,22 @@ class Employee(models.Model):
     matricule = fields.CharField(max_length=50, unique=True)
     # Nom de l'employé
     name = fields.CharField(max_length=255)
-    # Département de l'employé
-    department = fields.CharEnumField(DepartmentType)
+    # Département (colonne temporaire pour transition)
+    dept_str = fields.CharField(max_length=50, source_field='department')
+    # Département (FK vers Department)
+    dept = fields.ForeignKeyField('models.Department', related_name='employees', source_field='department_id')
     # Relation vers le manager (User) : un manager a plusieurs employés
     manager = fields.ForeignKeyField('models.User', related_name='employees')
     # Taux astreinte personnalisé (Ar/semaine), null = taux par défaut
     astreinte_rate = fields.IntField(null=True, default=None)
+    # Taux prime mensuelle personnalisé (Ar/mois), null = taux par défaut (plafond département)
+    mensuel_rate = fields.IntField(null=True, default=None)
     # Date de création
     created_at = fields.DatetimeField(auto_now_add=True)
+
+    @property
+    def department(self):
+        return self.dept_str
 
 # Modèle Prime (table "bonus")
 class Bonus(models.Model):
@@ -161,10 +182,16 @@ class Validation(models.Model):
 class PrimeMax(models.Model):
     # Clé primaire
     id = fields.IntField(pk=True)
-    # Département concerné
-    department = fields.CharEnumField(DepartmentType)
+    # Département (colonne temporaire pour transition)
+    dept_str = fields.CharField(max_length=50, source_field='department')
+    # Département (FK vers Department)
+    dept = fields.ForeignKeyField('models.Department', related_name='primemax', source_field='department_id')
     # Type de prime concerné
     bonus_type = fields.CharEnumField(BonusType, max_length=20)
+
+    @property
+    def department(self):
+        return self.dept_str
     # Montant maximum de la prime
     amount = fields.DecimalField(max_digits=15, decimal_places=2)
     # Utilisateur ayant défini le montant (optionnel)

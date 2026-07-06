@@ -18,33 +18,29 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
     container_name: bpm_backend
-    restart: unless-stopped  # <-- Redémarre si crash
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgres://postgres:mysecretpassword@db:5432/bpm_primes_db
+    expose:
+      - 8000
 
-  frontend:
-    build: ./frontend
-    container_name: bpm_frontend
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.prod
+    container_name: bpm_nginx
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "80:80"
     depends_on:
       - backend
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-      - VITE_API_URL=http://backend:8000
 
 volumes:
   postgres_data:

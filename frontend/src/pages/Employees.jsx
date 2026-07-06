@@ -1,15 +1,10 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { getEmployees, getBonuses, createEmployee, getUsers } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useDepartments } from '../contexts/DepartmentsContext';
 import { Link } from 'react-router-dom';
 import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon } from '../components/Icons';
 import Modal from '../components/Modal';
-
-const DEPARTMENTS = [
-  'Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation',
-  'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat',
-  'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG',
-];
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -21,6 +16,12 @@ const typeLabels = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
   commission: 'Commission',
+};
+
+const statusLabel = (bonus) => {
+  if (!bonus) return '';
+  if (bonus.status === 'En attente Directeur') return `En attente Directeur ${bonus.employee?.department || ''}`;
+  return bonus.status;
 };
 
 const getBadgeClass = (status) => {
@@ -50,10 +51,12 @@ const EXPORT_EMP_BONUS_COLUMNS = ["Matricule", "Nom", "Departement", "TypePrime"
 
 const Employees = () => {
   const { user } = useAuth();
+  const { departments } = useDepartments();
+  const deptNames = departments.map(d => d.name);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ matricule: '', name: '', department: 'Clientèle', manager_id: '' });
+  const [form, setForm] = useState({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '' });
   const [managers, setManagers] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [empBonuses, setEmpBonuses] = useState([]);
@@ -100,7 +103,7 @@ const Employees = () => {
     try {
       await createEmployee({ ...form, manager_id: parseInt(form.manager_id) });
       setShowForm(false);
-      setForm({ matricule: '', name: '', department: 'Clientèle', manager_id: '' });
+      setForm({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '' });
       const emps = await getEmployees();
       setEmployees(emps);
     } catch (err) {
@@ -167,7 +170,7 @@ const Employees = () => {
               <div className="form-control">
                 <label className="label"><span className="label-text">Département</span></label>
                 <select className="select select-bordered select-sm w-44" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} required>
-                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  {deptNames.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
               <div className="form-control">
@@ -187,48 +190,65 @@ const Employees = () => {
       )}
 
       <div className="flex items-center gap-2 mb-4">
-        <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
-          <option value="">Tous les départements</option>
-          {user?.department && <option value={user.department}>Mon département ({user.department})</option>}
-          {DEPARTMENTS.filter(d => d !== user?.department).map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
+        {user?.is_dg || user?.is_drh ? (
+          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+            <option value="">Tous les départements</option>
+            {user?.department && <option value={user.department}>Mon département ({user.department})</option>}
+            {deptNames.filter(d => d !== user?.department).map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-sm text-gray-600">Département : <strong>{user?.department}</strong></span>
+        )}
         <span className="text-xs text-gray-400">{employees.length} employé(s)</span>
       </div>
 
-      <div className="space-y-2 mb-6">
+      <div className="space-y-6 mb-6">
         {employees.length === 0 ? (
           <div className="text-center text-gray-400 py-12">Aucun employé</div>
         ) : (
-          employees.map((emp) => {
-            const mgr = managers.find((m) => m.id === emp.manager_id);
-            return (
-              <button key={emp.id} onClick={() => loadEmployeeBonuses(emp)}
-                className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl border transition-all text-left ${
-                  selectedEmp?.id === emp.id
-                    ? 'border-blue-400 bg-blue-50 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'
-                }`}>
-                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm shrink-0">
-                  {emp.name.charAt(0).toUpperCase()}
+          (() => {
+            const grouped = {};
+            employees.forEach(emp => {
+              if (!grouped[emp.department]) grouped[emp.department] = [];
+              grouped[emp.department].push(emp);
+            });
+            return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([dept, emps]) => (
+              <div key={dept}>
+                <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-t-xl border border-gray-200 border-b-0">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{dept}</span>
+                  <span className="text-[10px] font-medium text-gray-400 bg-white px-1.5 py-0.5 rounded-full">{emps.length}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 truncate">{emp.name}</p>
-                  <p className="text-xs text-gray-400">{emp.matricule}</p>
+                <div className="space-y-1 p-2 bg-white rounded-b-xl border border-gray-200">
+                  {emps.map((emp) => {
+                    const mgr = managers.find((m) => m.id === emp.manager_id);
+                    return (
+                      <button key={emp.id} onClick={() => loadEmployeeBonuses(emp)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-all text-left ${
+                          selectedEmp?.id === emp.id
+                            ? 'border-blue-400 bg-blue-50 shadow-sm'
+                            : 'border-transparent hover:border-blue-200 hover:bg-gray-50'
+                        }`}>
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs shrink-0">
+                          {emp.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 text-sm truncate">{emp.name}</p>
+                          <p className="text-[11px] text-gray-400">{emp.matricule}</p>
+                        </div>
+                        <div className="text-right text-[11px]">
+                          <div className="text-gray-400">Manager</div>
+                          <div className="font-medium text-gray-700">{mgr?.name || 'N/A'}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="text-right text-xs">
-                  <div className="text-gray-400">Département</div>
-                  <div className="font-medium text-gray-700">{emp.department}</div>
-                </div>
-                <div className="text-right text-xs">
-                  <div className="text-gray-400">Manager</div>
-                  <div className="font-medium text-gray-700">{mgr?.name || 'N/A'}</div>
-                </div>
-              </button>
-            );
-          })
+              </div>
+            ));
+          })()
         )}
       </div>
 
@@ -336,7 +356,7 @@ const Employees = () => {
                               <p className="text-[11px] text-gray-400">{bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}</p>
                             </div>
                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                              {bonus.status}
+                              {statusLabel(bonus)}
                             </span>
                             <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
                           </Link>

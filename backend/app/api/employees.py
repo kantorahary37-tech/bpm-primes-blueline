@@ -23,8 +23,11 @@ async def list_employees(
 ):
     query = Employee.all()
 
-    if department:
-        query = query.filter(department=department)
+    if user.is_dg or user.is_drh:
+        if department:
+            query = query.filter(dept_str=department)
+    else:
+        query = query.filter(dept_str=user.department)
 
     return await query
 
@@ -37,7 +40,7 @@ async def export_employees(
 ):
     query = Employee.all().prefetch_related('manager')
     if department:
-        query = query.filter(department=department)
+        query = query.filter(dept_str=department)
     employees = await query
 
     all_columns = ["Matricule", "Nom", "Departement", "Manager", "DateCreation"]
@@ -49,7 +52,7 @@ async def export_employees(
     extractors = {
         "Matricule": lambda e: e.matricule,
         "Nom": lambda e: e.name,
-        "Departement": lambda e: e.department.value,
+        "Departement": lambda e: e.department,
         "Manager": lambda e: e.manager.name if e.manager else '',
         "DateCreation": lambda e: e.created_at.isoformat() if e.created_at else '',
     }

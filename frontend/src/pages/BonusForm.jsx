@@ -41,9 +41,9 @@ const DEFAULT_QUALI_CRITERIA = [
 ]
 
 const BONUS_TYPE_DEPARTMENTS = {
-  mensuel: ['Clientèle', 'Commercial GP', 'Commercial entreprise', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
+  mensuel: ['Clientèle', 'Commerciale', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
   astreinte: ['BBS', 'DO', 'DSI', 'DT'],
-  commission: ['Commercial GP', 'Commercial entreprise'],
+  commission: ['Commerciale'],
 }
 
 export default function BonusForm() {
@@ -65,6 +65,11 @@ export default function BonusForm() {
   const getRate = (empId) => {
     const emp = employees.find(e => e.id === empId)
     return emp?.astreinte_rate ?? astreinteConfig.weeklyMax
+  }
+
+  const getMensuelRate = (empId) => {
+    const emp = employees.find(e => e.id === empId)
+    return emp?.mensuel_rate ?? null
   }
 
   const saveBonus = isEditing ? (data) => updateBonus(id, data) : createBonus;
@@ -247,9 +252,12 @@ export default function BonusForm() {
   useEffect(() => {
     if (!selectedEmp || !editType) return
     getPrimeMax(selectedEmp.department, editType).then(data => {
-      if (Array.isArray(data) && data.length > 0 && data[0].amount != null) {
-        setParams(p => ({ ...p, maxPrime: parseFloat(data[0].amount) }))
-      }
+      const deptMax = Array.isArray(data) && data.length > 0 && data[0].amount != null
+        ? parseFloat(data[0].amount)
+        : 150000
+      const emp = employees.find(e => e.id === selectedEmp.id)
+      const empMax = editType === 'mensuel' ? (emp?.mensuel_rate ?? null) : null
+      setParams(p => ({ ...p, maxPrime: empMax ?? deptMax }))
     }).catch(() => {})
   }, [selectedEmp?.id, editType])
 
@@ -517,10 +525,12 @@ export default function BonusForm() {
       setError('Un ou plusieurs employés sélectionnés ne sont pas autorisés pour les primes mensuelles.')
       setLoading(false); return
     }
-    const amount = Math.min(totalValue, params.maxPrime)
     try {
-      await Promise.all(allEmpIds.map(employee_id =>
-        saveBonus({
+      await Promise.all(allEmpIds.map(employee_id => {
+        const empMaxRate = getMensuelRate(employee_id)
+        const maxPrime = empMaxRate ?? params.maxPrime
+        const amount = Math.min(totalValue, maxPrime)
+        return saveBonus({
           employee_id,
           start_date: params.startDate,
           end_date: params.endDate,
@@ -528,7 +538,7 @@ export default function BonusForm() {
           performance_score: totalEvalPct,
           total_amount: amount,
           details: {
-            prime_max: params.maxPrime,
+            prime_max: maxPrime,
             quantitative: quantitative.map((c) => ({
               criteria: c.criteria, description: c.description,
               objective: c.objective, evaluation: c.evaluation, value: c.value,
@@ -542,7 +552,7 @@ export default function BonusForm() {
             total_evaluation: totalValue,
           },
         })
-      ))
+      }))
       navigateAfterSave()
     } catch (err) {
       setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : `Erreur (${err.response?.status}): ${err.response?.data?.detail || err.message || "inconnue"}`)
@@ -729,28 +739,28 @@ export default function BonusForm() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-base-200">
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Désignation</th>
-                    <th className="text-center py-2 px-2 font-medium text-base-content/60 w-24">Nombre</th>
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Description</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60 w-36">Montant (Ar)</th>
+                  <tr className="border-b border-gray-300">
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Désignation</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700 w-24">Nombre</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Description</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 w-36">Montant (Ar)</th>
                     <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {sales.map((row, i) => (
-                    <tr key={row.key} className="border-b border-base-100">
+                    <tr key={row.key} className="border-b border-gray-200">
                       <td className="py-1 px-2">
                         <input type="text" value={row.designation} onChange={(e) => handleSaleChange(i, 'designation', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Ex: Airfiber, 4G Litebox" />
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Ex: Airfiber, 4G Litebox" />
                       </td>
                       <td className="py-1 px-2 text-center">
                         <input type="number" value={row.nombre} min="0" onChange={(e) => handleSaleChange(i, 'nombre', e.target.value)}
-                          className="w-16 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
+                        className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                       </td>
                       <td className="py-1 px-2">
                         <input type="text" value={row.description} onChange={(e) => handleSaleChange(i, 'description', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Client / contrat..." />
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Client / contrat..." />
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
                         {((parseFloat(row.nombre) || 0) * commissionConfig.rate).toLocaleString('fr-FR')}
@@ -844,26 +854,26 @@ export default function BonusForm() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-base-200">
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Employé</th>
-                    <th className="text-center py-2 px-2 font-medium text-base-content/60 w-24">Nombre</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60 w-36">Montant (Ar)</th>
+                  <tr className="border-b border-gray-300">
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Employé</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700 w-24">Nombre</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 w-36">Montant (Ar)</th>
                     <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {disponibilites.map((d, i) => (
-                    <tr key={d.key} className="border-b border-base-100">
+                    <tr key={d.key} className="border-b border-gray-200">
                       <td className="py-1 px-2">
                         <select value={d.employee_id} onChange={(e) => handleDispoChange(i, 'employee_id', parseInt(e.target.value))}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
                           <option value="">Sélectionner...</option>
                           {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
                         </select>
                       </td>
                       <td className="py-1 px-2 text-center">
                         <input type="number" value={d.nombre} min="0" max={weeks} onChange={(e) => handleDispoChange(i, 'nombre', e.target.value)}
-                          className={`w-16 px-2 py-1 rounded border text-sm text-center focus:outline-none focus:ring-2 focus:ring-brand-500/30 ${(parseFloat(d.nombre) || 0) > weeks ? 'border-red-400 bg-red-50' : 'border-base-200'}`} />
+                          className={`w-16 px-2 py-1 rounded border text-sm text-center focus:outline-none focus:ring-2 focus:ring-brand-500/30 ${(parseFloat(d.nombre) || 0) > weeks ? 'border-red-400 bg-red-50' : 'border-gray-400'}`} />
                         {(parseFloat(d.nombre) || 0) > weeks && <span className="text-red-500 text-xs block">max {weeks}</span>}
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
@@ -876,7 +886,7 @@ export default function BonusForm() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="font-semibold border-t-2 border-brand-200">
+                  <tr className="font-semibold border-t-2 border-gray-400">
                     <td colSpan="2" className="py-2 px-2 text-right">Total Disponibilité</td>
                     <td className="py-2 px-2 text-right text-brand-600">{totalDispo.toLocaleString('fr-FR')} Ar</td>
                     <td></td>
@@ -904,52 +914,52 @@ export default function BonusForm() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-base-200">
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Employé</th>
-                    <th className="text-center py-2 px-2 font-medium text-base-content/60">Date</th>
-                    <th className="text-center py-2 px-2 font-medium text-base-content/60">Heure</th>
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Demandeur</th>
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Service</th>
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Motif</th>
-                    <th className="text-center py-2 px-2 font-medium text-base-content/60">Type</th>
-                    <th className="text-center py-2 px-2 font-medium text-base-content/60">Ticket</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60">Montant (Ar)</th>
+                  <tr className="border-b border-gray-300">
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Employé</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700">Date</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700">Heure</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Demandeur</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Service</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Motif</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700">Type</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700">Ticket</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700">Montant (Ar)</th>
                     <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {interventions.map((iv, i) => (
-                    <tr key={iv.key} className="border-b border-base-100">
+                    <tr key={iv.key} className="border-b border-gray-200">
                       <td className="py-1 px-2">
                         <select value={iv.employee_id} onChange={(e) => handleIntervChange(i, 'employee_id', parseInt(e.target.value))}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
                           <option value="">Sélectionner...</option>
                           {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
                         </select>
                       </td>
                       <td className="py-1 px-2">
                         <input type="date" value={iv.date} min={params.startDate} max={params.endDate} onChange={(e) => handleIntervChange(i, 'date', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                       </td>
                       <td className="py-1 px-2">
                         <input type="time" value={iv.heure} onChange={(e) => handleIntervChange(i, 'heure', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                       </td>
                       <td className="py-1 px-2">
                         <input type="text" value={iv.demandeur || ''} onChange={(e) => handleIntervChange(i, 'demandeur', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Demandeur" />
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Demandeur" />
                       </td>
                       <td className="py-1 px-2">
                         <input type="text" value={iv.service || ''} onChange={(e) => handleIntervChange(i, 'service', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Service" />
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Service" />
                       </td>
                       <td className="py-1 px-2">
-                        <input type="text" value={iv.motif} onChange={(e) => handleIntervChange(i, 'motif', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Motif de l'appel" />
+                        <input type="text" value={iv.motif} title={iv.motif} onChange={(e) => handleIntervChange(i, 'motif', e.target.value)}
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Motif de l'appel" />
                       </td>
                       <td className="py-1 px-2">
                         <select value={iv.type || 'intervention'} onChange={(e) => handleIntervChange(i, 'type', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
+                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
                           <option value="intervention">Intervention</option>
                           <option value="exceptionnelle">Exceptionnelle</option>
                           <option value="ponctuelle">Ponctuelle</option>
@@ -957,7 +967,7 @@ export default function BonusForm() {
                       </td>
                       <td className="py-1 px-2">
                         <input type="text" value={iv.ticket} onChange={(e) => handleIntervChange(i, 'ticket', e.target.value)}
-                          className="w-24 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="N° ticket" />
+                          className="w-24 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="N° ticket" />
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
                         {iv.employee_id ? Number(astreinteConfig.interventionRate).toLocaleString('fr-FR') : '—'}
@@ -984,14 +994,14 @@ export default function BonusForm() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-base-200">
-                    <th className="text-left py-2 px-2 font-medium text-base-content/60">Employé</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60">Disponibilité</th>
-                    <th className="text-center py-2 px-2 font-medium text-base-content/60">Taux</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60">Interventions</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60">Exceptionnelle</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60">Ponctuelle</th>
-                    <th className="text-right py-2 px-2 font-medium text-base-content/60">Total</th>
+                  <tr className="border-b border-gray-300">
+                    <th className="text-left py-2 px-2 font-medium text-gray-700">Employé</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700">Disponibilité</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700">Taux</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700">Interventions</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700">Exceptionnelle</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700">Ponctuelle</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -999,7 +1009,7 @@ export default function BonusForm() {
                     const rate = getRate(parseInt(id))
                     const isCustom = rate !== astreinteConfig.weeklyMax
                     return (
-                    <tr key={id} className="border-b border-base-100">
+                    <tr key={id} className="border-b border-gray-200">
                       <td className="py-2 px-2 font-medium">{e.name}</td>
                       <td className="py-2 px-2 text-right">{e.dispo.toLocaleString('fr-FR')} Ar</td>
                       <td className="py-2 px-2 text-center text-xs">{isCustom ? <span className="text-blue-600 font-medium">{rate.toLocaleString('fr-FR')}</span> : <span className="text-gray-400">{rate.toLocaleString('fr-FR')}</span>}</td>
@@ -1013,7 +1023,7 @@ export default function BonusForm() {
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-between text-lg font-bold border-t-2 border-brand-200 pt-3 mt-3">
+            <div className="flex justify-between text-lg font-bold border-t-2 border-gray-400 pt-3 mt-3">
               <span>Total Général</span>
               <span className="text-brand-600">{totalGeneral.toLocaleString('fr-FR')} Ar</span>
             </div>
@@ -1053,39 +1063,39 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Quantitative</h2>
-            <span className="text-xs text-base-content/50">{totalQuantiEval.toFixed(1)}%</span>
+            <span className="text-xs text-gray-600">{totalQuantiEval.toFixed(1)}%</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-base-200">
-                  <th className="text-left py-2 px-2 font-medium text-base-content/60">Critères</th>
-                  <th className="text-left py-2 px-2 font-medium text-base-content/60">Description/Obs</th>
-                  <th className="text-center py-2 px-2 font-medium text-base-content/60">Objectif</th>
-                  <th className="text-center py-2 px-2 font-medium text-base-content/60">Note (0 à poids)</th>
-                  <th className="text-right py-2 px-2 font-medium text-base-content/60">Valeur (Ar)</th>
+                <tr className="border-b border-gray-300">
+                  <th className="text-left py-2 px-2 font-medium text-gray-700">Critères</th>
+                  <th className="text-left py-2 px-2 font-medium text-gray-700">Description/Obs</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Objectif</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Note (0 à poids)</th>
+                  <th className="text-right py-2 px-2 font-medium text-gray-700">Valeur (Ar)</th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
                 {quantitative.map((item, i) => (
-                  <tr key={i} className="border-b border-base-100">
+                  <tr key={i} className="border-b border-gray-200">
                     <td className="py-2 px-2 font-medium">{item.criteria}</td>
                     <td className="py-2 px-2">
                       <input type="text" value={item.description}
                         onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'description', e.target.value, 'quanti')}
-                        className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
+                        className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
                       <input type="text" value={item.objective}
                         onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'objective', e.target.value, 'quanti')}
-                        className="w-16 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
+                        className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
                       <input type="number" min="0" max={parseInt(item.objective) || 100}
                         value={item.evaluation}
-                        onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'evaluation', e.target.value, 'quanti')}
-                        className="w-20 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
+                          onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'evaluation', e.target.value, 'quanti')}
+                        className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
                     <td className="py-2 px-2 text-center">
@@ -1094,7 +1104,7 @@ export default function BonusForm() {
                     </td>
                   </tr>
                 ))}
-                <tr className="font-semibold border-t-2 border-brand-200">
+                <tr className="font-semibold border-t-2 border-gray-400">
                   <td colSpan="5" className="py-2 px-2 text-right">Total Quantitatif</td>
                   <td className="py-2 px-2 text-right text-brand-600">{totalQuantiEval.toFixed(0)}</td>
                 </tr>
@@ -1149,39 +1159,39 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Qualitative</h2>
-            <span className="text-xs text-base-content/50">{totalQualiEval.toFixed(1)}% / 100%</span>
+            <span className="text-xs text-gray-600">{totalQualiEval.toFixed(1)}% / 100%</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-base-200">
-                  <th className="text-left py-2 px-2 font-medium text-base-content/60">Critères</th>
-                  <th className="text-left py-2 px-2 font-medium text-base-content/60">Description/Obs</th>
-                  <th className="text-center py-2 px-2 font-medium text-base-content/60">Objectif</th>
-                  <th className="text-center py-2 px-2 font-medium text-base-content/60">Note (0 à poids)</th>
-                  <th className="text-right py-2 px-2 font-medium text-base-content/60">Valeur (Ar)</th>
+                <tr className="border-b border-gray-300">
+                  <th className="text-left py-2 px-2 font-medium text-gray-700">Critères</th>
+                  <th className="text-left py-2 px-2 font-medium text-gray-700">Description/Obs</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Objectif</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Note (0 à poids)</th>
+                  <th className="text-right py-2 px-2 font-medium text-gray-700">Valeur (Ar)</th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
                 {qualitative.map((item, i) => (
-                  <tr key={i} className="border-b border-base-100">
+                  <tr key={i} className="border-b border-gray-200">
                     <td className="py-2 px-2 font-medium">{item.criteria}</td>
                     <td className="py-2 px-2">
                       <input type="text" value={item.description}
                         onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'description', e.target.value, 'quali')}
-                        className="w-full px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
+                        className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
                       <input type="text" value={item.objective}
                         onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'objective', e.target.value, 'quali')}
-                        className="w-16 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
+                        className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
                       <input type="number" min="0" max={parseInt(item.objective) || 100}
                         value={item.evaluation}
-                        onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'evaluation', e.target.value, 'quali')}
-                        className="w-20 px-2 py-1 rounded border border-base-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
+                          onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'evaluation', e.target.value, 'quali')}
+                        className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
                     <td className="py-2 px-2 text-center">
@@ -1190,7 +1200,7 @@ export default function BonusForm() {
                     </td>
                   </tr>
                 ))}
-                <tr className="font-semibold border-t-2 border-brand-200">
+                <tr className="font-semibold border-t-2 border-gray-400">
                   <td colSpan="5" className="py-2 px-2 text-right">Total Qualitatif</td>
                   <td className="py-2 px-2 text-right text-brand-600">{totalQualiEval.toFixed(0)}</td>
                 </tr>
@@ -1245,34 +1255,34 @@ export default function BonusForm() {
 
         <div className="card-blueline p-3 mb-0">
           <div className="flex flex-col gap-1.5">
-            <p className="text-base-content/50 text-xs">Note de calcul : Total = total valeur quantitative + total valeur qualitative</p>
-            <p className="text-[10px] text-base-content/40">Période : {params.startDate} → {params.endDate}</p>
+            <p className="text-gray-600 text-xs">Note de calcul : Total = total valeur quantitative + total valeur qualitative</p>
+            <p className="text-[10px] text-gray-500">Période : {params.startDate} → {params.endDate}</p>
 
             <div className="flex items-center gap-3">
               <div className="flex-1">
-                <div className="flex justify-between text-[11px] text-base-content/50">
+                <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Quantitatif</span>
                   <span>{totalQuantiEval.toFixed(1)}%</span>
                 </div>
-                <div className="w-full h-1.5 bg-base-200 rounded-full overflow-hidden mt-0.5">
+                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
                     style={{ width: `${Math.min(totalQuantiEval, 100)}%` }} />
                 </div>
               </div>
               <div className="flex-1">
-                <div className="flex justify-between text-[11px] text-base-content/50">
+                <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Qualitatif</span>
                   <span>{totalQualiEval.toFixed(1)}%</span>
                 </div>
-                <div className="w-full h-1.5 bg-base-200 rounded-full overflow-hidden mt-0.5">
+                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-violet-500"
                     style={{ width: `${Math.min(totalQualiEval, 100)}%` }} />
                 </div>
               </div>
             </div>
 
-            <div className="text-right pt-1 border-t border-base-200">
-              <p className="text-xs text-base-content/60">Total (quanti + quali)</p>
+            <div className="text-right pt-1 border-t border-gray-300">
+              <p className="text-xs text-gray-700">Total (quanti + quali)</p>
               <p className="text-xl font-bold text-brand-600">
                 {totalEvalPct.toFixed(1)}% — {totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
               </p>
