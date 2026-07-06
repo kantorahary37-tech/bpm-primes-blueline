@@ -343,48 +343,31 @@ const BonusDetail = () => {
         )}
 
         {bonus.bonus_type === 'astreinte' && bonus.details && (
-          <Section title="Détails astreinte" icon={MoonIcon}>
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
-                <p className="text-xs text-gray-600">Semaines</p>
+          <Section title="Récapitulatif astreinte" icon={MoonIcon}>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Semaines</p>
                 <p className="font-semibold text-gray-900">{bonus.details.weeks || '—'}</p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
-                <p className="text-xs text-gray-600">Prime max / semaine</p>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Prime max / semaine</p>
                 <p className="font-semibold text-gray-900">{formatAr(bonus.details.weekly_max)} Ar</p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
-                <p className="text-xs text-gray-600">Taux / intervention</p>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Taux / intervention</p>
                 <p className="font-semibold text-gray-900">{formatAr(bonus.details.intervention_rate)} Ar</p>
               </div>
             </div>
 
-            {bonus.details.disponibilites?.length > 0 && (
-              <div className="mb-6">
-                <h4 className="font-semibold text-sm text-gray-700 mb-2">Disponibilité</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Employé</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Nombre</th>
-                        <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bonus.details.disponibilites.map((d, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="py-1.5 text-gray-900">{d.employee_name || `#${d.employee_id}`}</td>
-                          <td className="py-1.5 text-center">{d.nombre}</td>
-                          <td className="py-1.5 text-right font-medium">{formatAr(parseInt(d.nombre) * (bonus.details.weekly_max || 0))}</td>
-                        </tr>
-                      ))}
-                      <tr className="font-semibold bg-gray-50">
-                        <td colSpan={2} className="py-1.5 text-gray-900">Total Disponibilité</td>
-                        <td className="py-1.5 text-right text-violet-600">{formatAr(bonus.details.total_dispo)} Ar</td>
-                      </tr>
-                    </tbody>
-                  </table>
+            <div className="space-y-1.5 mb-4 text-sm">
+              {bonus.details.total_dispo > 0 && (
+                <div className="flex items-center justify-between py-1 px-3 rounded-lg bg-blue-50/50">
+                  <span className="text-gray-600">
+                    Disponibilité <span className="text-gray-400 font-medium">
+                      {bonus.details.disponibilites?.reduce((s, d) => s + (parseInt(d.nombre) || 0), 0)} sem
+                    </span>
+                  </span>
+                  <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_dispo)} Ar</span>
                 </div>
               )}
               {bonus.details.total_interv > 0 && (
@@ -415,25 +398,28 @@ const BonusDetail = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Employé</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Date</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Heure</th>
-                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Motif</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Type</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Ticket</th>
-                        <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-1.5 font-medium text-gray-400 text-xs">Date</th>
+                        <th className="text-center py-1.5 font-medium text-gray-400 text-xs">Heure</th>
+                        <th className="text-left py-1.5 font-medium text-gray-400 text-xs">Motif</th>
+                        <th className="text-center py-1.5 font-medium text-gray-400 text-xs">Type</th>
+                        <th className="text-center py-1.5 font-medium text-gray-400 text-xs">Ticket</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bonus.details.interventions.map((iv, i) => (
-                        <tr key={i} className="border-b border-gray-200">
-                          <td className="py-1.5 text-gray-900">{iv.employee_name || `#${iv.employee_id}`}</td>
-                          <td className="py-1.5 text-center text-gray-800 text-xs">{iv.date || '—'}</td>
-                          <td className="py-1.5 text-center text-gray-800 text-xs">{iv.heure || '—'}</td>
-                          <td className="py-1.5 text-gray-800 text-xs">{iv.motif || '—'}</td>
-                          <td className="py-1.5 text-center text-xs">
-                            {iv.type === 'exceptionnelle' ? 'Exceptionnelle' : iv.type === 'ponctuelle' ? 'Ponctuelle' : 'Intervention'}
+                        <tr key={i} className="border-b border-gray-50">
+                          <td className="py-1 text-gray-900 text-xs">{iv.date || '—'}</td>
+                          <td className="py-1 text-center text-gray-500 text-xs">{iv.heure || '—'}</td>
+                          <td className="py-1 text-gray-500 text-xs">{iv.motif || '—'}</td>
+                          <td className="py-1 text-center text-xs">
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                              iv.type === 'exceptionnelle' ? 'bg-amber-100 text-amber-700' :
+                              iv.type === 'ponctuelle' ? 'bg-blue-100 text-blue-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {iv.type === 'exceptionnelle' ? 'Exceptionnelle' : iv.type === 'ponctuelle' ? 'Ponctuelle' : 'Intervention'}
+                            </span>
                           </td>
                           <td className="py-1 text-center text-xs font-mono">{iv.ticket || '—'}</td>
                         </tr>
