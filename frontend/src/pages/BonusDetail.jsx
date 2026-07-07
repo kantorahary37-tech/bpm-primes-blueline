@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getBonus, getBonusValidations, validateBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from '../components/Timeline';
@@ -32,6 +32,7 @@ const EXPORT_COLUMNS = {
 const BonusDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [bonus, setBonus] = useState(null);
   const [validations, setValidations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -252,7 +253,7 @@ const BonusDetail = () => {
         </div>
       )}
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/bonuses" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></Link>
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></button>
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <TypeIcon className="w-5 h-5" />

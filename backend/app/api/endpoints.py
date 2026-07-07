@@ -185,6 +185,7 @@ async def export_bonuses(
     search: Optional[str] = None,
     columns: Optional[str] = None,
     was_rejected: Optional[bool] = None,
+    show_paid: Optional[bool] = False,
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
     if status: query = query.filter(status=status)
@@ -202,13 +203,15 @@ async def export_bonuses(
         query = query.filter(
             Q(employee__name__icontains=search) | Q(employee__matricule__icontains=search)
         )
+    if show_paid:
+        query = query.filter(paid_at__isnull=False)
 
     bonuses = await query.order_by('-start_date')
 
     all_columns = [
         "Matricule", "Nom", "Departement", "TypePrime",
         "DateDebut", "DateFin", "Montant", "Statut",
-        "DejaRejete", "CreePar", "DateCreation"
+        "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation"
     ]
     if columns:
         selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
@@ -225,6 +228,7 @@ async def export_bonuses(
         "Montant": lambda b: str(int(b.total_amount)),
         "Statut": lambda b: b.status.value,
         "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
+        "MarqueePayeeLe": lambda b: b.paid_at.strftime('%d/%m/%Y %H:%M') if b.paid_at else '',
         "CreePar": lambda b: b.created_by.name if b.created_by else '',
         "DateCreation": lambda b: b.created_at.isoformat() if b.created_at else '',
     }
@@ -277,7 +281,7 @@ async def export_bonuses_xlsx(
     all_columns = [
         "Matricule", "Nom", "Departement", "TypePrime",
         "DateDebut", "DateFin", "Montant", "Statut",
-        "DejaRejete", "CreePar", "DateCreation"
+        "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation"
     ]
     if columns:
         selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
@@ -294,6 +298,7 @@ async def export_bonuses_xlsx(
         "Montant": lambda b: b.total_amount,
         "Statut": lambda b: b.status.value,
         "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
+        "MarqueePayeeLe": lambda b: b.paid_at.strftime('%d/%m/%Y %H:%M') if b.paid_at else '',
         "CreePar": lambda b: b.created_by.name if b.created_by else '',
         "DateCreation": lambda b: b.created_at.isoformat() if b.created_at else '',
     }
