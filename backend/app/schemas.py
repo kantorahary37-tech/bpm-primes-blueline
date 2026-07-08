@@ -184,3 +184,14 @@ class PrimeMaxResponse(PrimeMaxBase):
     id: int
     updated_at: datetime
     class Config: from_attributes = True
+
+class AuditLogResponse(BaseModel):
+    id: int
+    bonus_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    action: str
+    description: Optional[str] = None
+    changes: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    class Config: from_attributes = True

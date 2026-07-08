@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
-from app.models import User, Employee, Bonus, Validation, PrimeMax
+from enum import Enum
+from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog
 from app.auth import get_current_user
 from app.schemas import *
 from fastapi import HTTPException
@@ -13,10 +14,23 @@ from tortoise.expressions import Q
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, numbers
 from openpyxl.utils import get_column_letter
+from decimal import Decimal
 
-# Création du routeur API
+
+def _sanitize_for_json(v):
+    if isinstance(v, Decimal):
+        return str(v)
+    if isinstance(v, Enum):
+        return v.value if hasattr(v, 'value') else str(v)
+    if isinstance(v, datetime):
+        return v.isoformat()
+    if isinstance(v, dict):
+        return {k: _sanitize_for_json(v) for k, v in v.items()}
+    if isinstance(v, list):
+        return [_sanitize_for_json(x) for x in v]
+    return v
+
 router = APIRouter(dependencies=[Depends(get_current_user)])
-
 
 # Route POST pour créer une prime
 @router.post("/bonuses/", response_model=BonusResponse)
@@ -124,13 +138,17 @@ async def batch_validate_bonuses(
     total_errors = len(results) - total_success
     return BatchValidateResponse(results=results, total_success=total_success, total_errors=total_errors)
 
-# Route PUT pour modifier une prime (seulement si statut = Initialisé)
+# Route PUT pour modifier une prime
 @router.put("/bonuses/{bonus_id}", response_model=BonusResponse)
 async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
-    if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
-        raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé' ou 'En attente Directeur'")
+
+    can_edit_any = user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
+
+    if not can_edit_any:
+        if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
+            raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé' ou 'En attente Directeur'")
 
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
@@ -141,10 +159,52 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
+    if can_edit_any and bonus.status != ValidationStatus.INITIALISE:
+        update_data['status'] = ValidationStatus.INITIALISE
     update_data['was_rejected'] = False
+
+    SCALAR_FIELDS = [
+        "total_amount", "performance_score", "absences", "retard",
+        "prime_mensuel_amount", "nb_jours_astreinte", "taux_jour",
+        "prime_astreinte_amount", "ca_realise", "ca_objectif",
+        "taux_commission", "commission_amount",
+    ]
+
+    before = {f: getattr(bonus, f) for f in SCALAR_FIELDS}
+    before["details"] = bonus.details
+    before["status"] = str(bonus.status.value) if hasattr(bonus.status, 'value') else str(bonus.status)
+
     await bonus.update_from_dict(update_data)
     await bonus.save()
-    return await Bonus.get(id=bonus.id).prefetch_related('employee')
+    updated = await Bonus.get(id=bonus.id).prefetch_related('employee')
+
+    after = {f: getattr(updated, f) for f in SCALAR_FIELDS}
+    after["details"] = updated.details
+    after["status"] = str(updated.status.value) if hasattr(updated.status, 'value') else str(updated.status)
+
+    changes = []
+    for f in SCALAR_FIELDS:
+        if str(before[f]) != str(after[f]):
+            changes.append(f"{f}: {before[f]} → {after[f]}")
+    if before["status"] != after["status"]:
+        changes.append(f"statut: {before['status']} → {after['status']}")
+    if str(before["details"]) != str(after["details"]):
+        changes.append("détails modifiés (critères, notes, coefficients)")
+
+    changes_data = {"before": {f: _sanitize_for_json(before[f]) for f in SCALAR_FIELDS + ["details", "status"] if str(before[f]) != str(after[f])},
+                    "after": {f: _sanitize_for_json(after[f]) for f in SCALAR_FIELDS + ["details", "status"] if str(before[f]) != str(after[f])}}
+    try:
+        await AuditLog.create(
+            bonus_id=bonus.id,
+            user_id=user.id,
+            action="MODIFICATION",
+            description="; ".join(changes) if changes else "Modification enregistrée",
+            changes=changes_data,
+        )
+    except Exception:
+        pass  # Audit log failure must not block the modification
+
+    return updated
 
 # Route GET pour lister les primes (filtres optionnels)
 @router.get("/bonuses/", response_model=List[BonusResponse])
@@ -545,7 +605,13 @@ async def validate_bonus(
     elif validation.action == "REJETER":
         bonus.status = ValidationStatus.INITIALISE
         bonus.was_rejected = True
-    
+        await AuditLog.create(
+            bonus_id=bonus.id,
+            user_id=user.id,
+            action="REJET",
+            description=f"Rejet par {user.name} ({step})" + (f" — Motif : {validation.motif_rejet}" if validation.motif_rejet else ""),
+        )
+
     # Sauvegarde de la prime
     await bonus.save()
     return {"message": "OK", "status": bonus.status}
@@ -577,5 +643,28 @@ async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_curre
     for bonus in bonuses:
         bonus.paid_at = now
         await bonus.save()
+        await AuditLog.create(
+            bonus_id=bonus.id,
+            user_id=user.id,
+            action="PAIEMENT",
+            description=f"Paiement effectué par {user.name}",
+        )
 
     return {"message": f"{len(bonuses)} prime(s) marquée(s) comme payée(s)", "count": len(bonuses)}
+
+@router.get("/bonuses/{bonus_id}/audit-logs", response_model=List[AuditLogResponse])
+async def get_audit_logs(bonus_id: int, user: User = Depends(get_current_user)):
+    logs = await AuditLog.filter(bonus_id=bonus_id).prefetch_related('user').order_by('created_at')
+    result = []
+    for log in logs:
+        result.append(AuditLogResponse(
+            id=log.id,
+            bonus_id=log.bonus_id,
+            user_id=log.user_id,
+            user_name=log.user.name if log.user else None,
+            action=log.action,
+            description=log.description,
+            changes=log.changes,
+            created_at=log.created_at,
+        ))
+    return result

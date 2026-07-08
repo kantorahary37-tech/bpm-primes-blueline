@@ -9,11 +9,11 @@ const iconMap = {
 
 export default function Timeline({ items }) {
   if (!items || items.length === 0) {
-    return <p className="text-sm text-base-content/40 py-4 text-center">Aucun historique</p>
+    return <p className="text-sm text-base-content/40 py-2 text-center">Aucun historique</p>
   }
 
   return (
-    <div className="relative pl-8 space-y-6">
+    <div className="relative pl-8 space-y-2">
       <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-base-300" />
       {items.map((item, i) => {
         const cfg = iconMap[item.action] || iconMap[item.step] || { icon: null, bg: 'bg-base-200' }
@@ -23,7 +23,7 @@ export default function Timeline({ items }) {
             <div className={`absolute -left-8 w-8 h-8 rounded-full ${cfg.bg} flex items-center justify-center ring-4 ring-base-100`}>
               {Icon ? <Icon className="w-4 h-4" /> : <span className="text-sm">•</span>}
             </div>
-            <div className="card-blueline p-4">
+            <div className="card-blueline p-2.5">
               <div className="flex items-center justify-between gap-4">
                 <p className="font-medium text-sm">
                   {item.step === 'CLOSED' ? 'Clôture automatique' : `Validation ${item.step || ''}`}
@@ -32,9 +32,9 @@ export default function Timeline({ items }) {
                 {item.date && <span className="text-xs text-base-content/40 shrink-0">{item.date}</span>}
               </div>
               {item.action === 'REJETER' && item.motif_rejet && (
-                <p className="text-sm text-red-600 mt-1">Motif : {item.motif_rejet}</p>
+                <p className="text-sm text-red-600 mt-0.5">Motif : {item.motif_rejet}</p>
               )}
-              {item.note && <p className="text-sm text-base-content/60 mt-1">{item.note}</p>}
+              {item.note && <p className="text-sm text-base-content/60 mt-0.5">{item.note}</p>}
             </div>
           </div>
         )

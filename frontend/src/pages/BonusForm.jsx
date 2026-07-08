@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
+import Modal from '../components/Modal'
 import * as XLSX from 'xlsx'
 
 const FRENCH_MONTHS = {
@@ -87,6 +88,10 @@ export default function BonusForm() {
   })
   const [manager, setManager] = useState({ name: '', function: '' })
   const [params, setParams] = useState({ startDate: monthStart, endDate: monthEnd, maxPrime: 150000 })
+  const [selectedMonth, setSelectedMonth] = useState(now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'))
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
+  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const years = Array.from({ length: 8 }, (_, i) => now.getFullYear() - 2 + i)
 
   const [observation, setObservation] = useState('')
   const [teamSelections, setTeamSelections] = useState([])
@@ -102,15 +107,15 @@ export default function BonusForm() {
   const [error, setError] = useState('')
 
   const [quantitative, setQuantitative] = useState([
-    { criteria: 'Planification du travail', description: '', objective: '15%', evaluation: 0, value: 0 },
-    { criteria: 'Respect des deadlines', description: '', objective: '15%', evaluation: 0, value: 0 },
-    { criteria: "Capacité d'analyse", description: '', objective: '10%', evaluation: 0, value: 0 },
-    { criteria: 'Exécution des tâches périodiques', description: '', objective: '10%', evaluation: 0, value: 0 },
+    { criteria: 'Planification du travail', description: '', coeff: 2, note: 0, value: 0 },
+    { criteria: 'Respect des deadlines', description: '', coeff: 1, note: 0, value: 0 },
+    { criteria: "Capacité d'analyse", description: '', coeff: 1, note: 0, value: 0 },
+    { criteria: 'Exécution des tâches périodiques', description: '', coeff: 2, note: 0, value: 0 },
   ])
   const [qualitative, setQualitative] = useState([
-    { criteria: 'Qualité du travail', description: '', objective: '20%', evaluation: 0, value: 0 },
-    { criteria: 'Initiative', description: '', objective: '15%', evaluation: 0, value: 0 },
-    { criteria: "Travail d'équipe", description: '', objective: '15%', evaluation: 0, value: 0 },
+    { criteria: 'Qualité du travail', description: '', coeff: 2, note: 0, value: 0 },
+    { criteria: 'Initiative', description: '', coeff: 1, note: 0, value: 0 },
+    { criteria: "Travail d'équipe", description: '', coeff: 1, note: 0, value: 0 },
   ])
 
   const [simpleForm, setSimpleForm] = useState({
@@ -238,6 +243,7 @@ export default function BonusForm() {
   const [showAddQuali, setShowAddQuali] = useState(false)
   const [customMode, setCustomMode] = useState(null)
   const [customCriteria, setCustomCriteria] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => {
     getEmployees().then(all => {
@@ -268,6 +274,7 @@ export default function BonusForm() {
       setSelectedEmp(b.employee || null);
       if (b.employee) setEmployee({ department: b.employee.department || '', service: '', name: b.employee.name, function: '', matricule: b.employee.matricule });
       setParams((p) => ({ ...p, startDate: b.start_date, endDate: b.end_date }));
+      if (b.start_date) { setSelectedMonth(b.start_date.substring(0, 7)); setSelectedYear(parseInt(b.start_date.substring(0, 4))); }
       if (b.details) {
         const d = b.details;
         if (d.quantitative) setQuantitative(d.quantitative);
@@ -283,14 +290,12 @@ export default function BonusForm() {
     });
   }, [id]);
 
-  const totalQuantiEval = quantitative.reduce((s, i) => s + (parseFloat(i.evaluation) || 0), 0)
-  const totalQualiEval = qualitative.reduce((s, i) => s + (parseFloat(i.evaluation) || 0), 0)
-  const totalEvalPct = totalQuantiEval + totalQualiEval
+  const totalQuantiCoeff = quantitative.reduce((s, i) => s + (parseFloat(i.coeff) || 0), 0)
+  const totalQualiCoeff = qualitative.reduce((s, i) => s + (parseFloat(i.coeff) || 0), 0)
+  const totalCoeff = totalQuantiCoeff + totalQualiCoeff
   const totalQuantiValue = quantitative.reduce((s, i) => s + i.value, 0)
   const totalQualiValue = qualitative.reduce((s, i) => s + i.value, 0)
   const totalValue = totalQuantiValue + totalQualiValue
-  const totalQuantiObj = quantitative.reduce((s, i) => s + (parseInt(i.objective) || 0), 0)
-  const totalQualiObj = qualitative.reduce((s, i) => s + (parseInt(i.objective) || 0), 0)
 
   if (!['mensuel', 'astreinte', 'commission'].includes(editType)) {
     return (
@@ -305,12 +310,16 @@ export default function BonusForm() {
 
   const handleEvalChange = (list, setter, index, field, value, section) => {
     const newData = [...list]
-    if (field === 'evaluation') {
+    if (field === 'note') {
       const item = newData[index]
-      const maxEval = parseInt(item.objective) || 0
-      const pct = Math.max(0, Math.min(parseFloat(value) || 0, maxEval))
-      newData[index].evaluation = pct
-      newData[index].value = params.maxPrime * (pct / 100)
+      const note = Math.max(0, Math.min(parseFloat(value) || 0, 10))
+      newData[index].note = note
+      newData[index].value = params.maxPrime * (item.coeff / 10) * (note / 10)
+    } else if (field === 'coeff') {
+      const item = newData[index]
+      const coeff = Math.max(0, Math.min(parseFloat(value) || 0, 10))
+      newData[index].coeff = coeff
+      newData[index].value = params.maxPrime * (coeff / 10) * (item.note / 10)
     } else {
       newData[index][field] = value
     }
@@ -319,13 +328,20 @@ export default function BonusForm() {
 
   const getAvailableCriteria = (currentList, defaults) =>
     defaults.filter((c) => !currentList.some((item) => item.criteria === c))
+  const doDelete = () => {
+    if (confirmDelete) {
+      const { list, setter, index } = confirmDelete
+      setter(list.filter((_, i) => i !== index))
+      setConfirmDelete(null)
+    }
+  }
 
   const removeEvalItem = (list, setter, index) => {
-    setter(list.filter((_, i) => i !== index))
+    setConfirmDelete({ list, setter, index })
   }
 
   const addEvalItem = (list, setter, criteria, section) => {
-    setter([...list, { criteria, description: '', objective: '0%', evaluation: 0, value: 0 }])
+    setter([...list, { criteria, description: '', coeff: 0, note: 0, value: 0 }])
   }
 
   const handleConfigChange = (field, value) => {
@@ -530,28 +546,28 @@ export default function BonusForm() {
         const empMaxRate = getMensuelRate(employee_id)
         const maxPrime = empMaxRate ?? params.maxPrime
         const amount = Math.min(totalValue, maxPrime)
-        return saveBonus({
-          employee_id,
-          start_date: params.startDate,
-          end_date: params.endDate,
-          bonus_type: 'mensuel',
-          performance_score: totalEvalPct,
-          total_amount: amount,
-          details: {
-            prime_max: maxPrime,
-            quantitative: quantitative.map((c) => ({
-              criteria: c.criteria, description: c.description,
-              objective: c.objective, evaluation: c.evaluation, value: c.value,
-            })),
-            qualitative: qualitative.map((c) => ({
-              criteria: c.criteria, description: c.description,
-              objective: c.objective, evaluation: c.evaluation, value: c.value,
-            })),
-            total_quantitative: totalQuantiValue,
-            total_qualitative: totalQualiValue,
-            total_evaluation: totalValue,
-          },
-        })
+          return saveBonus({
+            employee_id,
+            start_date: params.startDate,
+            end_date: params.endDate,
+            bonus_type: 'mensuel',
+            performance_score: totalCoeff,
+            total_amount: amount,
+            details: {
+              prime_max: maxPrime,
+              quantitative: quantitative.map((c) => ({
+                criteria: c.criteria, description: c.description,
+                coeff: c.coeff, note: c.note, value: c.value,
+              })),
+              qualitative: qualitative.map((c) => ({
+                criteria: c.criteria, description: c.description,
+                coeff: c.coeff, note: c.note, value: c.value,
+              })),
+              total_quantitative: totalQuantiValue,
+              total_qualitative: totalQualiValue,
+              total_evaluation: totalValue,
+            },
+          })
       }))
       navigateAfterSave()
     } catch (err) {
@@ -592,7 +608,7 @@ export default function BonusForm() {
 
   const renderField = (name, label, placeholder, step = 'any') => (
     <div key={name}>
-      <label className="block text-sm font-medium text-base-content/70 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-base-content/70 mb-0.5">{label}</label>
       <input type="number" step={step} name={name} value={simpleForm[name]} onChange={handleSimpleChange}
         className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
         placeholder={placeholder} />
@@ -600,33 +616,33 @@ export default function BonusForm() {
   )
 
   const sharedHeader = (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-      <div className="card-blueline p-4">
-        <h2 className="font-semibold text-base-content mb-3 text-sm">{editType === 'astreinte' ? 'Responsable' : "Informations de l'employé"}</h2>
-        <div className="space-y-2">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+      <div className="card-blueline p-3">
+        <h2 className="font-semibold text-base-content mb-2 text-sm">{editType === 'astreinte' ? 'Responsable' : "Informations de l'employé"}</h2>
+        <div className="space-y-1.5">
           {editType === 'astreinte' ? (
             <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2">
               Les employés sont définis dans les tableaux ci-dessous. Une prime sera créée par employé.
             </div>
           ) : isEditing ? (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Nom et prénom</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nom et prénom</label>
                 <input type="text" value={employee.name} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Matricule</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Matricule</label>
                 <input type="text" value={employee.matricule} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Département</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Département</label>
                 <input type="text" value={employee.department} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Employé</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Employé</label>
                 <select value={selectedEmp?.id || ''} onChange={handleSelectEmployee}
                   className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
                   <option value="">Sélectionner...</option>
@@ -634,19 +650,19 @@ export default function BonusForm() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Département</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Département</label>
                 <input type="text" value={employee.department} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Nom et prénom</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nom et prénom</label>
                 <input type="text" value={employee.name} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Matricule</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Matricule</label>
                 <input type="text" value={employee.matricule} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Service</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Service</label>
                 <input type="text" value={employee.service} onChange={(e) => setEmployee({ ...employee, service: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
               </div>
             </div>
@@ -654,55 +670,99 @@ export default function BonusForm() {
         </div>
       </div>
 
-      <div className="card-blueline p-4">
-        <h2 className="font-semibold text-base-content mb-3 text-sm">Responsable & Période</h2>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-3">
+      <div className="card-blueline p-3">
+        <h2 className="font-semibold text-base-content mb-2 text-sm">Responsable & Période</h2>
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-medium text-base-content/70 mb-1">Nom du responsable</label>
+              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nom du responsable</label>
               <input type="text" value={connectedUser?.name || ''} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-base-content/70 mb-1">Rôle</label>
+              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Rôle</label>
               <input type="text" value={connectedUser?.is_dg ? 'Directeur Général' : connectedUser?.is_drh ? 'DRH' : connectedUser?.is_directeur ? 'Directeur' : connectedUser?.is_validator_n1 ? 'Validateur N+1' : 'Utilisateur'} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-base-content/70 mb-1">Fonction</label>
+            <label className="block text-sm font-medium text-base-content/70 mb-0.5">Fonction</label>
             <input type="text" value={connectedUser?.poste || ''} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Date début</label>
-                <input type="date" value={params.startDate} onChange={(e) => setParams({ ...params, startDate: e.target.value })} className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 ${params.endDate < params.startDate ? 'border-red-400' : 'border-base-300'}`} />
+            {editType === 'astreinte' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-base-content/70 mb-0.5">Date début</label>
+                  <input type="date" value={params.startDate} onChange={(e) => setParams({ ...params, startDate: e.target.value })} className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 ${params.endDate < params.startDate ? 'border-red-400' : 'border-base-300'}`} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-base-content/70 mb-0.5">Date fin</label>
+                  <input type="date" value={params.endDate} onChange={(e) => setParams({ ...params, endDate: e.target.value })} className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 ${params.endDate < params.startDate ? 'border-red-400' : 'border-base-300'}`} />
+                </div>
               </div>
+            ) : (
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Date fin</label>
-                <input type="date" value={params.endDate} onChange={(e) => setParams({ ...params, endDate: e.target.value })} className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 ${params.endDate < params.startDate ? 'border-red-400' : 'border-base-300'}`} />
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Mois</label>
+                <div className="flex gap-2 items-start">
+                  <select value={selectedMonth} onChange={(e) => {
+                    const val = e.target.value
+                    setSelectedMonth(val)
+                    const [y, m] = val.split('-')
+                    const last = new Date(parseInt(y), parseInt(m), 0).toISOString().split('T')[0]
+                    setParams(p => ({ ...p, startDate: val + '-01', endDate: last }))
+                  }}
+                  className="w-44 px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
+                    {months.map((m, i) => {
+                      const idx = String(i + 1).padStart(2, '0')
+                      return <option key={idx} value={`${selectedYear}-${idx}`}>{m}</option>
+                    })}
+                  </select>
+                  <select value={selectedYear} onChange={(e) => {
+                    const y = e.target.value
+                    setSelectedYear(y)
+                    const idx = selectedMonth.split('-')[1]
+                    const last = new Date(parseInt(y), parseInt(idx), 0).toISOString().split('T')[0]
+                    const newVal = y + '-' + idx
+                    setSelectedMonth(newVal)
+                    setParams(p => ({ ...p, startDate: newVal + '-01', endDate: last }))
+                  }}
+                  className="w-28 px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                  <button type="button" onClick={() => {
+                    const now = new Date()
+                    const y = now.getFullYear()
+                    const m = String(now.getMonth() + 1).padStart(2, '0')
+                    const val = y + '-' + m
+                    setSelectedYear(y)
+                    setSelectedMonth(val)
+                    const last = new Date(y, now.getMonth() + 1, 0).toISOString().split('T')[0]
+                    setParams(p => ({ ...p, startDate: val + '-01', endDate: last }))
+                  }}
+                  className="btn btn-sm btn-ghost px-2 mt-0 text-xs text-brand-600 hover:bg-brand-50 whitespace-nowrap">Mois en cours</button>
+                </div>
               </div>
-            </div>
-          {params.endDate < params.startDate && (
-            <p className="text-red-500 text-sm mt-1">⚠️ La date de fin ne peut pas être avant la date de début.</p>
-          )}
+            )}
+            {editType === 'astreinte' && params.endDate < params.startDate && (
+              <p className="text-red-500 text-sm mt-0.5">⚠️ La date de fin ne peut pas être avant la date de début.</p>
+            )}
           {editType === 'astreinte' ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Prime max / semaine (Ar)</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime max / semaine (Ar)</label>
                 <input type="number" value={astreinteConfig.weeklyMax} onChange={(e) => handleConfigChange('weeklyMax', e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-1">Nombre de semaines</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nombre de semaines</label>
                 <input type="number" value={calcWeeks(params.startDate, params.endDate)} readOnly
                   className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
             </div>
           ) : (
             <div>
-              <label className="block text-sm font-medium text-base-content/70 mb-1">Prime maximum (Ar)</label>
+              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime maximum (Ar)</label>
               <input type="number" value={params.maxPrime} readOnly
                 className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60 cursor-not-allowed" />
-              <p className="text-[11px] text-base-content/40 mt-1">Modifiable dans la page Plafonds</p>
+              <p className="text-[11px] text-base-content/40 mt-0.5">Modifiable dans la page Plafonds</p>
             </div>
           )}
         </div>
@@ -725,7 +785,7 @@ export default function BonusForm() {
           <div className="card-blueline p-4">
             <h2 className="font-semibold text-base-content text-sm mb-2">Configuration commission</h2>
             <div className="max-w-xs">
-              <label className="block text-sm font-medium text-base-content/70 mb-1">Commission par vente (Ar)</label>
+              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Commission par vente (Ar)</label>
               <input type="number" value={commissionConfig.rate} onChange={(e) => handleCommissionConfigChange('rate', e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
             </div>
@@ -1041,6 +1101,7 @@ export default function BonusForm() {
   }
 
   return (
+    <>
     <div className="page-container !px-2 max-w-full">
       <div className="flex items-center gap-3 mb-6">
         <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
@@ -1052,9 +1113,9 @@ export default function BonusForm() {
       <form onSubmit={handleSubmitMensuel}>
         {sharedHeader}
 
-        {(totalQuantiObj + totalQualiObj) !== 100 && (
+        {totalCoeff > 0 && totalCoeff !== 10 && (
           <div className="mb-4 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">
-            <ExclamationIcon className="w-4 h-4" /> Les objectifs qualitatifs et quantitatifs totalisent {totalQuantiObj + totalQualiObj}% (doivent faire 100%)
+            <ExclamationIcon className="w-4 h-4" /> La somme des coefficients ({totalCoeff.toFixed(1)}) n'est pas égale à 10
           </div>
         )}
 
@@ -1063,7 +1124,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Quantitative</h2>
-            <span className="text-xs text-gray-600">{totalQuantiEval.toFixed(1)}%</span>
+            <span className="text-xs text-gray-600">{totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1071,9 +1132,9 @@ export default function BonusForm() {
                 <tr className="border-b border-gray-300">
                   <th className="text-left py-2 px-2 font-medium text-gray-700">Critères</th>
                   <th className="text-left py-2 px-2 font-medium text-gray-700">Description/Obs</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-700">Objectif</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-700">Note (0 à poids)</th>
-                  <th className="text-right py-2 px-2 font-medium text-gray-700">Valeur (Ar)</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Coefficient</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Note /10</th>
+                  <th className="text-right py-2 px-2 font-medium text-gray-700">Montant (Ar)</th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
@@ -1087,14 +1148,14 @@ export default function BonusForm() {
                         className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="text" value={item.objective}
-                        onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'objective', e.target.value, 'quanti')}
+                      <input type="number" min="0" max="10" step="0.5" value={item.coeff}
+                        onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'coeff', e.target.value, 'quanti')}
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max={parseInt(item.objective) || 100}
-                        value={item.evaluation}
-                          onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'evaluation', e.target.value, 'quanti')}
+                      <input type="number" min="0" max="10" step="0.5"
+                        value={item.note}
+                          onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'note', e.target.value, 'quanti')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
@@ -1105,8 +1166,10 @@ export default function BonusForm() {
                   </tr>
                 ))}
                 <tr className="font-semibold border-t-2 border-gray-400">
-                  <td colSpan="5" className="py-2 px-2 text-right">Total Quantitatif</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{totalQuantiEval.toFixed(0)}</td>
+                  <td colSpan="3" className="py-2 px-2 text-right">Total Quantitatif</td>
+                  <td className="py-2 px-2 text-center font-medium">{totalQuantiCoeff.toFixed(1)}</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>
@@ -1159,7 +1222,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Qualitative</h2>
-            <span className="text-xs text-gray-600">{totalQualiEval.toFixed(1)}% / 100%</span>
+            <span className="text-xs text-gray-600">{totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1167,9 +1230,9 @@ export default function BonusForm() {
                 <tr className="border-b border-gray-300">
                   <th className="text-left py-2 px-2 font-medium text-gray-700">Critères</th>
                   <th className="text-left py-2 px-2 font-medium text-gray-700">Description/Obs</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-700">Objectif</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-700">Note (0 à poids)</th>
-                  <th className="text-right py-2 px-2 font-medium text-gray-700">Valeur (Ar)</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Coefficient</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-700">Note /10</th>
+                  <th className="text-right py-2 px-2 font-medium text-gray-700">Montant (Ar)</th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
@@ -1183,14 +1246,14 @@ export default function BonusForm() {
                         className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="text" value={item.objective}
-                        onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'objective', e.target.value, 'quali')}
+                      <input type="number" min="0" max="10" step="0.5" value={item.coeff}
+                        onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'coeff', e.target.value, 'quali')}
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max={parseInt(item.objective) || 100}
-                        value={item.evaluation}
-                          onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'evaluation', e.target.value, 'quali')}
+                      <input type="number" min="0" max="10" step="0.5"
+                        value={item.note}
+                          onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'note', e.target.value, 'quali')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
@@ -1201,8 +1264,10 @@ export default function BonusForm() {
                   </tr>
                 ))}
                 <tr className="font-semibold border-t-2 border-gray-400">
-                  <td colSpan="5" className="py-2 px-2 text-right">Total Qualitatif</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{totalQualiEval.toFixed(0)}</td>
+                  <td colSpan="3" className="py-2 px-2 text-right">Total Qualitatif</td>
+                  <td className="py-2 px-2 text-center font-medium">{totalQualiCoeff.toFixed(1)}</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>
@@ -1255,28 +1320,28 @@ export default function BonusForm() {
 
         <div className="card-blueline p-3 mb-0">
           <div className="flex flex-col gap-1.5">
-            <p className="text-gray-600 text-xs">Note de calcul : Total = total valeur quantitative + total valeur qualitative</p>
+            <p className="text-gray-600 text-xs">Note de calcul : Montant = PrimeMax × (Coeff/10) × (Note/10)</p>
             <p className="text-[10px] text-gray-500">Période : {params.startDate} → {params.endDate}</p>
 
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Quantitatif</span>
-                  <span>{totalQuantiEval.toFixed(1)}%</span>
+                  <span>{totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
-                    style={{ width: `${Math.min(totalQuantiEval, 100)}%` }} />
+                    style={{ width: `${Math.min((totalQuantiValue / (params.maxPrime || 1)) * 100, 100)}%` }} />
                 </div>
               </div>
               <div className="flex-1">
                 <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Qualitatif</span>
-                  <span>{totalQualiEval.toFixed(1)}%</span>
+                  <span>{totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-violet-500"
-                    style={{ width: `${Math.min(totalQualiEval, 100)}%` }} />
+                    style={{ width: `${Math.min((totalQualiValue / (params.maxPrime || 1)) * 100, 100)}%` }} />
                 </div>
               </div>
             </div>
@@ -1284,7 +1349,7 @@ export default function BonusForm() {
             <div className="text-right pt-1 border-t border-gray-300">
               <p className="text-xs text-gray-700">Total (quanti + quali)</p>
               <p className="text-xl font-bold text-brand-600">
-                {totalEvalPct.toFixed(1)}% — {totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
+                {totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
               </p>
             </div>
           </div>
@@ -1334,5 +1399,14 @@ export default function BonusForm() {
         </div>
       </form>
     </div>
+
+      <Modal open={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmer la suppression" size="sm">
+        <p className="text-sm text-gray-600 mb-6">Ce critère sera définitivement supprimé.</p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => setConfirmDelete(null)} className="btn btn-sm btn-ghost">Annuler</button>
+          <button onClick={doDelete} className="btn btn-sm bg-red-500 hover:bg-red-600 text-white border-0">Supprimer</button>
+        </div>
+      </Modal>
+    </>
   )
 }

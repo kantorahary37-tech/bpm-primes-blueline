@@ -99,6 +99,11 @@ export const getBonusValidations = async (id) => {
   return data;
 };
 
+export const getAuditLogs = async (id) => {
+  const { data } = await api.get(`/bonuses/${id}/audit-logs`);
+  return data;
+};
+
 export const validateBonus = async (bonusId, validationData, step) => {
   const { data } = await api.post(`/bonuses/${bonusId}/validate?step=${step}`, validationData);
   return data;

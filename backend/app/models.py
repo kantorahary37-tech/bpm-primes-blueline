@@ -198,3 +198,13 @@ class PrimeMax(models.Model):
     set_by = fields.ForeignKeyField('models.User', null=True)
     # Date de mise à jour
     updated_at = fields.DatetimeField(auto_now=True)
+
+# Modèle Audit Log (table "auditlog")
+class AuditLog(models.Model):
+    id = fields.IntField(pk=True)
+    bonus = fields.ForeignKeyField('models.Bonus', related_name='audit_logs')
+    user = fields.ForeignKeyField('models.User')
+    action = fields.CharField(max_length=50)
+    description = fields.TextField(null=True)
+    changes = fields.JSONField(null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)

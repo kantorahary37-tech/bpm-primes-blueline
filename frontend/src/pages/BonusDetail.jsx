@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getBonus, getBonusValidations, validateBonus } from '../services/api';
+import { getBonus, getBonusValidations, getAuditLogs, validateBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
-import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon, DownloadIcon, ClockIcon } from '../components/Icons';
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -35,6 +35,7 @@ const BonusDetail = () => {
   const navigate = useNavigate();
   const [bonus, setBonus] = useState(null);
   const [validations, setValidations] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
@@ -65,6 +66,7 @@ const BonusDetail = () => {
           }),
         }));
         setValidations([creation, ...timeline]);
+        getAuditLogs(id).then(setAuditLogs).catch(() => {});
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -187,7 +189,11 @@ const BonusDetail = () => {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-sm text-gray-900">{label}</h4>
-          <span className="text-xs text-gray-600">{totalEval}%</span>
+          <span className="text-xs text-gray-600">
+            {items[0] && 'coeff' in items[0]
+              ? `${items.reduce((s, i) => s + (i.coeff || 0), 0)} coeff`
+              : `${totalEval}%`}
+          </span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
           <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -197,17 +203,17 @@ const BonusDetail = () => {
             <thead>
               <tr className="border-b border-gray-300">
                 <th className="text-left py-2 pr-2 font-medium text-gray-600 text-xs">Critères</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Objectif</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Note</th>
-                <th className="text-right py-2 pl-2 font-medium text-gray-600 text-xs">Valeur (Ar)</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Coefficient</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Note /10</th>
+                <th className="text-right py-2 pl-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
                 <tr key={i} className="border-b border-gray-200">
                   <td className="py-2 pr-2 text-gray-900">{item.criteria}</td>
-                  <td className="py-2 px-2 text-center text-gray-800">{item.objective}</td>
-                  <td className="py-2 px-2 text-center font-medium text-gray-900">{item.evaluation ?? 0}</td>
+                  <td className="py-2 px-2 text-center text-gray-800">{item.coeff ?? item.objective ?? 0}</td>
+                  <td className="py-2 px-2 text-center font-medium text-gray-900">{item.note ?? item.evaluation ?? 0}</td>
                   <td className="py-2 pl-2 text-right font-medium text-gray-900">{formatAr(item.value)}</td>
                 </tr>
               ))}
@@ -242,6 +248,7 @@ const BonusDetail = () => {
 
   const step = getValidStep(bonus.status);
   const TypeIcon = typeIcons[bonus.bonus_type] || ClipboardIcon
+  const canEditAsAdmin = user?.is_dg || user?.is_drh || (user?.is_directeur && bonus.employee?.department === user.department)
 
   return (
     <div className="page-container max-w-4xl">
@@ -319,7 +326,7 @@ const BonusDetail = () => {
               <EvaluationTable
                 label="Quantitatif"
                 items={bonus.details.quantitative}
-                totalEval={bonus.details.quantitative?.reduce((s, i) => s + (i.evaluation || 0), 0)}
+                totalEval={bonus.details.quantitative?.reduce((s, i) => s + ((i.note ?? i.evaluation) || 0), 0)}
                 totalValue={bonus.details.total_quantitative || 0}
                 primeMax={bonus.details.prime_max || bonus.total_amount}
                 color="bg-blue-500"
@@ -328,7 +335,7 @@ const BonusDetail = () => {
               <EvaluationTable
                 label="Qualitatif"
                 items={bonus.details.qualitative}
-                totalEval={bonus.details.qualitative?.reduce((s, i) => s + (i.evaluation || 0), 0)}
+                totalEval={bonus.details.qualitative?.reduce((s, i) => s + ((i.note ?? i.evaluation) || 0), 0)}
                 totalValue={bonus.details.total_qualitative || 0}
                 primeMax={bonus.details.prime_max || bonus.total_amount}
                 color="bg-violet-500"
@@ -377,18 +384,6 @@ const BonusDetail = () => {
                     Interventions <span className="text-gray-400 font-medium">{bonus.details.interventions?.length || 0} × {formatAr(bonus.details.intervention_rate)}</span>
                   </span>
                   <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_interv)} Ar</span>
-                </div>
-              )}
-              {(bonus.details.exceptionnelle || 0) > 0 && (
-                <div className="flex items-center justify-between py-1 px-3">
-                  <span className="text-gray-500">Exceptionnelle</span>
-                  <span className="font-medium text-gray-900">{formatAr(bonus.details.exceptionnelle)} Ar</span>
-                </div>
-              )}
-              {(bonus.details.ponctuelle || 0) > 0 && (
-                <div className="flex items-center justify-between py-1 px-3">
-                  <span className="text-gray-500">Ponctuelle</span>
-                  <span className="font-medium text-gray-900">{formatAr(bonus.details.ponctuelle)} Ar</span>
                 </div>
               )}
             </div>
@@ -501,9 +496,98 @@ const BonusDetail = () => {
           <Timeline items={validations} />
         </Section>
 
+        {auditLogs.length > 0 && (
+          <Section title="Historique des modifications" icon={ClockIcon}>
+            <div className="space-y-1.5">
+              {auditLogs.map((log, i) => {
+                const iconMap = {
+                  MODIFICATION: { icon: EditIcon, bg: 'bg-amber-100 text-amber-600' },
+                  PAIEMENT: { icon: CheckIcon, bg: 'bg-emerald-100 text-emerald-600' },
+                  REJET: { icon: XCircleIcon, bg: 'bg-red-100 text-red-600' },
+                }
+                const cfg = iconMap[log.action] || { icon: null, bg: 'bg-blue-100 text-blue-600' }
+                const Icon = cfg.icon
+                const changes = (log.description || '').split('; ').filter(Boolean)
+
+                const fieldLabels = {
+                  total_amount: 'Montant total',
+                  performance_score: 'Score',
+                  absences: 'Absences',
+                  retard: 'Retards',
+                  prime_mensuel_amount: 'Prime mensuelle',
+                  nb_jours_astreinte: 'Jours astreinte',
+                  taux_jour: 'Taux journalier',
+                  prime_astreinte_amount: 'Prime astreinte',
+                  ca_realise: 'CA réalisé',
+                  ca_objectif: 'CA objectif',
+                  taux_commission: 'Taux commission',
+                  commission_amount: 'Commission',
+                  details: 'Détails',
+                  statut: 'Statut',
+                }
+
+                const formatVal = (v) => {
+                  if (!v || v === 'None' || v === 'null') return '—'
+                  return v
+                }
+
+                return (
+                  <div key={i} className="flex gap-2.5 items-start group">
+                    <div className={`w-5 h-5 rounded-full ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                      {Icon ? <Icon className="w-2.5 h-2.5" /> : <span className="text-[10px]">•</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-gray-700">
+                          {log.user_name && <span className="font-medium">{log.user_name}</span>}
+                          <span className="text-gray-400 mx-1">·</span>
+                          <span className="text-gray-500">
+                            {log.action === 'MODIFICATION' ? 'Modification' : log.action === 'PAIEMENT' ? 'Paiement' : log.action === 'REJET' ? 'Rejet' : log.action}
+                          </span>
+                        </p>
+                        <span className="text-[11px] text-gray-400 shrink-0">
+                          {new Date(log.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {changes.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {changes.map((c, j) => {
+                            const match = c.match(/^(\w+): (.+) → (.+)$/)
+                            if (match) {
+                              const [, field, oldVal, newVal] = match
+                              const label = fieldLabels[field] || field
+                              if (field === 'details') return <p key={j} className="text-[11px] text-gray-400 italic">Détails modifiés (critères, notes, coefficients)</p>
+                              return (
+                                <p key={j} className="text-[11px] text-gray-600 leading-relaxed">
+                                  <span className="font-medium text-gray-700">{label}</span>
+                                  <span className="text-gray-400"> : </span>
+                                  <span className="text-gray-400 line-through">{formatVal(oldVal)}</span>
+                                  <span className="text-gray-300 mx-1">→</span>
+                                  <span className="font-medium text-gray-800">{formatVal(newVal)}</span>
+                                </p>
+                              )
+                            }
+                            if (c.startsWith('détails')) return <p key={j} className="text-[11px] text-gray-400 italic">Détails modifiés (critères, notes, coefficients)</p>
+                            return <p key={j} className="text-[11px] text-gray-500">{c}</p>
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Section>
+        )}
+
         {step && (
           <div className="flex gap-3 justify-end pt-2">
-            {bonus.status === 'Initialisé' && bonus.was_rejected ? (
+            {canEditAsAdmin && (
+              <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
+                <EditIcon className="w-4 h-4" /> Modifier
+              </Link>
+            )}
+            {!canEditAsAdmin && bonus.status === 'Initialisé' && bonus.was_rejected ? (
               <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
                 <EditIcon className="w-4 h-4" /> Modifier
               </Link>
