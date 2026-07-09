@@ -19,8 +19,12 @@ while True:
         print("Database not ready, waiting...")
         time.sleep(1)
 
-# Run aerich migrations
+# Run pending aerich migrations
 print("Running migrations...")
-subprocess.run(["aerich", "upgrade"])
+result = subprocess.run(["aerich", "upgrade"], capture_output=True, text=True)
+if result.returncode != 0:
+    # Table "aerich" does not exist yet — first-time init
+    print("aerich not initialized, running init-db...")
+    subprocess.run(["aerich", "init-db"])
 
 print("Starting application...")

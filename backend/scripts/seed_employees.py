@@ -12,167 +12,45 @@ from app.auth import get_password_hash
 
 
 MANAGERS_PER_DEPT = {
-    "Clientèle": [
+    "Direction Clientele": [
         ("clientele.manager@blueline.mg", "Rakoto Harilala", "Responsable Clientèle", True),
     ],
-    "Commerciale": [
+    "Direction Commerciale": [
         ("commerciale.manager@blueline.mg", "Razafy Mamy", "Responsable Commerciale", True),
     ],
-    "ADV": [
-        ("adv.manager@blueline.mg", "Raharinirina Fy", "Responsable ADV", True),
-    ],
-    "Fidélisation": [
-        ("fidele.manager@blueline.mg", "Randria Nome", "Responsable Fidélisation", True),
-    ],
-    "Auditeur interne": [
-        ("audit.manager@blueline.mg", "Ranalvo Tia", "Responsable Audit", True),
-    ],
-    "DAF Contrôleur": [
-        ("dafcontroleur.manager@blueline.mg", "Rakotomalala Haja", "DAF Contrôleur", True),
-    ],
-    "DAF CDG": [
-        ("dafcdg.manager@blueline.mg", "Andriantsilavo Mamy", "DAF CDG", True),
-    ],
-    "CTB": [
-        ("ctb.manager@blueline.mg", "Razafimandimby Solo", "Responsable CTB", True),
+    "Direction Administrative et Financiere": [
+        ("daf.manager@blueline.mg", "Rakotomalala Haja", "DAF", True),
     ],
     "RH": [
         ("rh.manager@blueline.mg", "Randrianarisoa Voahangy", "Responsable RH", True),
     ],
-    "Achat": [
+    "Direction Achat": [
         ("achat.manager@blueline.mg", "Rakotondrabe Tiana", "Responsable Achat", True),
     ],
-    "BBS": [
+    "Direction BBS": [
         ("bbs.manager@blueline.mg", "Rindra Razafimbelo", "Responsable BBS", True),
     ],
-    "Communication & Mktg": [
+    "Direction Communication et Marketing": [
         ("com.manager@blueline.mg", "Ranaivosoa Kanto", "Responsable Communication", True),
     ],
-    "DO": [
+    "Direction des Operations": [
         ("do.manager@blueline.mg", "Randriamiarantsoa Lova", "Responsable DO", True),
     ],
-    "DSI": [
+    "Direction des Systemes d'Informations": [
         ("dsi.manager@blueline.mg", "Vonjy Rakotoniaina", "Chef de Projet DSI", True),
     ],
-    "DT": [
+    "Direction Technique": [
         ("dt.manager@blueline.mg", "Rakotoarisoa Jean", "Responsable DT", True),
     ],
-    "Logistique": [
+    "Direction Logistique": [
         ("log.manager@blueline.mg", "Rajaonarison Faly", "Responsable Logistique", True),
     ],
-    "DG": [
+    "Direction Generale": [
         ("dg@blueline.mg", "Directeur Général", "DG", False),
     ],
 }
 
-EMPLOYEES_PER_DEPT = {
-    "Clientèle": [
-        ("CLT001", "Rakotoarisoa Ando"),
-        ("CLT002", "Razafindrakoto Miora"),
-        ("CLT003", "Randriamampionona Lala"),
-        ("CLT004", "Andrianantenaina Tovo"),
-        ("CLT005", "Rakotoniaina Holy"),
-        ("CLT006", "Rabeharisoa Nivo"),
-    ],
-    "Commerciale": [
-        ("CGP001", "Razafy Faniry"),
-        ("CGP002", "Randrianarison Tahiry"),
-        ("CGP003", "Rakotozafy Hery"),
-        ("CGP004", "Andrianjafy Nambinina"),
-        ("CGP005", "Ranaivosoa Tafita"),
-        ("CEN001", "Rabeantoandro Sarobidy"),
-        ("CEN002", "Razafindrakoto Fitahiana"),
-        ("CEN003", "Randriatsarafara Rivo"),
-        ("CEN004", "Rakotonirina Maminirina"),
-    ],
-    "ADV": [
-        ("ADV001", "Raharimanantsoa Anjarasoa"),
-        ("ADV002", "Razafimandimby Faneva"),
-        ("ADV003", "Andriamasinoro Tafitasoa"),
-        ("ADV004", "Randrianantenaina Toky"),
-    ],
-    "Fidélisation": [
-        ("FID001", "Rakotoarivelo Soa"),
-        ("FID002", "Razafinjato Ony"),
-        ("FID003", "Randriambololona Mamy"),
-    ],
-    "Auditeur interne": [
-        ("AUD001", "Ravelojaona Herinjaka"),
-        ("AUD002", "Razafindrakoto Manoa"),
-        ("AUD003", "Rakotonirina Sitraka"),
-    ],
-    "DAF Contrôleur": [
-        ("DAF001", "Rakotovao Hasina"),
-        ("DAF002", "Randrianandrasana Hary"),
-        ("DAF003", "Razafindratsimba Tiana"),
-    ],
-    "DAF CDG": [
-        ("CDG001", "Rafanomezantsoa Lova"),
-        ("CDG002", "Andriatsiferana Tafita"),
-        ("CDG003", "Rakotoniaina Nomena"),
-    ],
-    "CTB": [
-        ("CTB001", "Razafinakanga Holy"),
-        ("CTB002", "Randriamasimanana Tovo"),
-        ("CTB003", "Rabeharisoa Miora"),
-    ],
-    "RH": [
-        ("RH001", "Randrianasolo Voahangy"),
-        ("RH002", "Rakotoarimanana Soafara"),
-        ("RH003", "Razafindrakoto Hanta"),
-        ("RH004", "Andriambelosoa Miranto"),
-    ],
-    "Achat": [
-        ("ACH001", "Rakotondrabe Tafita"),
-        ("ACH002", "Randriamampionona Hasina"),
-        ("ACH003", "Razafinjato Miranto"),
-    ],
-    "BBS": [
-        ("BBS001", "Razafimandimby Nandrianina"),
-        ("BBS002", "Randrianarivelo Sitraka"),
-        ("BBS003", "Rakotoarisoa Mandresy"),
-        ("BBS004", "Andriamananjara Tafitasoa"),
-        ("BBS005", "Ranaivoarisoa Miora"),
-    ],
-    "Communication & Mktg": [
-        ("COM001", "Rakotondravao Kanto"),
-        ("COM002", "Randriamanantena Holy"),
-        ("COM003", "Razafindrakoto Nivo"),
-    ],
-    "DO": [
-        ("DO001", "Rajaonarison Faneva"),
-        ("DO002", "Randriamiandrisoa Tovo"),
-        ("DO003", "Rakotozafy Mamy"),
-        ("DO004", "Razafinjato Nambinina"),
-        ("DO005", "Andriamasinoro Hery"),
-    ],
-    "DSI": [
-        ("DSI001", "Rakotoarison Nantenaina"),
-        ("DSI002", "Randrianantenaina Tafitasoa"),
-        ("DSI003", "Razafindrakoto Mandresy"),
-        ("DSI004", "Andriamanjato Sitraka"),
-        ("DSI005", "Ranaivoson Maminirina"),
-        ("DSI006", "Rakotondravony Lova"),
-        ("DSI007", "Razafinakanga Holy"),
-        ("DSI008", "Randriatsarafara Nomena"),
-    ],
-    "DT": [
-        ("DT001", "Rakotoarivelo Fy"),
-        ("DT002", "Razafindrakoto Tafita"),
-        ("DT003", "Randrianandrasana Miora"),
-        ("DT004", "Rabeantoandro Hasina"),
-    ],
-    "Logistique": [
-        ("LOG001", "Rakotonirina Faneva"),
-        ("LOG002", "Razafinjato Soa"),
-        ("LOG003", "Randriambololona Tovo"),
-        ("LOG004", "Rajaonarison Nomena"),
-    ],
-    "DG": [
-        ("DG001", "Secrétaire DG"),
-        ("DG002", "Assistant DG"),
-    ],
-}
+EMPLOYEES_PER_DEPT = {}
 
 
 async def seed():
@@ -184,13 +62,13 @@ async def seed():
 
     directors_data = [
         dict(email="directeur@blueline.mg", name="Directeur Général Adjoint",
-             poste="Directeur", department="DG", is_directeur=True),
+             poste="Directeur", department="Direction Generale", is_directeur=True),
         dict(email="rivo@gulfsat.mg", name="Nantenaina Ulrich",
-             poste="DSI", department="DSI", is_directeur=True),
+             poste="DSI", department="Direction des Systemes d'Informations", is_directeur=True),
         dict(email="johary.drh@blueline.mg", name="Johary",
-             poste="DRH", department="RH", is_drh=True),
+             poste="DRH", department="Direction Administrative et Financiere", is_drh=True),
         dict(email="dg@blueline.mg", name="Directeur Général",
-             poste="DG", department="DG", is_dg=True),
+             poste="DG", department="Direction Generale", is_dg=True),
     ]
 
     all_users_data = list(directors_data)
@@ -249,7 +127,7 @@ async def seed():
             if d == dept and mgrs:
                 manager_email = mgrs[0][0]
                 break
-        if not manager_email and dept == "DG":
+        if not manager_email and dept == "Direction Generale":
             manager_email = "dg@blueline.mg"
         if not manager_email:
             manager_email = "dg@blueline.mg"

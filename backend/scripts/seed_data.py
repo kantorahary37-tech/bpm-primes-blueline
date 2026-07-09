@@ -26,21 +26,21 @@ async def seed():
     # Création des utilisateurs
     users_data = [
         dict(email="vonjy.rakotoniaina@staff.blueline.mg", name="Vonjy Rakotoniaina",
-             poste="Chef de Projet", department="DSI", is_validator_n1=True),
+             poste="Chef de Projet", department="Direction des Systemes d'Informations", is_validator_n1=True),
         dict(email="rivo@gulfsat.mg", name="Nantenaina Ulrich",
-             poste="DSI", department="DSI", is_directeur=True),
+             poste="DSI", department="Direction des Systemes d'Informations", is_directeur=True),
         dict(email="johary.drh@blueline.mg", name="Johary",
              poste="DRH", department="RH", is_drh=True),
         dict(email="dg@blueline.mg", name="Directeur Général",
-             poste="DG", department="DG", is_dg=True),
+             poste="DG", department="Direction Generale", is_dg=True),
         dict(email="rindra.razafimbelo@blueline-business.mg", name="RAZAFIMBELO Faliharinohatra Rindra",
-             poste="DA", department="BBS", is_validator_n1=True),
+             poste="DA", department="Direction BBS", is_validator_n1=True),
         dict(email="natana.randriambololona@blueline-business.mg", name="RANDRIAMBOLONOLONA Natana",
-             poste="Commerciale", department="Commerciale", is_validator_n1=True),
+             poste="Commerciale", department="Direction Commerciale", is_validator_n1=True),
         dict(email="rija.rakoto@staff.blueline.mg", name="Rija Rakoto",
-             poste="DSI", department="DSI"),
+             poste="DSI", department="Direction des Systemes d'Informations"),
         dict(email="mahery.andria@staff.blueline.mg", name="Mahery Andria",
-             poste="DSI", department="DSI"),
+             poste="DSI", department="Direction des Systemes d'Informations"),
     ]
 
     users_map = {}
@@ -78,17 +78,9 @@ async def seed():
 
     # Création des employés
     employees_data = [
-        dict(matricule="EMP001", name="Employé Test 1", department="DSI",
-             manager=users_map["vonjy.rakotoniaina@staff.blueline.mg"]),
-        dict(matricule="EMP002", name="Employé Test 2", department="BBS",
-             manager=users_map["rindra.razafimbelo@blueline-business.mg"]),
-        dict(matricule="EMP003", name="Vonjy Rakotoniaina", department="DSI",
-             manager=users_map["rivo@gulfsat.mg"]),
-        dict(matricule="EMP004", name="Rija Rakoto", department="DSI",
-             manager=users_map["rija.rakoto@staff.blueline.mg"]),
-        dict(matricule="EMP005", name="Mahery Andria", department="DSI",
+        dict(matricule="EMP005", name="Mahery Andria", department="Direction des Systemes d'Informations",
              manager=users_map["mahery.andria@staff.blueline.mg"]),
-        dict(matricule="EMP006", name="RANDRIAMBOLONOLONA Natana", department="Commerciale",
+        dict(matricule="EMP006", name="RANDRIAMBOLONOLONA Natana", department="Direction Commerciale",
              manager=users_map["natana.randriambololona@blueline-business.mg"]),
     ]
 
@@ -118,9 +110,9 @@ async def seed():
 
     # Création des plafonds
     plafonds = [
-        dict(department="DSI", bonus_type="mensuel", amount=200000),
-        dict(department="BBS", bonus_type="mensuel", amount=150000),
-        dict(department="Commerciale", bonus_type="mensuel", amount=150000),
+        dict(department="Direction des Systemes d'Informations", bonus_type="mensuel", amount=200000),
+        dict(department="Direction BBS", bonus_type="mensuel", amount=150000),
+        dict(department="Direction Commerciale", bonus_type="mensuel", amount=150000),
     ]
     for p in plafonds:
         dept_obj = await get_dept(p["department"])

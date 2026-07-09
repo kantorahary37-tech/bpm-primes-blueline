@@ -41,9 +41,16 @@ const DEFAULT_QUALI_CRITERIA = [
 ]
 
 const BONUS_TYPE_DEPARTMENTS = {
-  mensuel: ['Clientèle', 'Commerciale', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
-  astreinte: ['BBS', 'DO', 'DSI', 'DT'],
-  commission: ['Commerciale'],
+  mensuel: [
+    'Direction Achat', 'Direction Administrative et Financiere',
+    'Direction BBS', 'Direction Clientele', 'Direction Commerciale',
+    'Direction Communication et Marketing', 'Direction des Operations',
+    'Direction des Services Generaux', "Direction des Systemes d'Informations",
+    'Direction Generale', 'Direction Logistique', 'Direction Technique',
+  ],
+  astreinte: ['Direction BBS', 'Direction des Operations',
+              "Direction des Systemes d'Informations", 'Direction Technique'],
+  commission: ['Direction Commerciale'],
 }
 
 export default function BonusForm() {
@@ -383,7 +390,7 @@ export default function BonusForm() {
       return e && !BONUS_TYPE_DEPARTMENTS.astreinte.includes(e.department)
     })
     if (badDept) {
-      setError('Seuls les départements BBS, DO, DSI, DT sont autorisés pour les primes d\'astreinte.')
+      setError('Seuls les départements Direction BBS, Direction des Operations, Direction des Systemes d\'Informations, Direction Technique sont autorisés pour les primes d\'astreinte.')
       setLoading(false); return
     }
 

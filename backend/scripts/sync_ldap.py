@@ -46,11 +46,19 @@ LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=blueline,dc=mg')
 LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', 'blueline2488')
 LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
 
+# When True, use the LDAP userPassword attribute for BPM auth.
+# When False (default), use a fixed test password (testprime).
+USE_LDAP_PASSWORD = os.getenv('USE_LDAP_PASSWORD', 'false').lower() in ('1', 'true', 'yes')
+
+LDAP_PASSWORD_ATTR = 'userPassword' if USE_LDAP_PASSWORD else None
+
 LDAP_ATTRS = [
     'uid', 'mail', 'givenName', 'sn', 'cn',
     'employeeNumber', 'departmentNumber', 'ou',
     'title', 'employeeType', 'manager',
 ]
+if LDAP_PASSWORD_ATTR:
+    LDAP_ATTRS.append(LDAP_PASSWORD_ATTR)
 
 # ---------------------------------------------------------------------------
 # Known directors / special roles
@@ -58,19 +66,15 @@ LDAP_ATTRS = [
 # what LDAP says.  Add or remove entries as needed.
 # ---------------------------------------------------------------------------
 DIRECTORS: dict[str, dict] = {
-    'rivo@gulfsat.mg': {
-        'name': 'Nantenaina Ulrich', 'poste': 'DSI', 'is_directeur': True,
-    },
-    'dg@blueline.mg': {
-        'name': 'Directeur Général', 'poste': 'DG', 'is_dg': True,
-    },
-    'johary.drh@blueline.mg': {
-        'name': 'Johary', 'poste': 'DRH', 'is_drh': True,
-    },
-    'directeur@blueline.mg': {
-        'name': 'Directeur Général Adjoint', 'poste': 'Directeur',
-        'is_directeur': True,
-    },
+    # 'rivo@gulfsat.mg': {
+    #     'name': 'Nantenaina Ulrich', 'poste': 'DSI', 'is_directeur': True,
+    # },
+    # 'dg@blueline.mg': {
+    #     'name': 'Directeur Général', 'poste': 'DG', 'is_dg': True,
+    # },
+    # 'johary.drh@blueline.mg': {
+    #     'name': 'Johary', 'poste': 'DRH', 'is_drh': True,
+    # }
 }
 
 # ---------------------------------------------------------------------------
@@ -167,6 +171,16 @@ async def sync():
     dn_index = {u['dn']: u for u in ldap_users if u.get('dn')}
     # Index email → LDAP record
     email_index = {u['email']: u for u in ldap_users}
+    # Pre-build fast partial DN → email lookup
+    dn_to_email: dict[str, str] = {}
+    for dn, rec in dn_index.items():
+        dn_to_email[dn] = rec['email']
+        for p in dn.replace('=', ' ').replace(',', ' ').split():
+            dn_to_email[p.lower()] = rec['email']
+
+    # Pre-fetch all existing BPM users (used by both user + employee sections)
+    all_bpm_users = await User.all()
+    existing_users = {u.email: u for u in all_bpm_users}
 
     # ------------------------------------------------------------------
     # 1. Departments
@@ -190,13 +204,14 @@ async def sync():
 
     manager_emails: set[str] = set()
     for dn in manager_dns:
-        if dn in dn_index:
-            manager_emails.add(dn_index[dn]['email'])
-        # Try partial match
-        for other_dn, other_rec in dn_index.items():
-            if dn in other_dn or other_dn in dn:
-                manager_emails.add(other_rec['email'])
-                break
+        if dn in dn_to_email:
+            manager_emails.add(dn_to_email[dn])
+        else:
+            # Partial match via pre-built index
+            for token in dn.replace('=', ' ').replace(',', ' ').lower().split():
+                if token in dn_to_email:
+                    manager_emails.add(dn_to_email[token])
+                    break
 
     # ------------------------------------------------------------------
     # 3. Users (BPM accounts) – must exist before Employee manager FK
@@ -204,7 +219,7 @@ async def sync():
     users_to_create: set[str] = (
         manager_emails
         | set(DIRECTORS.keys())
-        | {u.email async for u in User.all()}
+        | set(existing_users.keys())
     )
 
     log.info('=== Utilisateurs BPM ===')
@@ -212,10 +227,10 @@ async def sync():
     users_updated = 0
     user_by_email: dict[str, User] = {}
 
+    to_create: list[User] = []
     for email in sorted(users_to_create):
         ldap_rec = email_index.get(email)
 
-        # Determine roles
         is_n1 = email in manager_emails
         is_dir = bool(DIRECTORS.get(email, {}).get('is_directeur'))
         is_drh = bool(DIRECTORS.get(email, {}).get('is_drh'))
@@ -231,11 +246,11 @@ async def sync():
             poste = d.get('poste', '')
             dept_name = d.get('department', '')
         else:
-            continue  # existing User whose email no longer in LDAP – skip
+            continue
 
         dept_obj = dept_cache.get(dept_name)
 
-        existing = await User.get_or_none(email=email)
+        existing = existing_users.get(email)
         if existing:
             existing.name = name
             existing.poste = poste
@@ -250,7 +265,13 @@ async def sync():
             user_by_email[email] = existing
             users_updated += 1
         else:
-            user = await User.create(
+            if USE_LDAP_PASSWORD and ldap_rec:
+                raw = ldap_rec.get('userPassword')
+                pw = raw.decode() if isinstance(raw, bytes) else (raw or '')
+                default_password = pw
+            else:
+                default_password = 'testprime'
+            to_create.append(User(
                 email=email,
                 name=name,
                 poste=poste,
@@ -260,11 +281,17 @@ async def sync():
                 is_directeur=is_dir,
                 is_drh=is_drh,
                 is_dg=is_dg,
-                password_hash=get_password_hash(os.urandom(24).hex()),
-            )
-            user_by_email[email] = user
-            users_created += 1
-            log.info('  ✓ Créé  %s (%s)', name, email)
+                password_hash=get_password_hash(default_password),
+            ))
+
+    if to_create:
+        await User.bulk_create(to_create)
+        # bulk_create does not populate PKs — re-fetch by email
+        new_emails = [u.email for u in to_create]
+        for user in await User.filter(email__in=new_emails):
+            user_by_email[user.email] = user
+            log.info('  ✓ Créé  %s (%s)', user.name, user.email)
+        users_created = len(to_create)
 
     if users_updated:
         log.info('  ~ Mis à jour %d utilisateur(s)', users_updated)
@@ -274,76 +301,93 @@ async def sync():
     # ------------------------------------------------------------------
     log.info('=== Employés ===')
 
-    # Pre-collect default manager per department (first User in each dept)
+    # Default manager per department (reuse all_bpm_users from above)
     dept_head: dict[str, User | None] = {}
-    for dept_name in all_dept_names:
-        first = await User.filter(dept_str=dept_name).first()
-        dept_head[dept_name] = first
-    # Global fallback – DG
-    dg_user = await User.filter(is_dg=True).first()
+    for user in all_bpm_users:
+        if user.dept_str and user.dept_str not in dept_head:
+            dept_head[user.dept_str] = user
+    dg_user = next((u for u in all_bpm_users if u.is_dg), None)
+
+    # Pre-fetch existing employees indexed by matricule
+    existing_employees = {e.matricule: e async for e in Employee.all()}
 
     employees_created = 0
     employees_updated = 0
     manager_resolved = 0
     manager_fallback = 0
 
+    # Pre-compute manager mapping for every LDAP user (one pass, no O(n²))
+    emp_manager_map: dict[str, tuple[User | None, str | None]] = {}
+    for u in ldap_users:
+        email = u['email']
+        raw_dn = u.get('manager')
+        resolved_dn = None
+        mgr_user: User | None = None
+
+        if raw_dn:
+            if raw_dn in dn_to_email:
+                resolved_dn = raw_dn
+            else:
+                for token in raw_dn.replace('=', ' ').replace(',', ' ').lower().split():
+                    if token in dn_to_email:
+                        resolved_dn = token
+                        break
+
+        if resolved_dn:
+            mgr_email = dn_to_email[resolved_dn]
+            mgr_user = user_by_email.get(mgr_email)
+
+        if not mgr_user:
+            dept_name = _dept_name(u)
+            mgr_user = dept_head.get(dept_name) or dg_user
+
+        emp_manager_map[email] = (mgr_user, resolved_dn)
+
+    # Process employees in bulk
+    to_create: list[Employee] = []
+    to_update: list[Employee] = []
     for u in ldap_users:
         email = u['email']
         matricule = _matricule(u, email)
         name = _full_name(u)
         dept_name = _dept_name(u)
         dept_obj = dept_cache.get(dept_name)
+        manager_user, mgr_dn = emp_manager_map[email]
 
-        # Resolve manager User
-        manager_user: User | None = None
-        raw_manager_dn = u.get('manager')
-        manager_dn = None
-
-        if raw_manager_dn:
-            # Direct match
-            if raw_manager_dn in dn_index:
-                manager_dn = raw_manager_dn
-            else:
-                # Partial match
-                for candidate_dn in dn_index:
-                    if raw_manager_dn in candidate_dn or candidate_dn in raw_manager_dn:
-                        manager_dn = candidate_dn
-                        break
-
-        if manager_dn:
-            mgr_email = dn_index[manager_dn]['email']
-            manager_user = user_by_email.get(mgr_email)
-
-        # Fallback: department head
-        if not manager_user:
-            manager_user = dept_head.get(dept_name)
-
-        # Final fallback: DG
-        if not manager_user:
-            manager_user = dg_user
-
-        if manager_user and manager_dn:
+        if manager_user and mgr_dn:
             manager_resolved += 1
-        elif manager_user and not manager_dn:
+        elif manager_user and not mgr_dn:
             manager_fallback += 1
 
-        emp_defaults = {
-            'name': name,
-            'dept_str': dept_name,
-            'dept': dept_obj,
-            'manager': manager_user,
-        }
+        if not manager_user:
+            log.warning('  ⚠ Aucun manager pour %s (%s) — ignoré', name, matricule)
+            continue
 
-        emp, created = await Employee.get_or_create(
-            matricule=matricule,
-            defaults=emp_defaults,
+        emp_data = dict(
+            name=name,
+            dept_str=dept_name,
+            dept=dept_obj,
+            manager=manager_user,
+            is_active=True,
         )
-        if not created:
-            await emp.update_from_dict(emp_defaults).save()
+
+        existing = existing_employees.get(matricule)
+        if existing:
+            for attr, val in emp_data.items():
+                setattr(existing, attr, val)
+            to_update.append(existing)
             employees_updated += 1
         else:
+            to_create.append(Employee(matricule=matricule, **emp_data))
             employees_created += 1
-            log.info('  ✓ Créé  %s (%s) [%s]', name, matricule, dept_name)
+
+    if to_create:
+        await Employee.bulk_create(to_create)
+        for emp in to_create:
+            log.info('  ✓ Créé  %s (%s) [%s]', emp.name, emp.matricule, emp.dept_str)
+
+    for emp in to_update:
+        await emp.save()
 
     if employees_updated:
         log.info('  ~ Mis à jour %d employé(s)', employees_updated)

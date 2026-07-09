@@ -1,27 +1,5 @@
-# Imports de base Tortoise pour définir les modèles
-from tortoise import fields, models
-# Import d'Enum pour créer des énumérations de chaînes
 from enum import Enum
-
-# Enumération des départements de l'entreprise
-class DepartmentType(str, Enum):
-    CLIENTELE = "Clientèle"
-    COMMERCIALE = "Commerciale"
-    ADV = "ADV"
-    FIDELISATION = "Fidélisation"
-    AUDITEUR_INTERNE = "Auditeur interne"
-    DAF_CONTROLEUR = "DAF Contrôleur"
-    DAF_CDG = "DAF CDG"
-    CTB = "CTB"
-    RH = "RH"
-    ACHAT = "Achat"
-    BBS = "BBS"
-    COMM_MKTG = "Communication & Mktg"
-    DO = "DO"
-    DSI = "DSI"
-    DT = "DT"
-    LOGISTIQUE = "Logistique"
-    DG = "DG"
+from tortoise import fields, models
 
 # Enumération des types de primes
 class BonusType(str, Enum):
@@ -101,6 +79,8 @@ class Employee(models.Model):
     astreinte_rate = fields.IntField(null=True, default=None)
     # Taux prime mensuelle personnalisé (Ar/mois), null = taux par défaut (plafond département)
     mensuel_rate = fields.IntField(null=True, default=None)
+    # Si l'employé est actif (visible dans les listes)
+    is_active = fields.BooleanField(default=True)
     # Date de création
     created_at = fields.DatetimeField(auto_now_add=True)
 

@@ -1,5 +1,6 @@
 """
-Script pour créer des primes de test (mensuel, astreinte, commission) pour chaque département.
+Script pour créer des primes de test (mensuel, astreinte, commission).
+Utilise les noms de départements synchronisés depuis l'AD.
 Usage : python -m scripts.seed_bonuses
 """
 import sys, random
@@ -7,18 +8,21 @@ sys.path.append('.')
 
 from app.db_config import TORTOISE_ORM
 from tortoise import Tortoise, run_async
-from app.models import Employee, User, Bonus, Validation, PrimeMax
+from app.models import Employee, User, Bonus, PrimeMax
 from datetime import date, datetime
 
 random.seed(42)
 
 MENSUEL_DEPTS = [
-    'Clientèle', 'Commerciale', 'ADV', 'Fidélisation',
-    'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat',
-    'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG',
+    'Direction Achat', 'Direction Administrative et Financiere',
+    'Direction BBS', 'Direction Clientele', 'Direction Commerciale',
+    'Direction Communication et Marketing', 'Direction des Operations',
+    'Direction des Services Generaux', 'Direction des Systemes d\'Informations',
+    'Direction Generale', 'Direction Logistique', 'Direction Technique',
 ]
-ASTREINTE_DEPTS = ['BBS', 'DO', 'DSI', 'DT']
-COMMISSION_DEPTS = ['Commerciale']
+ASTREINTE_DEPTS = ['Direction BBS', 'Direction des Operations',
+                   'Direction des Systemes d\'Informations', 'Direction Technique']
+COMMISSION_DEPTS = ['Direction Commerciale']
 
 QUANTI_CRITERIA = [
     'Planification du travail', 'Respect des deadlines',

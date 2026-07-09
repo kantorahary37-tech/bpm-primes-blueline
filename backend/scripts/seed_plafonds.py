@@ -1,5 +1,6 @@
 """
 Script pour créer les plafonds de primes par défaut pour tous les départements.
+Utilise les noms de départements synchronisés depuis l'AD.
 Usage : python -m scripts.seed_plafonds
 """
 import sys
@@ -10,9 +11,11 @@ from tortoise import Tortoise, run_async
 from app.models import PrimeMax, Department
 
 DEPARTMENTS = [
-    'Clientèle', 'Commerciale', 'ADV', 'Fidélisation',
-    'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat',
-    'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG',
+    'Direction Achat', 'Direction Administrative et Financiere',
+    'Direction BBS', 'Direction Clientele', 'Direction Commerciale',
+    'Direction Communication et Marketing', 'Direction des Operations',
+    'Direction des Services Generaux', 'Direction des Systemes d\'Informations',
+    'Direction Generale', 'Direction Logistique', 'Direction Technique',
 ]
 
 DEFAULTS = {
@@ -26,11 +29,15 @@ DEFAULTS = {
 
 BONUS_TYPE_DEPARTMENTS = {
     'mensuel': DEPARTMENTS,
-    'astreinte': ['BBS', 'DO', 'DSI', 'DT'],
-    'commission': ['Commerciale'],
-    'intervention': ['BBS', 'DO', 'DSI', 'DT'],
-    'ponctuelle': ['BBS', 'DO', 'DSI', 'DT'],
-    'exceptionnel': ['BBS', 'DO', 'DSI', 'DT'],
+    'astreinte': ['Direction BBS', 'Direction des Operations',
+                  'Direction des Systemes d\'Informations', 'Direction Technique'],
+    'commission': ['Direction Commerciale'],
+    'intervention': ['Direction BBS', 'Direction des Operations',
+                     'Direction des Systemes d\'Informations', 'Direction Technique'],
+    'ponctuelle': ['Direction BBS', 'Direction des Operations',
+                   'Direction des Systemes d\'Informations', 'Direction Technique'],
+    'exceptionnel': ['Direction BBS', 'Direction des Operations',
+                     'Direction des Systemes d\'Informations', 'Direction Technique'],
 }
 
 async def seed():

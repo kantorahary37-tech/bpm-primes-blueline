@@ -83,6 +83,7 @@ class EmployeeCreate(EmployeeBase): pass
 class EmployeeUpdate(BaseModel):
     astreinte_rate: Optional[int] = None
     mensuel_rate: Optional[int] = None
+    is_active: Optional[bool] = None
 
 # Schéma de réponse employé
 class EmployeeResponse(EmployeeBase):

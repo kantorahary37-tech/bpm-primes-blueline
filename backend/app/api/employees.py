@@ -21,7 +21,7 @@ async def list_employees(
     department: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
-    query = Employee.all()
+    query = Employee.all().filter(is_active=True)
 
     if user.is_dg or user.is_drh:
         if department:
@@ -38,7 +38,7 @@ async def export_employees(
     columns: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
-    query = Employee.all().prefetch_related('manager')
+    query = Employee.all().filter(is_active=True).prefetch_related('manager')
     if department:
         query = query.filter(dept_str=department)
     employees = await query

@@ -13,7 +13,8 @@ const ALL_TYPES = [
   { value: 'exceptionnel', label: 'Exceptionnelle' },
 ];
 
-const ASTR_DEPARTMENTS = ['BBS', 'DO', 'DSI', 'DT'];
+const ASTR_DEPARTMENTS = ['Direction BBS', 'Direction des Operations',
+                           "Direction des Systemes d'Informations", 'Direction Technique'];
 
 const PlafondsPage = () => {
   const { user } = useAuth();

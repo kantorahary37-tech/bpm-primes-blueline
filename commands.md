@@ -3,10 +3,9 @@ Seeds commands :
 Ajout des montants de plafond des primes et des données d'utilisateurs
 
 ```Shell
+docker compose exec backend python -m scripts.sync_ldap
 docker compose exec backend python -m scripts.seed_plafonds
-docker compose exec backend python -m scripts.seed_data
-docker compose exec backend python -m scripts.seed_employees  # 72 employés fictifs pour tous les départements
-docker compose exec backend python -m scripts.seed_bonuses   # 72 primes de test (mensuel/astreinte/commission) sur 3 mois
+docker compose exec backend python -m scripts.seed_bonuses
 ```
 
 Lancement de Docker en dev mode :

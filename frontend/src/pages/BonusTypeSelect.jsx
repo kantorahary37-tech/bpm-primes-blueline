@@ -2,9 +2,16 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const BONUS_TYPE_DEPARTMENTS = {
-  mensuel: ['Clientèle', 'Commerciale', 'ADV', 'Fidélisation', 'Auditeur interne', 'DAF Contrôleur', 'DAF CDG', 'CTB', 'RH', 'Achat', 'BBS', 'Communication & Mktg', 'DO', 'DSI', 'DT', 'Logistique', 'DG'],
-  astreinte: ['BBS', 'DO', 'DSI', 'DT'],
-  commission: ['Commerciale'],
+  mensuel: [
+    'Direction Achat', 'Direction Administrative et Financiere',
+    'Direction BBS', 'Direction Clientele', 'Direction Commerciale',
+    'Direction Communication et Marketing', 'Direction des Operations',
+    'Direction des Services Generaux', "Direction des Systemes d'Informations",
+    'Direction Generale', 'Direction Logistique', 'Direction Technique',
+  ],
+  astreinte: ['Direction BBS', 'Direction des Operations',
+              "Direction des Systemes d'Informations", 'Direction Technique'],
+  commission: ['Direction Commerciale'],
 }
 
 const CalendarSvg = () => (
