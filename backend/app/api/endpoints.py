@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from enum import Enum
-from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog
+from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification
 from app.auth import get_current_user
 from app.schemas import *
 from fastapi import HTTPException
@@ -203,6 +203,46 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
         )
     except Exception:
         pass  # Audit log failure must not block the modification
+
+    if can_edit_any and changes:
+        employee = await Employee.get(id=bonus.employee_id).prefetch_related('manager')
+        recipients = []
+
+        if user.is_dg:
+            if employee.manager:
+                recipients.append(employee.manager)
+            directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+            if directeur and directeur.id != user.id:
+                recipients.append(directeur)
+        elif user.is_directeur:
+            if employee.manager:
+                recipients.append(employee.manager)
+
+        FIELD_LABELS_SHORT = {
+            "total_amount": "montant", "performance_score": "score", "status": "statut",
+            "prime_mensuel_amount": "prime", "prime_astreinte_amount": "astreinte",
+            "commission_amount": "commission", "nb_jours_astreinte": "jours astreinte",
+            "taux_jour": "taux/jour", "taux_commission": "taux commission",
+            "ca_realise": "CA réalisé", "ca_objectif": "CA objectif",
+            "details": "détails", "absences": "absences", "retard": "retards",
+        }
+        changed_fields = set()
+        for c in changes:
+            field = c.split(":")[0]
+            changed_fields.add(FIELD_LABELS_SHORT.get(field, field))
+        summary = ", ".join(sorted(changed_fields))
+
+        for r in recipients:
+            try:
+                await Notification.create(
+                    user=r,
+                    bonus=bonus,
+                    sender=user,
+                    type="MODIF_DG" if user.is_dg else "MODIF_DIR",
+                    message=f"{employee.name} — {summary}",
+                )
+            except Exception:
+                pass
 
     return updated
 

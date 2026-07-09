@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import NotificationDropdown from './NotificationDropdown'
 import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, UserIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon } from './Icons'
 
 const navItems = [
@@ -78,7 +79,8 @@ export default function Layout({ children }) {
             </div>
 
             {/* Right: user menu */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <NotificationDropdown />
               <div className="relative" ref={menuRef}>
                 <button onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="hidden sm:flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">

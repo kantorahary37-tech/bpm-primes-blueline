@@ -208,3 +208,14 @@ class AuditLog(models.Model):
     description = fields.TextField(null=True)
     changes = fields.JSONField(null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
+
+# Modèle Notification (table "notification")
+class Notification(models.Model):
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField('models.User', related_name='notifications')
+    bonus = fields.ForeignKeyField('models.Bonus', related_name='notifications')
+    sender = fields.ForeignKeyField('models.User', related_name='sent_notifications')
+    type = fields.CharField(max_length=20)  # MODIF_DIR, MODIF_DG
+    message = fields.TextField()
+    is_read = fields.BooleanField(default=False)
+    created_at = fields.DatetimeField(auto_now_add=True)
