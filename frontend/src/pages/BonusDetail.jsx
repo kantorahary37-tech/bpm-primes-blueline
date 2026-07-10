@@ -4,7 +4,7 @@ import { getBonus, getBonusValidations, getAuditLogs, validateBonus } from '../s
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
-import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon, DownloadIcon, ClockIcon } from '../components/Icons';
+import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon } from '../components/Icons';
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -346,6 +346,30 @@ const BonusDetail = () => {
                   <span>{formatAr(bonus.total_amount)} / {formatAr(bonus.details.prime_max || bonus.total_amount)} Ar</span>
                 </div>
               </div>
+            </div>
+          </Section>
+        )}
+
+        {bonus.bonus_type === 'mensuel' && bonus.details?.others?.length > 0 && (
+          <Section title="Autres primes" icon={PlusIcon}>
+            <div className="space-y-2">
+              {bonus.details.others.map((o, i) => (
+                <div key={i} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{o.libelle || 'Prime sans libellé'}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {o.type}
+                      {o.debut_mois || o.debut_annee || o.fin_mois || o.fin_annee ? (
+                        ` · ${o.debut_mois || '?'}/${o.debut_annee || '?'} → ${o.fin_mois || '?'}/${o.fin_annee || '?'}`
+                      ) : ''}
+                    </p>
+                    {o.file?.url && (
+                      <a href={o.file.url} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:underline mt-1 inline-block">Voir la pièce jointe</a>
+                    )}
+                  </div>
+                  <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} Ar</span>
+                </div>
+              ))}
             </div>
           </Section>
         )}

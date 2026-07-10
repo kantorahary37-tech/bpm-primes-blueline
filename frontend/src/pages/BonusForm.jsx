@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import Modal from '../components/Modal'
@@ -139,6 +139,30 @@ export default function BonusForm() {
   const [importedFileName, setImportedFileName] = useState('')
   const [importFeedback, setImportFeedback] = useState('')
   const [importError, setImportError] = useState('')
+
+  const [others, setOthers] = useState([])
+  const otherTypes = ['temporaire', 'periodique', 'autres']
+
+  const addOther = () => {
+    setOthers(prev => [...prev, { key: Date.now() + Math.random(), libelle: '', type: 'temporaire', typeCustom: '', file: null, fileData: null, debut_mois: '', debut_annee: '', fin_mois: '', fin_annee: '', montant: 0 }])
+  }
+  const removeOther = (key) => setOthers(prev => prev.filter(o => o.key !== key))
+  const updateOther = (key, field, value) => setOthers(prev => prev.map(o => o.key === key ? { ...o, [field]: value } : o))
+
+  const handleOtherFile = async (key, file) => {
+    if (!file) return
+    try {
+      const result = await uploadFile(file)
+      updateOther(key, 'file', result)
+      updateOther(key, 'fileData', file)
+    } catch { }
+  }
+  const removeOtherFile = (key) => {
+    updateOther(key, 'file', null)
+    updateOther(key, 'fileData', null)
+  }
+
+  const othersTotal = others.reduce((sum, o) => sum + (parseFloat(o.montant) || 0), 0)
 
   const handleImportExcel = async (e) => {
     const file = e.target.files?.[0]
@@ -293,6 +317,7 @@ export default function BonusForm() {
   const totalQuantiCoeff = quantitative.reduce((s, i) => s + (parseFloat(i.coeff) || 0), 0)
   const totalQualiCoeff = qualitative.reduce((s, i) => s + (parseFloat(i.coeff) || 0), 0)
   const totalCoeff = totalQuantiCoeff + totalQualiCoeff
+  const coeffInvalid = totalCoeff > 0 && totalCoeff !== 10
   const totalQuantiValue = quantitative.reduce((s, i) => s + i.value, 0)
   const totalQualiValue = qualitative.reduce((s, i) => s + i.value, 0)
   const totalValue = totalQuantiValue + totalQualiValue
@@ -552,7 +577,7 @@ export default function BonusForm() {
             end_date: params.endDate,
             bonus_type: 'mensuel',
             performance_score: totalCoeff,
-            total_amount: amount,
+            total_amount: amount + othersTotal,
             details: {
               prime_max: maxPrime,
               quantitative: quantitative.map((c) => ({
@@ -566,6 +591,11 @@ export default function BonusForm() {
               total_quantitative: totalQuantiValue,
               total_qualitative: totalQualiValue,
               total_evaluation: totalValue,
+              others: others.map(o => ({
+                libelle: o.libelle, type: o.type === 'autres' ? o.typeCustom : o.type,
+                file: o.file ? { filename: o.file.filename, original_name: o.file.original_name, url: o.file.url } : null,
+                debut_mois: o.debut_mois, debut_annee: o.debut_annee, fin_mois: o.fin_mois, fin_annee: o.fin_annee, montant: parseFloat(o.montant) || 0,
+              })),
             },
           })
       }))
@@ -1091,7 +1121,7 @@ export default function BonusForm() {
 
           <div className="flex gap-3 justify-end">
             <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-            <button type="submit" disabled={loading} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+            <button type="submit" disabled={loading || coeffInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
               {loading ? <span className="loading loading-spinner" /> : `Créer les primes (${primeCount})`}
             </button>
           </div>
@@ -1115,7 +1145,7 @@ export default function BonusForm() {
 
         {totalCoeff > 0 && totalCoeff !== 10 && (
           <div className="mb-4 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">
-            <ExclamationIcon className="w-4 h-4" /> La somme des coefficients ({totalCoeff.toFixed(1)}) n'est pas égale à 10
+            <ExclamationIcon className="w-4 h-4" /> La somme des coefficients ({totalCoeff.toFixed(1)}) n'est pas égale à 10 — la validation est bloquée tant que ce total n'est pas égal à 10
           </div>
         )}
 
@@ -1347,13 +1377,107 @@ export default function BonusForm() {
             </div>
 
             <div className="text-right pt-1 border-t border-gray-300">
-              <p className="text-xs text-gray-700">Total (quanti + quali)</p>
+              <p className="text-xs text-gray-700">
+                Total (quanti + quali){othersTotal > 0 && <span className="text-gray-400"> + autres ({othersTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar)</span>}
+              </p>
               <p className="text-xl font-bold text-brand-600">
-                {totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
+                {(totalValue + othersTotal).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
               </p>
             </div>
           </div>
 
+        </div>
+
+        <div className="card-blueline p-4 mt-3 border-l-4 border-l-amber-500 bg-amber-50/30">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="font-semibold text-gray-900 text-sm">Autres primes</h2>
+              <p className="text-[10px] text-gray-500 mt-0.5">Ajoutez des primes supplementaires (installation, interim, etc.)</p>
+            </div>
+            <button type="button" onClick={addOther} className="btn btn-xs bg-amber-600 hover:bg-amber-700 text-white border-0 flex items-center gap-1">
+              <PlusIcon className="w-3.5 h-3.5" /> Ajouter
+            </button>
+          </div>
+
+          {others.length === 0 && (
+            <div className="text-center py-6 text-gray-400 text-xs">
+              Aucune prime supplementaire. Cliquez sur "Ajouter" pour en créer une.
+            </div>
+          )}
+
+          {others.map((o, idx) => (
+            <div key={o.key} className="bg-white rounded-lg border border-amber-200 p-3 mb-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-medium text-amber-700">Autre prime #{idx + 1}</span>
+                <button type="button" onClick={() => removeOther(o.key)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="lg:col-span-2">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Libelle</label>
+                  <input type="text" value={o.libelle} onChange={(e) => updateOther(o.key, 'libelle', e.target.value)}
+                    placeholder="ex: Prime d'installation"
+                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Type</label>
+                  <select value={o.type} onChange={(e) => updateOther(o.key, 'type', e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
+                    {otherTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {o.type === 'autres' && (
+                    <input type="text" value={o.typeCustom} onChange={(e) => updateOther(o.key, 'typeCustom', e.target.value)}
+                      placeholder="Precisez le type..."
+                      className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm mt-1" />
+                  )}
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Période (optionnel)</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-gray-500">Début</span>
+                    <select value={o.debut_mois} onChange={(e) => updateOther(o.key, 'debut_mois', e.target.value)}
+                      className="px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
+                      <option value="">Mois</option>
+                      {months.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                    </select>
+                    <select value={o.debut_annee} onChange={(e) => updateOther(o.key, 'debut_annee', e.target.value)}
+                      className="px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
+                      <option value="">Année</option>
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <span className="text-[11px] text-gray-500 ml-2">Fin</span>
+                    <select value={o.fin_mois} onChange={(e) => updateOther(o.key, 'fin_mois', e.target.value)}
+                      className="px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
+                      <option value="">Mois</option>
+                      {months.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                    </select>
+                    <select value={o.fin_annee} onChange={(e) => updateOther(o.key, 'fin_annee', e.target.value)}
+                      className="px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
+                      <option value="">Année</option>
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="lg:col-span-1">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant (Ar)</label>
+                  <input type="number" min="0" value={o.montant} onChange={(e) => updateOther(o.key, 'montant', e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                </div>
+              </div>
+              <div className="mt-2">
+                <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Piece jointe (obligatoire)</label>
+                {o.file ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <a href={o.file.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate">{o.file.original_name}</a>
+                    <button type="button" onClick={() => removeOtherFile(o.key)} className="text-red-400 hover:text-red-600">&times;</button>
+                  </div>
+                ) : (
+                  <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.xls,.xlsx"
+                    onChange={(e) => handleOtherFile(o.key, e.target.files?.[0])}
+                    className="file-input file-input-bordered file-input-xs w-full text-sm" />
+                )}
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="card-blueline p-3 border-l-4 border-l-blue-500 bg-blue-50/40">
@@ -1393,7 +1517,7 @@ export default function BonusForm() {
 
         <div className="flex gap-3 justify-end">
           <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-          <button type="submit" disabled={loading} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+          <button type="submit" disabled={loading || coeffInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
             {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
           </button>
         </div>
