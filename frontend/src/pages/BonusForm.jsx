@@ -310,6 +310,19 @@ export default function BonusForm() {
         if (d.rate) setCommissionConfig((c) => ({ ...c, rate: d.rate }));
         if (d.exceptionnelle !== undefined) setAdditionalPrimes((p) => ({ ...p, exceptionnelle: d.exceptionnelle }));
         if (d.ponctuelle !== undefined) setAdditionalPrimes((p) => ({ ...p, ponctuelle: d.ponctuelle }));
+        if (d.others) setOthers(d.others.map((o, i) => ({
+          key: Date.now() + Math.random() + i,
+          libelle: o.libelle || '',
+          type: o.type || 'temporaire',
+          typeCustom: o.type === 'autres' ? '' : '',
+          file: o.file && o.file.url ? o.file : null,
+          fileData: null,
+          debut_mois: o.debut_mois ? String(o.debut_mois) : '',
+          debut_annee: o.debut_annee ? String(o.debut_annee) : '',
+          fin_mois: o.fin_mois ? String(o.fin_mois) : '',
+          fin_annee: o.fin_annee ? String(o.fin_annee) : '',
+          montant: o.montant || 0,
+        })));
       }
     });
   }, [id]);
@@ -318,6 +331,13 @@ export default function BonusForm() {
   const totalQualiCoeff = qualitative.reduce((s, i) => s + (parseFloat(i.coeff) || 0), 0)
   const totalCoeff = totalQuantiCoeff + totalQualiCoeff
   const coeffInvalid = totalCoeff > 0 && totalCoeff !== 10
+  const periodKey = (o) => (parseInt(o.debut_annee) || 0) * 12 + (parseInt(o.debut_mois) || 0)
+  const periodKeyFin = (o) => (parseInt(o.fin_annee) || 0) * 12 + (parseInt(o.fin_mois) || 0)
+  const periodInvalid = others.some(o => {
+    const d = periodKey(o), f = periodKeyFin(o)
+    if (d === 0 || f === 0) return false
+    return d > f
+  })
   const totalQuantiValue = quantitative.reduce((s, i) => s + i.value, 0)
   const totalQualiValue = qualitative.reduce((s, i) => s + i.value, 0)
   const totalValue = totalQuantiValue + totalQualiValue
@@ -1121,7 +1141,7 @@ export default function BonusForm() {
 
           <div className="flex gap-3 justify-end">
             <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-            <button type="submit" disabled={loading || coeffInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+            <button type="submit" disabled={loading || coeffInvalid || periodInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
               {loading ? <span className="loading loading-spinner" /> : `Créer les primes (${primeCount})`}
             </button>
           </div>
@@ -1456,6 +1476,9 @@ export default function BonusForm() {
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
+                  {periodKey(o) > 0 && periodKeyFin(o) > 0 && periodKey(o) > periodKeyFin(o) && (
+                    <p className="text-[11px] text-red-600 mt-1">La date de début doit être antérieure ou égale à la date de fin.</p>
+                  )}
                 </div>
                 <div className="lg:col-span-1">
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant (Ar)</label>
@@ -1517,7 +1540,7 @@ export default function BonusForm() {
 
         <div className="flex gap-3 justify-end">
           <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-          <button type="submit" disabled={loading || coeffInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+          <button type="submit" disabled={loading || coeffInvalid || periodInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
             {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
           </button>
         </div>
