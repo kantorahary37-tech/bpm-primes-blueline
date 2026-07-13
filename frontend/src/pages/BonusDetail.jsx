@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getBonus, getBonusValidations, getAuditLogs, validateBonus } from '../services/api';
+import { getBonus, getBonusValidations, getAuditLogs, validateBonus, openFile } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
@@ -367,7 +367,7 @@ const BonusDetail = () => {
                       ) : ''}
                     </p>
                     {o.file?.url && (
-                      <a href={o.file.url} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:underline mt-1 inline-block">Voir la pièce jointe</a>
+                      <button type="button" onClick={() => openFile(o.file.url)} className="text-[11px] text-blue-600 hover:underline mt-1 inline-block">Voir la pièce jointe</button>
                     )}
                   </div>
                   <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} Ar</span>

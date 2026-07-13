@@ -1,6 +1,6 @@
 import os, uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from app.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -9,6 +9,18 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".doc", ".docx", ".xls", ".xlsx"}
+
+MEDIA_TYPES = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 
 @router.post("/upload")
@@ -25,4 +37,18 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(400, "Fichier trop volumineux (max 10 Mo)")
     with open(filepath, "wb") as f:
         f.write(content)
-    return JSONResponse(content={"filename": filename, "original_name": file.filename, "url": f"/uploads/{filename}"})
+    return JSONResponse(content={"filename": filename, "original_name": file.filename, "url": f"/api/v1/uploads/{filename}"})
+
+
+@router.get("/uploads/{filename}")
+async def download_file(filename: str, user=Depends(get_current_user)):
+    filename = os.path.basename(filename)
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    abs_upload = os.path.abspath(UPLOAD_DIR)
+    if not os.path.abspath(filepath).startswith(abs_upload):
+        raise HTTPException(400, "Chemin de fichier invalide")
+    if not os.path.isfile(filepath):
+        raise HTTPException(404, "Fichier introuvable")
+    ext = os.path.splitext(filename)[1].lower()
+    media_type = MEDIA_TYPES.get(ext, "application/octet-stream")
+    return FileResponse(filepath, media_type=media_type, filename=filename)

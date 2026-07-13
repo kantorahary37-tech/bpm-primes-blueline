@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import Modal from '../components/Modal'
@@ -1503,7 +1503,7 @@ export default function BonusForm() {
                 <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Piece jointe (obligatoire)</label>
                 {o.file ? (
                   <div className="flex items-center gap-2 text-sm">
-                    <a href={o.file.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate">{o.file.original_name}</a>
+                    <button type="button" onClick={() => openFile(o.file.url)} className="text-blue-600 hover:underline truncate text-left">{o.file.original_name}</button>
                     <button type="button" onClick={() => removeOtherFile(o.key)} className="text-red-400 hover:text-red-600">&times;</button>
                   </div>
                 ) : (

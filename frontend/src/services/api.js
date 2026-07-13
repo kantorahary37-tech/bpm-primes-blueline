@@ -166,4 +166,12 @@ export const uploadFile = async (file) => {
   return data;
 };
 
+export const openFile = async (url) => {
+  const path = url.startsWith('/uploads/') ? url.replace('/uploads/', '/api/v1/uploads/') : url;
+  const { data } = await api.get(path, { responseType: 'blob' });
+  const blobUrl = URL.createObjectURL(new Blob([data]));
+  window.open(blobUrl, '_blank');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+};
+
 export default api;

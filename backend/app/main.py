@@ -1,7 +1,6 @@
 # Import de FastAPI pour créer l'application web
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 # Import de l'extension Tortoise pour FastAPI (gestion auto de l'ORM)
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import IntegrityError, DoesNotExist
@@ -27,7 +26,6 @@ app.include_router(upload.router, prefix="/api/v1")
 import os
 uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Enregistrement de Tortoise ORM avec FastAPI
 register_tortoise(app, config=TORTOISE_ORM, add_exception_handlers=False)
