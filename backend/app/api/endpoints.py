@@ -30,6 +30,69 @@ def _sanitize_for_json(v):
         return [_sanitize_for_json(x) for x in v]
     return v
 
+
+def can_access_bonus(user, bonus, action):
+    """Source de verite unique pour les droits sur les primes.
+    action : 'list' | 'read' | 'export' | 'validate' | 'update'
+    bonus = None pour les scopes de liste/export (filtre dept seulement)."""
+    # 1) Perimetre departement
+    if user.is_dg or user.is_drh:
+        dept_ok = True
+    else:
+        dept_ok = (bonus is None) or (bonus.employee.dept_str == user.department)
+
+    # 2) Lecture / export : statuts visibles selon le role
+    if action in ("list", "read", "export"):
+        if user.is_dg:
+            allowed = {ValidationStatus.EN_ATTENTE_DG}
+        elif user.is_drh:
+            allowed = {ValidationStatus.VALIDE}
+        elif user.is_directeur:
+            allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
+        elif user.is_validator_n1:
+            allowed = {ValidationStatus.INITIALISE}
+        else:
+            allowed = set()
+        if bonus is None:
+            return dept_ok
+        return dept_ok and (bonus.status in allowed)
+
+    # 3) Validation : role + statut + departement
+    if action == "validate":
+        if user.is_dg:
+            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DG
+        if user.is_directeur:
+            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DIRECTEUR
+        if user.is_validator_n1:
+            return dept_ok and bonus.status == ValidationStatus.INITIALISE
+        return False
+
+    # 4) Modification : meme logique que la validation
+    if action == "update":
+        if user.is_dg:
+            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DG
+        if user.is_directeur:
+            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DIRECTEUR
+        if user.is_validator_n1:
+            return dept_ok and bonus.status == ValidationStatus.INITIALISE
+        return False
+
+    return False
+
+
+def bonus_readable_statuses(user):
+    """Statuts qu'un role a le droit de lister/exporter (None = tous)."""
+    if user.is_dg:
+        return [ValidationStatus.EN_ATTENTE_DG]
+    if user.is_drh:
+        return [ValidationStatus.VALIDE]
+    if user.is_directeur:
+        return [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+    if user.is_validator_n1:
+        return [ValidationStatus.INITIALISE]
+    return []
+
+
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # Route POST pour créer une prime
@@ -149,11 +212,9 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
 
-    can_edit_any = user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
-
-    if not can_edit_any:
-        if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
-            raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé' ou 'En attente Directeur'")
+    can_update = can_access_bonus(user, bonus, "update")
+    if not can_update:
+        raise HTTPException(403, "Modification non autorisée pour cette prime")
 
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
@@ -169,7 +230,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
-    if can_edit_any and bonus.status != ValidationStatus.INITIALISE:
+    if can_update and bonus.status != ValidationStatus.INITIALISE:
         update_data['status'] = ValidationStatus.INITIALISE
     update_data['was_rejected'] = False
 
@@ -214,7 +275,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     except Exception:
         pass  # Audit log failure must not block the modification
 
-    if can_edit_any and changes:
+    if can_update and changes:
         employee = await Employee.get(id=bonus.employee_id).prefetch_related('manager')
         recipients = []
 
@@ -271,11 +332,15 @@ async def list_bonuses(
     query = Bonus.all().prefetch_related('employee')
     if not (user.is_dg or user.is_drh) and user.department:
         query = query.filter(employee__dept_str=user.department)
+    allowed = bonus_readable_statuses(user)
+    if status and status in [s.value for s in allowed]:
+        query = query.filter(status=status)
+    elif allowed:
+        query = query.filter(status__in=allowed)
     if show_paid:
         query = query.filter(paid_at__isnull=False)
     else:
         query = query.filter(paid_at__isnull=True)
-    if status: query = query.filter(status=status)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date: query = query.filter(start_date__gte=start_date)
@@ -296,9 +361,16 @@ async def export_bonuses(
     columns: Optional[str] = None,
     was_rejected: Optional[bool] = None,
     show_paid: Optional[bool] = False,
+    user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
-    if status: query = query.filter(status=status)
+    if not (user.is_dg or user.is_drh) and user.department:
+        query = query.filter(employee__dept_str=user.department)
+    allowed = bonus_readable_statuses(user)
+    if status and status in [s.value for s in allowed]:
+        query = query.filter(status=status)
+    elif allowed:
+        query = query.filter(status__in=allowed)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date and end_date:
@@ -307,7 +379,8 @@ async def export_bonuses(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
-    if department: query = query.filter(employee__dept_str=department)
+    if department and (user.is_dg or user.is_drh):
+        query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -368,9 +441,16 @@ async def export_bonuses_xlsx(
     search: Optional[str] = None,
     columns: Optional[str] = None,
     was_rejected: Optional[bool] = None,
+    user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
-    if status: query = query.filter(status=status)
+    if not (user.is_dg or user.is_drh) and user.department:
+        query = query.filter(employee__dept_str=user.department)
+    allowed = bonus_readable_statuses(user)
+    if status and status in [s.value for s in allowed]:
+        query = query.filter(status=status)
+    elif allowed:
+        query = query.filter(status__in=allowed)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date and end_date:
@@ -379,7 +459,8 @@ async def export_bonuses_xlsx(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
-    if department: query = query.filter(employee__dept_str=department)
+    if department and (user.is_dg or user.is_drh):
+        query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -566,16 +647,20 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
 
 # Route GET pour une prime spécifique
 @router.get("/bonuses/{bonus_id}", response_model=BonusResponse)
-async def get_bonus(bonus_id: int):
+async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
+    if not can_access_bonus(user, bonus, "read"):
+        raise HTTPException(403, "Accès refusé à cette prime")
     return bonus
 
 # Route GET pour l'historique des validations d'une prime
 @router.get("/bonuses/{bonus_id}/validations", response_model=List[ValidationResponse])
-async def get_bonus_validations(bonus_id: int):
+async def get_bonus_validations(bonus_id: int, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id)
     if not bonus: raise HTTPException(404, "Bonus not found")
+    if not can_access_bonus(user, bonus, "read"):
+        raise HTTPException(403, "Accès refusé à cette prime")
     validations = await Validation.filter(bonus_id=bonus_id).prefetch_related('validator')
     result = []
     for v in validations:
@@ -601,12 +686,16 @@ async def validate_bonus(
     user: User = Depends(get_current_user)
 ):
     # Récupération de la prime ou erreur 404
-    bonus = await Bonus.get_or_none(id=bonus_id)
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
-    
+
     # Vérification : si déjà validé, ON BLOQUE
     if bonus.status == ValidationStatus.VALIDE:
         raise HTTPException(status_code=400, detail="Bonus déjà validé - aucune action possible")
+
+    # Contrôle d'acces : role + departement + statut
+    if not can_access_bonus(user, bonus, "validate"):
+        raise HTTPException(403, "Validation non autorisée pour cette prime")
     
     # Validation du workflow : chaque étape n'est possible que si le statut actuel correspond
     expected_status = {
