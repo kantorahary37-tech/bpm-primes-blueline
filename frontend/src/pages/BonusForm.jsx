@@ -338,6 +338,12 @@ export default function BonusForm() {
     if (d === 0 || f === 0) return false
     return d > f
   })
+  const otherInvalid = others.some(o =>
+    !o.libelle?.trim() ||
+    !o.type ||
+    (o.type === 'autres' && !o.typeCustom?.trim()) ||
+    !(parseFloat(o.montant) > 0)
+  )
   const totalQuantiValue = quantitative.reduce((s, i) => s + i.value, 0)
   const totalQualiValue = qualitative.reduce((s, i) => s + i.value, 0)
   const totalValue = totalQuantiValue + totalQualiValue
@@ -1141,7 +1147,7 @@ export default function BonusForm() {
 
           <div className="flex gap-3 justify-end">
             <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-            <button type="submit" disabled={loading || coeffInvalid || periodInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+            <button type="submit" disabled={loading || coeffInvalid || periodInvalid || otherInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
               {loading ? <span className="loading loading-spinner" /> : `Créer les primes (${primeCount})`}
             </button>
           </div>
@@ -1396,19 +1402,26 @@ export default function BonusForm() {
               </div>
             </div>
 
-            <div className="text-right pt-1 border-t border-gray-300">
-              <p className="text-xs text-gray-700">
-                Total (quanti + quali){othersTotal > 0 && <span className="text-gray-400"> + autres ({othersTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar)</span>}
-              </p>
-              <p className="text-xl font-bold text-brand-600">
-                {(totalValue + othersTotal).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} / {params.maxPrime.toLocaleString('fr-FR')} Ar
-              </p>
+            <div className="border-t border-gray-300 pt-3 mt-3">
+              <div className="flex items-center justify-between text-[11px] text-gray-600">
+                <span>Total évaluation (quanti + quali) <span className="text-gray-400">/ {params.maxPrime.toLocaleString('fr-FR')} Ar</span></span>
+                <span>{totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
+                <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
+                  style={{ width: `${Math.min((totalValue / (params.maxPrime || 1)) * 100, 100)}%` }} />
+              </div>
             </div>
           </div>
 
         </div>
 
         <div className="card-blueline p-4 mt-3 border-l-4 border-l-amber-500 bg-amber-50/30">
+          {others.length > 0 && otherInvalid && (
+            <div className="mb-3 bg-red-50 text-red-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">
+              <ExclamationIcon className="w-4 h-4" /> Chaque « Autre prime » doit avoir un libellé, un type et un montant renseignés (le montant doit être supérieur à 0).
+            </div>
+          )}
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-semibold text-gray-900 text-sm">Autres primes</h2>
@@ -1501,7 +1514,28 @@ export default function BonusForm() {
               </div>
             </div>
           ))}
+
+          {othersTotal > 0 && (
+            <div className="border-t border-amber-200 pt-3 mt-3">
+              <div className="flex items-center justify-between text-[11px] text-gray-600">
+                <span>Autres primes</span>
+                <span>{othersTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
+                <div className="h-full rounded-full transition-all duration-300 bg-amber-500" style={{ width: '100%' }} />
+              </div>
+            </div>
+          )}
         </div>
+
+        {othersTotal > 0 && (
+          <div className="card-blueline p-4 mt-3 border-l-4 border-l-blue-500 bg-blue-50/40">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-gray-900">Total général</p>
+              <p className="text-2xl font-bold text-brand-600">{(totalValue + othersTotal).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</p>
+            </div>
+          </div>
+        )}
 
         <div className="card-blueline p-3 border-l-4 border-l-blue-500 bg-blue-50/40">
           <div className="space-y-2">
@@ -1540,7 +1574,7 @@ export default function BonusForm() {
 
         <div className="flex gap-3 justify-end">
           <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-          <button type="submit" disabled={loading || coeffInvalid || periodInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+          <button type="submit" disabled={loading || coeffInvalid || periodInvalid || otherInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
             {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
           </button>
         </div>

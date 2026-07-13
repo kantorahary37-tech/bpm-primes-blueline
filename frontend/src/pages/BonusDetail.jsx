@@ -340,10 +340,13 @@ const BonusDetail = () => {
                 primeMax={bonus.details.prime_max || bonus.total_amount}
                 color="bg-violet-500"
               />
-              <div className="border-t-2 border-blue-200 pt-4 mt-4">
-                <div className="flex items-center justify-between text-lg font-bold text-blue-700">
-                  <span>Total général</span>
-                  <span>{formatAr(bonus.total_amount)} / {formatAr(bonus.details.prime_max || bonus.total_amount)} Ar</span>
+              <div className="border-t border-gray-300 pt-3 mt-3">
+                <div className="flex items-center justify-between text-[11px] text-gray-600">
+                  <span>Total évaluation <span className="text-gray-400">/ {formatAr(bonus.details?.prime_max || bonus.total_amount)} Ar</span></span>
+                  <span>{formatAr(bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0))} Ar</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
+                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.min(((bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0)) / (bonus.details?.prime_max || bonus.total_amount || 1)) * 100, 100)}%` }} />
                 </div>
               </div>
             </div>
@@ -370,6 +373,14 @@ const BonusDetail = () => {
                   <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} Ar</span>
                 </div>
               ))}
+              <div className="border-t border-amber-200 pt-3 mt-3 flex items-center justify-between text-[11px] text-gray-600">
+                <span>Autres primes</span>
+                <span>{formatAr(bonus.details.others.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0))} Ar</span>
+              </div>
+              <div className="card-blueline p-3 mt-3 border-l-4 border-l-blue-500 bg-blue-50/40 flex items-center justify-between">
+                <p className="text-sm font-bold text-gray-900">Total général</p>
+                <p className="text-2xl font-bold text-brand-600">{formatAr(bonus.total_amount)} Ar</p>
+              </div>
             </div>
           </Section>
         )}

@@ -42,10 +42,15 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
             dept_str=employee.dept_str,
             bonus_type=bonus.bonus_type
         ).first()
-        if primemax and bonus.total_amount > primemax.amount:
+        # Le plafond ne s'applique qu'à l'évaluation (quanti + quali), pas aux "Autres primes"
+        details = bonus.details or {}
+        others_list = details.get('others', []) if isinstance(details, dict) else []
+        others_total = sum(float(o.get('montant', 0) or 0) for o in others_list)
+        eval_amount = float(bonus.total_amount) - others_total
+        if primemax and eval_amount > primemax.amount:
             raise HTTPException(
                 status_code=400,
-                detail=f"Le montant ({bonus.total_amount} Ar) dépasse le plafond "
+                detail=f"Le montant de l'évaluation ({eval_amount} Ar) dépasse le plafond "
                        f"autorisé ({primemax.amount} Ar) pour "
                        f"'{bonus.bonus_type.value}' dans le département '{employee.dept_str}'."
             )
@@ -154,8 +159,13 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
         employee = await Employee.get(id=bonus.employee_id)
         primemax = await PrimeMax.filter(dept_str=employee.dept_str, bonus_type=bonus.bonus_type).first()
-        if primemax and update_data['total_amount'] > primemax.amount:
-            raise HTTPException(400, f"Le montant dépasse le plafond autorisé ({primemax.amount} Ar)")
+        # Le plafond ne s'applique qu'à l'évaluation, pas aux "Autres primes"
+        details = update_data.get('details') or (bonus.details or {})
+        others_list = details.get('others', []) if isinstance(details, dict) else []
+        others_total = sum(float(o.get('montant', 0) or 0) for o in others_list)
+        eval_amount = float(update_data['total_amount']) - others_total
+        if primemax and eval_amount > primemax.amount:
+            raise HTTPException(400, f"Le montant de l'évaluation dépasse le plafond autorisé ({primemax.amount} Ar)")
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
