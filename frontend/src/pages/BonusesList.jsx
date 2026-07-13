@@ -193,23 +193,14 @@ const [filterMonth, setFilterMonth] = useState('');
       ];
     }
 
-    const myStatuses = [];
-    if (user.is_validator_n1) myStatuses.push('Initialisé');
-    if (user.is_directeur) myStatuses.push('En attente Directeur');
-    if (user.is_dg) myStatuses.push('En attente DG');
-
     const base = [
-      { key: 'myValidation', title: 'À valider par vous', highlight: true, filter: (b) => myStatuses.includes(b.status) },
       { key: 'initialised', title: 'Initialisées', highlight: false, filter: (b) => b.status === 'Initialisé' },
       { key: 'pendingDirector', title: 'En attente Directeur', highlight: false, filter: (b) => b.status === 'En attente Directeur' },
       { key: 'pendingDG', title: 'En attente DG', highlight: false, filter: (b) => b.status === 'En attente DG' },
       { key: 'validated', title: 'Validées', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
     ];
 
-    const order = [];
-    const hasValidationRole = user.is_validator_n1 || user.is_directeur || user.is_dg;
-    if (hasValidationRole) order.push('myValidation');
-    order.push('initialised', 'pendingDirector', 'pendingDG', 'validated');
+    const order = ['initialised', 'pendingDirector', 'pendingDG', 'validated'];
 
     const map = new Map(base.map((s) => [s.key, s]));
     return order.map((key) => map.get(key)).filter(Boolean);
@@ -670,9 +661,18 @@ const [filterMonth, setFilterMonth] = useState('');
             </div>
           </div>
         </div>
-      )) : viewMode === 'status' ? sections.map((section) => {
+      )) : viewMode === 'status' ? (() => {
+        const total = sections.reduce((n, s) => n + ((grouped[s.key] || []).length), 0);
+        if (total === 0) {
+          return (
+            <div className="p-10 text-center text-gray-400 bg-white rounded-xl border border-gray-200">
+              Aucune prime à valider
+            </div>
+          );
+        }
+        return sections.map((section) => {
         const items = grouped[section.key] || [];
-        if (items.length === 0 && section.key !== 'myValidation') return null;
+        if (items.length === 0) return null;
         const showAll = sectionExpand[section.key];
         const limit = 12;
         const visible = showAll ? items : items.slice(0, limit);
@@ -682,7 +682,7 @@ const [filterMonth, setFilterMonth] = useState('');
           <div key={section.key} className="mb-6">
             <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl ${section.highlight ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
               <h2 className="font-semibold">{section.title}</h2>
-              {(section.key === 'myValidation' || section.key === 'initialised' || section.key === 'pendingDirector' || section.key === 'pendingDG' || section.key === 'validated') && items.length > 0 && (
+              {(section.key === 'initialised' || section.key === 'pendingDirector' || section.key === 'pendingDG' || section.key === 'validated') && items.length > 0 && (
                 <div className="flex gap-1">
                   <button onClick={(e) => {
                     e.stopPropagation();
@@ -736,7 +736,8 @@ const [filterMonth, setFilterMonth] = useState('');
             )}
           </div>
         );
-      }) : (() => {
+      });
+      })() : (() => {
         const PAGE_SIZE = 4;
         const totalPages = Math.max(1, Math.ceil(monthGroups.length / PAGE_SIZE));
         const safePage = Math.min(datePage, totalPages);
