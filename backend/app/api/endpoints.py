@@ -657,7 +657,7 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
 # Route GET pour l'historique des validations d'une prime
 @router.get("/bonuses/{bonus_id}/validations", response_model=List[ValidationResponse])
 async def get_bonus_validations(bonus_id: int, user: User = Depends(get_current_user)):
-    bonus = await Bonus.get_or_none(id=bonus_id)
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
     if not can_access_bonus(user, bonus, "read"):
         raise HTTPException(403, "Accès refusé à cette prime")
@@ -793,6 +793,10 @@ async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_curre
 
 @router.get("/bonuses/{bonus_id}/audit-logs", response_model=List[AuditLogResponse])
 async def get_audit_logs(bonus_id: int, user: User = Depends(get_current_user)):
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
+    if not bonus: raise HTTPException(404, "Bonus not found")
+    if not can_access_bonus(user, bonus, "read"):
+        raise HTTPException(403, "Accès refusé à cette prime")
     logs = await AuditLog.filter(bonus_id=bonus_id).prefetch_related('user').order_by('created_at')
     result = []
     for log in logs:
