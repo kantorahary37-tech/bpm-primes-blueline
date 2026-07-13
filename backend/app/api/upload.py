@@ -10,6 +10,19 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".doc", ".docx", ".xls", ".xlsx"}
 
+# Magic bytes : premiers octets reels du fichier selon le type
+MAGIC_BYTES = {
+    ".pdf": [b"%PDF"],
+    ".png": [b"\x89PNG"],
+    ".jpg": [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".gif": [b"GIF87a", b"GIF89a"],
+    ".doc": [b"\xd0\xcf\x11\xe0"],
+    ".xls": [b"\xd0\xcf\x11\xe0"],
+    ".docx": [b"PK\x03\x04"],
+    ".xlsx": [b"PK\x03\x04"],
+}
+
 MEDIA_TYPES = {
     ".pdf": "application/pdf",
     ".png": "image/png",
@@ -35,6 +48,8 @@ async def upload_file(file: UploadFile = File(...)):
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Fichier trop volumineux (max 10 Mo)")
+    if not any(content.startswith(sig) for sig in MAGIC_BYTES.get(ext, [])):
+        raise HTTPException(400, "Le contenu du fichier ne correspond pas a l'extension declaree")
     with open(filepath, "wb") as f:
         f.write(content)
     return JSONResponse(content={"filename": filename, "original_name": file.filename, "url": f"/api/v1/uploads/{filename}"})
