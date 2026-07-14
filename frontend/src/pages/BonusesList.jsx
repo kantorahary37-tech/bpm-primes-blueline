@@ -199,17 +199,13 @@ const [filterMonth, setFilterMonth] = useState('');
     if (user.is_dg) myStatuses.push('En attente DG');
 
     const base = [
-      { key: 'myValidation', title: 'À valider par vous', highlight: true, filter: (b) => myStatuses.includes(b.status) },
       { key: 'initialised', title: 'Initialisées', highlight: false, filter: (b) => b.status === 'Initialisé' },
       { key: 'pendingDirector', title: 'En attente Directeur', highlight: false, filter: (b) => b.status === 'En attente Directeur' },
       { key: 'pendingDG', title: 'En attente DG', highlight: false, filter: (b) => b.status === 'En attente DG' },
       { key: 'validated', title: 'Validées', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
     ];
 
-    const order = [];
-    const hasValidationRole = user.is_validator_n1 || user.is_directeur || user.is_dg;
-    if (hasValidationRole) order.push('myValidation');
-    order.push('initialised', 'pendingDirector', 'pendingDG', 'validated');
+    const order = ['initialised', 'pendingDirector', 'pendingDG', 'validated'];
 
     const map = new Map(base.map((s) => [s.key, s]));
     return order.map((key) => map.get(key)).filter(Boolean);
