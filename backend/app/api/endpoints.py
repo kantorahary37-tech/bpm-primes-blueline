@@ -721,7 +721,18 @@ async def validate_bonus(
             f"Action impossible : la prime est au statut '{bonus.status}', "
             f"attendait '{expected_status}' pour l'étape {step}."
         )
-    
+
+    # Vérification du rôle de l'utilisateur pour cette étape
+    step_role = {"N1": "is_validator_n1", "DIRECTEUR": "is_directeur", "DG": "is_dg"}
+    required_role = step_role.get(step)
+    if not required_role or not getattr(user, required_role, False):
+        raise HTTPException(status_code=403, detail="Vous n'avez pas le rôle requis pour cette étape de validation")
+
+    # Vérification du département (sauf DG qui voit tout)
+    if not user.is_dg:
+        if bonus.employee.dept_str != user.department:
+            raise HTTPException(status_code=403, detail="Cette prime n'est pas dans votre département")
+
     # Création de l'enregistrement de validation (validator_id depuis le JWT)
     await Validation.create(
         bonus_id=bonus.id,
