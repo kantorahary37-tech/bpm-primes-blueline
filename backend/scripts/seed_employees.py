@@ -225,7 +225,7 @@ async def seed():
             }
         )
         if not created:
-            await user.update_from_dict({
+            user.update_from_dict({
                 "name": u["name"],
                 "poste": u["poste"],
                 "dept_str": u["department"],
@@ -234,7 +234,8 @@ async def seed():
                 "is_directeur": u.get("is_directeur", False),
                 "is_drh": u.get("is_drh", False),
                 "is_dg": u.get("is_dg", False),
-            }).save()
+            })
+            await user.save()
             print(f"  ~ Mis à jour : {user.name} ({user.email})")
         else:
             print(f"  ✓ Créé : {user.name} ({user.email})")
@@ -271,12 +272,13 @@ async def seed():
                 }
             )
             if not created:
-                await emp.update_from_dict({
+                emp.update_from_dict({
                     "name": name,
                     "dept_str": dept,
                     "dept": dept_obj,
                     "manager": manager,
-                }).save()
+                })
+                await emp.save()
                 print(f"  ~ Mis à jour : {emp.name} ({emp.matricule}) [{dept}]")
             else:
                 print(f"  ✓ Créé : {emp.name} ({emp.matricule}) [{dept}]")
