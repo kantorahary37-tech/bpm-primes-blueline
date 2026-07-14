@@ -581,7 +581,7 @@ const [filterMonth, setFilterMonth] = useState('');
             className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'date' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
             Date
           </button>
-          {(user?.is_dg || user?.is_drh || user?.is_directeur) && (
+          {(user?.is_dg || user?.is_drh) && (
             <button onClick={() => setViewMode('department')}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'department' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
               Département
