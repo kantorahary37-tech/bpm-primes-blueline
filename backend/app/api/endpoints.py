@@ -759,6 +759,21 @@ async def validate_bonus(
             description=f"Rejet par {user.name} ({step})" + (f" — Motif : {validation.motif_rejet}" if validation.motif_rejet else ""),
         )
 
+        # Notification au N+1 (manager) que la prime revient à Initialisé
+        try:
+            employee = await Employee.get(id=bonus.employee_id).prefetch_related('manager')
+            if employee.manager:
+                motif = f" — Motif : {validation.motif_rejet}" if validation.motif_rejet else ""
+                await Notification.create(
+                    user=employee.manager,
+                    bonus=bonus,
+                    sender=user,
+                    type="REJET",
+                    message=f"{employee.name} — Prime rejetée{motif}",
+                )
+        except Exception:
+            pass
+
     # Sauvegarde de la prime
     await bonus.save()
     return {"message": "OK", "status": bonus.status}
