@@ -193,14 +193,23 @@ const [filterMonth, setFilterMonth] = useState('');
       ];
     }
 
+    const myStatuses = [];
+    if (user.is_validator_n1) myStatuses.push('Initialisé');
+    if (user.is_directeur) myStatuses.push('En attente Directeur');
+    if (user.is_dg) myStatuses.push('En attente DG');
+
     const base = [
+      { key: 'myValidation', title: 'À valider par vous', highlight: true, filter: (b) => myStatuses.includes(b.status) },
       { key: 'initialised', title: 'Initialisées', highlight: false, filter: (b) => b.status === 'Initialisé' },
       { key: 'pendingDirector', title: 'En attente Directeur', highlight: false, filter: (b) => b.status === 'En attente Directeur' },
       { key: 'pendingDG', title: 'En attente DG', highlight: false, filter: (b) => b.status === 'En attente DG' },
       { key: 'validated', title: 'Validées', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
     ];
 
-    const order = ['initialised', 'pendingDirector', 'pendingDG', 'validated'];
+    const order = [];
+    const hasValidationRole = user.is_validator_n1 || user.is_directeur || user.is_dg;
+    if (hasValidationRole) order.push('myValidation');
+    order.push('initialised', 'pendingDirector', 'pendingDG', 'validated');
 
     const map = new Map(base.map((s) => [s.key, s]));
     return order.map((key) => map.get(key)).filter(Boolean);
@@ -525,19 +534,24 @@ const [filterMonth, setFilterMonth] = useState('');
           <option value="astreinte">Astreinte</option>
           <option value="commission">Commission</option>
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
-          {!user?.is_dg && !user?.is_directeur && !user?.is_drh && <option value="">Tous statuts</option>}
-          {!user?.is_dg && !user?.is_directeur && !user?.is_drh && <option value="Initialisé">Initialisé</option>}
-          {!user?.is_dg && !user?.is_drh && <option value="En attente Directeur">En attente Directeur</option>}
-          {!user?.is_directeur && !user?.is_drh && <option value="En attente DG">En attente DG</option>}
-          <option value="Prime validée">Validée</option>
-          {!user?.is_drh && <option value="Prime rejetée">Rejetée</option>}
-        </select>
+        {/* Filtre statut : visible uniquement pour DG et DRH (les autres n'ont qu'un seul statut possible) */}
+        {(user?.is_dg || user?.is_drh) && (
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+            {user?.is_drh && <option value="">Tous statuts</option>}
+            {user?.is_drh && <option value="Prime validée">Validée</option>}
+            {user?.is_drh && <option value="Prime rejetée">Rejetée</option>}
+            {user?.is_dg && <option value="">Tous statuts</option>}
+            {user?.is_dg && <option value="En attente DG">En attente DG</option>}
+            {user?.is_dg && <option value="Prime validée">Validée</option>}
+            {user?.is_dg && <option value="Prime rejetée">Rejetée</option>}
+          </select>
+        )}
         <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Rechercher un employé..."
           className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 w-48" />
-        {(user?.is_dg || user?.is_drh || user?.is_directeur) && (
+        {/* Filtre département : visible uniquement pour DG et DRH (Directeur est déjà limité à son département) */}
+        {(user?.is_dg || user?.is_drh) && (
           <select value={depFilter} onChange={(e) => setDepFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
             <option value="">Tous départements</option>
@@ -661,18 +675,9 @@ const [filterMonth, setFilterMonth] = useState('');
             </div>
           </div>
         </div>
-      )) : viewMode === 'status' ? (() => {
-        const total = sections.reduce((n, s) => n + ((grouped[s.key] || []).length), 0);
-        if (total === 0) {
-          return (
-            <div className="p-10 text-center text-gray-400 bg-white rounded-xl border border-gray-200">
-              Aucune prime à valider
-            </div>
-          );
-        }
-        return sections.map((section) => {
+      )) : viewMode === 'status' ? sections.map((section) => {
         const items = grouped[section.key] || [];
-        if (items.length === 0) return null;
+        if (items.length === 0 && section.key !== 'myValidation') return null;
         const showAll = sectionExpand[section.key];
         const limit = 12;
         const visible = showAll ? items : items.slice(0, limit);
@@ -682,7 +687,7 @@ const [filterMonth, setFilterMonth] = useState('');
           <div key={section.key} className="mb-6">
             <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl ${section.highlight ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
               <h2 className="font-semibold">{section.title}</h2>
-              {(section.key === 'initialised' || section.key === 'pendingDirector' || section.key === 'pendingDG' || section.key === 'validated') && items.length > 0 && (
+              {(section.key === 'myValidation' || section.key === 'initialised' || section.key === 'pendingDirector' || section.key === 'pendingDG' || section.key === 'validated') && items.length > 0 && (
                 <div className="flex gap-1">
                   <button onClick={(e) => {
                     e.stopPropagation();
@@ -736,8 +741,7 @@ const [filterMonth, setFilterMonth] = useState('');
             )}
           </div>
         );
-      });
-      })() : (() => {
+      }) : (() => {
         const PAGE_SIZE = 4;
         const totalPages = Math.max(1, Math.ceil(monthGroups.length / PAGE_SIZE));
         const safePage = Math.min(datePage, totalPages);
