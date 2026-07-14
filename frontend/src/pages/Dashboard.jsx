@@ -45,7 +45,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [b, e] = await Promise.all([getBonuses(), getEmployees(user?.department)]);
+        const [b, e] = await Promise.all([getBonuses(null, null, null, null, null, user?.is_drh), getEmployees(user?.department)]);
         setBonuses(b);
         setEmployees(e);
         setLoading(false);
@@ -55,7 +55,7 @@ const Dashboard = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [user]);
 
   const formatAmount = (v) => (v || 0).toLocaleString('fr-FR') + ' Ar';
 
@@ -93,6 +93,13 @@ const Dashboard = () => {
     const sorted = [...bonuses.filter(b => myStatuses.includes(b.status))];
     sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return sorted;
+  }, [bonuses, user]);
+
+  const toPay = useMemo(() => {
+    if (!user?.is_drh) return [];
+    const unpaid = bonuses.filter(b => b.status === 'Prime validée' && !b.paid_at);
+    unpaid.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return unpaid;
   }, [bonuses, user]);
 
   const formatDate = (dateStr) => {
@@ -175,44 +182,83 @@ const Dashboard = () => {
       </div>
 
       <div className="mb-6">
-        <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-blue-600 text-white">
-          <EyeIcon className="w-4 h-4" />
-          <h2 className="font-semibold">À valider par vous</h2>
-          <Link to="/bonuses?view=status" className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-blue-100 hover:bg-white/30 hover:text-white transition-all">
-            Voir tout
-          </Link>
-          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-blue-700">
-            {myPending.length}
-          </span>
-        </div>
-
-        {myPending.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            Aucune prime en attente de votre validation
-          </div>
-        ) : (
-          <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-              {myPending.slice(0, 6).map((bonus) => {
-                return (
-                  <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm transition-all group">
-                    <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                      {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
-                    </div>
-                    <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-                      <span className="font-medium">{bonus.employee?.name || 'N/A'}</span>
-                    </span>
-                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                      {statusLabel(bonus)}
-                    </span>
-                    <span className="text-[10px] font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
-                    <EyeIcon className="w-3 h-3 text-gray-300 shrink-0" />
-                  </Link>
-                );
-              })}
+        {user?.is_drh ? (
+          <>
+            <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-emerald-600 text-white">
+              <CheckIcon className="w-4 h-4" />
+              <h2 className="font-semibold">En attente de paiement</h2>
+              <Link to="/validated" className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-emerald-100 hover:bg-white/30 hover:text-white transition-all">
+                Voir tout
+              </Link>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-emerald-700">
+                {toPay.length}
+              </span>
             </div>
-          </div>
+
+            {toPay.length === 0 ? (
+              <div className="p-8 text-center text-gray-400 bg-white rounded-b-xl border border-t-0 border-gray-200">
+                Aucune prime en attente de paiement
+              </div>
+            ) : (
+              <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                  {toPay.slice(0, 6).map((bonus) => (
+                    <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-emerald-300 hover:shadow-sm transition-all group">
+                      <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                        {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
+                      </div>
+                      <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
+                        <span className="font-medium">{bonus.employee?.name || 'N/A'}</span>
+                      </span>
+                      <span className="text-[9px] text-gray-400 shrink-0">{bonus.employee?.department || ''}</span>
+                      <span className="text-[10px] font-semibold text-emerald-600 shrink-0">{bonus.total_amount} Ar</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-blue-600 text-white">
+              <EyeIcon className="w-4 h-4" />
+              <h2 className="font-semibold">À valider par vous</h2>
+              <Link to="/bonuses?view=status" className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-blue-100 hover:bg-white/30 hover:text-white transition-all">
+                Voir tout
+              </Link>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-blue-700">
+                {myPending.length}
+              </span>
+            </div>
+
+            {myPending.length === 0 ? (
+              <div className="p-8 text-center text-gray-400 bg-white rounded-b-xl border border-t-0 border-gray-200">
+                Aucune prime en attente de votre validation
+              </div>
+            ) : (
+              <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                  {myPending.slice(0, 6).map((bonus) => (
+                    <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm transition-all group">
+                      <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                        {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
+                      </div>
+                      <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
+                        <span className="font-medium">{bonus.employee?.name || 'N/A'}</span>
+                      </span>
+                      <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
+                        {statusLabel(bonus)}
+                      </span>
+                      <span className="text-[10px] font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
+                      <EyeIcon className="w-3 h-3 text-gray-300 shrink-0" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
