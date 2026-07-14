@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from enum import Enum
-from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification
+from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus
 from app.auth import get_current_user
 from app.schemas import *
 from fastapi import HTTPException
@@ -29,53 +29,6 @@ def _sanitize_for_json(v):
     if isinstance(v, list):
         return [_sanitize_for_json(x) for x in v]
     return v
-
-
-def _read_statuses(user):
-    # Statuts lisibles selon le rôle (source de vérité unique)
-    if user.is_dg:
-        return {ValidationStatus.EN_ATTENTE_DG}
-    if user.is_drh:
-        return {ValidationStatus.VALIDE}            # DRH : uniquement les primes validées
-    if user.is_directeur:
-        return {ValidationStatus.EN_ATTENTE_DIRECTEUR}
-    if user.is_validator_n1:                        # N+1 = "manager"
-        return {ValidationStatus.INITIALISE}        # inclut les rejetées (was_rejected)
-    return set()
-
-
-def can_access_bonus(user, bonus, action):
-    # Périmètre département : DG et DRH voient tous les départements
-    if user.is_dg or user.is_drh:
-        dept_ok = True
-    else:
-        dept_ok = (bonus is None) or (bonus.employee.dept_str == user.department)
-
-    if action in ("list", "read", "export"):
-        if bonus is None:
-            return dept_ok  # liste/export : filtrage département seul (statut géré à part)
-        return dept_ok and (bonus.status in _read_statuses(user))
-
-    if action == "validate":
-        if user.is_dg:
-            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DG
-        if user.is_directeur:
-            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DIRECTEUR
-        if user.is_validator_n1:
-            return dept_ok and bonus.status == ValidationStatus.INITIALISE
-        return False  # DRH et autres rôles : jamais
-
-    if action == "update":
-        if user.is_dg:
-            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DG
-        if user.is_directeur:
-            return dept_ok and bonus.status == ValidationStatus.EN_ATTENTE_DIRECTEUR
-        if user.is_validator_n1:
-            return dept_ok and bonus.status == ValidationStatus.INITIALISE
-        return False  # DRH : non (mark-paid est géré à part)
-
-    return False
-
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -196,8 +149,11 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
 
-    if not can_access_bonus(user, bonus, "update"):
-        raise HTTPException(403, "Vous n'êtes pas autorisé à modifier cette prime")
+    can_edit_any = user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
+
+    if not can_edit_any:
+        if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
+            raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé' ou 'En attente Directeur'")
 
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
@@ -213,7 +169,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
-    if can_access_bonus(user, bonus, "update") and bonus.status != ValidationStatus.INITIALISE:
+    if can_edit_any and bonus.status != ValidationStatus.INITIALISE:
         update_data['status'] = ValidationStatus.INITIALISE
     update_data['was_rejected'] = False
 
@@ -258,7 +214,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     except Exception:
         pass  # Audit log failure must not block the modification
 
-    if can_access_bonus(user, bonus, "update") and changes:
+    if can_edit_any and changes:
         employee = await Employee.get(id=bonus.employee_id).prefetch_related('manager')
         recipients = []
 
@@ -313,16 +269,33 @@ async def list_bonuses(
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee')
-    if not (user.is_dg or user.is_drh):
+    if not (user.is_dg or user.is_drh) and user.department:
         query = query.filter(employee__dept_str=user.department)
-    read_statuses = _read_statuses(user)
-    if read_statuses:
-        query = query.filter(status__in=read_statuses)
+
+    # Filtrer les statuts selon le rôle de l'utilisateur
+    if user.is_dg:
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
+    elif user.is_drh:
+        allowed_statuses = [ValidationStatus.VALIDE]
+    elif user.is_directeur:
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+    elif user.is_validator_n1:
+        allowed_statuses = [ValidationStatus.INITIALISE]
+    else:
+        allowed_statuses = []
+
+    if status:
+        status_enum = ValidationStatus(status)
+        if status_enum not in allowed_statuses:
+            raise HTTPException(status_code=403, detail="Vous n'avez pas accès aux primes avec ce statut")
+        query = query.filter(status=status_enum)
+    else:
+        query = query.filter(status__in=allowed_statuses)
+
     if show_paid:
         query = query.filter(paid_at__isnull=False)
     else:
         query = query.filter(paid_at__isnull=True)
-    if status: query = query.filter(status=status)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date: query = query.filter(start_date__gte=start_date)
@@ -343,17 +316,8 @@ async def export_bonuses(
     columns: Optional[str] = None,
     was_rejected: Optional[bool] = None,
     show_paid: Optional[bool] = False,
-    user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
-    if not (user.is_dg or user.is_drh):
-        query = query.filter(employee__dept_str=user.department)
-    else:
-        if department:
-            query = query.filter(employee__dept_str=department)
-    read_statuses = _read_statuses(user)
-    if read_statuses:
-        query = query.filter(status__in=read_statuses)
     if status: query = query.filter(status=status)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
@@ -363,6 +327,7 @@ async def export_bonuses(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
+    if department: query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -423,17 +388,8 @@ async def export_bonuses_xlsx(
     search: Optional[str] = None,
     columns: Optional[str] = None,
     was_rejected: Optional[bool] = None,
-    user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
-    if not (user.is_dg or user.is_drh):
-        query = query.filter(employee__dept_str=user.department)
-    else:
-        if department:
-            query = query.filter(employee__dept_str=department)
-    read_statuses = _read_statuses(user)
-    if read_statuses:
-        query = query.filter(status__in=read_statuses)
     if status: query = query.filter(status=status)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
@@ -443,6 +399,7 @@ async def export_bonuses_xlsx(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
+    if department: query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -534,9 +491,7 @@ async def export_bonuses_xlsx(
 
 
 @router.get("/bonuses/export/sage")
-async def export_sage(user: User = Depends(get_current_user)):
-    if not user.is_drh:
-        raise HTTPException(403, "Seul le DRH peut exporter la paie Sage")
+async def export_sage():
     bonuses = await Bonus.filter(status=ValidationStatus.VALIDE).prefetch_related('employee')
 
     output = io.StringIO()
@@ -567,12 +522,10 @@ async def export_sage(user: User = Depends(get_current_user)):
 
 # Route GET pour l'export d'une prime spécifique
 @router.get("/bonuses/{bonus_id}/export")
-async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None, user: User = Depends(get_current_user)):
+async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee', 'created_by')
     if not bonus:
         raise HTTPException(404, "Bonus not found")
-    if not can_access_bonus(user, bonus, "read"):
-        raise HTTPException(403, "Accès refusé à cette prime")
 
     common = [
         "Matricule", "Nom", "Departement", "TypePrime",
@@ -633,20 +586,16 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None, user
 
 # Route GET pour une prime spécifique
 @router.get("/bonuses/{bonus_id}", response_model=BonusResponse)
-async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
+async def get_bonus(bonus_id: int):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
-    if not can_access_bonus(user, bonus, "read"):
-        raise HTTPException(403, "Accès refusé à cette prime")
     return bonus
 
 # Route GET pour l'historique des validations d'une prime
 @router.get("/bonuses/{bonus_id}/validations", response_model=List[ValidationResponse])
-async def get_bonus_validations(bonus_id: int, user: User = Depends(get_current_user)):
-    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
+async def get_bonus_validations(bonus_id: int):
+    bonus = await Bonus.get_or_none(id=bonus_id)
     if not bonus: raise HTTPException(404, "Bonus not found")
-    if not can_access_bonus(user, bonus, "read"):
-        raise HTTPException(403, "Accès refusé à cette prime")
     validations = await Validation.filter(bonus_id=bonus_id).prefetch_related('validator')
     result = []
     for v in validations:
@@ -672,13 +621,9 @@ async def validate_bonus(
     user: User = Depends(get_current_user)
 ):
     # Récupération de la prime ou erreur 404
-    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
+    bonus = await Bonus.get_or_none(id=bonus_id)
     if not bonus: raise HTTPException(404, "Bonus not found")
-
-    # Vérification des droits : rôle + département + statut
-    if not can_access_bonus(user, bonus, "validate"):
-        raise HTTPException(status_code=403, detail="Vous n'êtes pas autorisé à valider cette prime")
-
+    
     # Vérification : si déjà validé, ON BLOQUE
     if bonus.status == ValidationStatus.VALIDE:
         raise HTTPException(status_code=400, detail="Bonus déjà validé - aucune action possible")
@@ -745,7 +690,7 @@ async def validate_bonus(
 # Route POST pour marquer des primes comme payées
 @router.post("/bonuses/mark-paid")
 async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_current_user)):
-    if not user.is_drh:
+    if not user.is_drh and not user.is_dg:
         raise HTTPException(403, "Seul le DRH peut marquer les primes comme payées")
 
     query = Bonus.filter(status=ValidationStatus.VALIDE, paid_at__isnull=True)
@@ -779,11 +724,6 @@ async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_curre
 
 @router.get("/bonuses/{bonus_id}/audit-logs", response_model=List[AuditLogResponse])
 async def get_audit_logs(bonus_id: int, user: User = Depends(get_current_user)):
-    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
-    if not bonus:
-        raise HTTPException(404, "Bonus not found")
-    if not can_access_bonus(user, bonus, "read"):
-        raise HTTPException(403, "Accès refusé à cette prime")
     logs = await AuditLog.filter(bonus_id=bonus_id).prefetch_related('user').order_by('created_at')
     result = []
     for log in logs:
