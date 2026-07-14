@@ -316,9 +316,34 @@ async def export_bonuses(
     columns: Optional[str] = None,
     was_rejected: Optional[bool] = None,
     show_paid: Optional[bool] = False,
+    user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
-    if status: query = query.filter(status=status)
+
+    # Filtre département selon le rôle
+    if not (user.is_dg or user.is_drh) and user.department:
+        query = query.filter(employee__dept_str=user.department)
+
+    # Filtre statut selon le rôle
+    if user.is_dg:
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
+    elif user.is_drh:
+        allowed_statuses = [ValidationStatus.VALIDE]
+    elif user.is_directeur:
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+    elif user.is_validator_n1:
+        allowed_statuses = [ValidationStatus.INITIALISE]
+    else:
+        allowed_statuses = []
+
+    if status:
+        status_enum = ValidationStatus(status)
+        if status_enum not in allowed_statuses:
+            raise HTTPException(status_code=403, detail="Vous n'avez pas accès aux primes avec ce statut")
+        query = query.filter(status=status_enum)
+    else:
+        query = query.filter(status__in=allowed_statuses)
+
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date and end_date:
@@ -327,7 +352,10 @@ async def export_bonuses(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
-    if department: query = query.filter(employee__dept_str=department)
+    if department:
+        if not (user.is_dg or user.is_drh) and department != user.department:
+            raise HTTPException(status_code=403, detail="Vous ne pouvez exporter que les primes de votre département")
+        query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -388,9 +416,34 @@ async def export_bonuses_xlsx(
     search: Optional[str] = None,
     columns: Optional[str] = None,
     was_rejected: Optional[bool] = None,
+    user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by')
-    if status: query = query.filter(status=status)
+
+    # Filtre département selon le rôle
+    if not (user.is_dg or user.is_drh) and user.department:
+        query = query.filter(employee__dept_str=user.department)
+
+    # Filtre statut selon le rôle
+    if user.is_dg:
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
+    elif user.is_drh:
+        allowed_statuses = [ValidationStatus.VALIDE]
+    elif user.is_directeur:
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+    elif user.is_validator_n1:
+        allowed_statuses = [ValidationStatus.INITIALISE]
+    else:
+        allowed_statuses = []
+
+    if status:
+        status_enum = ValidationStatus(status)
+        if status_enum not in allowed_statuses:
+            raise HTTPException(status_code=403, detail="Vous n'avez pas accès aux primes avec ce statut")
+        query = query.filter(status=status_enum)
+    else:
+        query = query.filter(status__in=allowed_statuses)
+
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date and end_date:
@@ -399,7 +452,10 @@ async def export_bonuses_xlsx(
         query = query.filter(start_date__gte=start_date)
     elif end_date:
         query = query.filter(end_date__lte=end_date)
-    if department: query = query.filter(employee__dept_str=department)
+    if department:
+        if not (user.is_dg or user.is_drh) and department != user.department:
+            raise HTTPException(status_code=403, detail="Vous ne pouvez exporter que les primes de votre département")
+        query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -614,27 +670,9 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
 
 # Route GET pour l'historique des validations d'une prime
 @router.get("/bonuses/{bonus_id}/validations", response_model=List[ValidationResponse])
-async def get_bonus_validations(bonus_id: int, user: User = Depends(get_current_user)):
+async def get_bonus_validations(bonus_id: int):
     bonus = await Bonus.get_or_none(id=bonus_id)
     if not bonus: raise HTTPException(404, "Bonus not found")
-
-    if not (user.is_dg or user.is_drh):
-        if bonus.employee.dept_str != user.department:
-            raise HTTPException(status_code=404, detail="Bonus introuvable")
-
-    if user.is_dg:
-        allowed = {ValidationStatus.EN_ATTENTE_DG}
-    elif user.is_drh:
-        allowed = {ValidationStatus.VALIDE}
-    elif user.is_directeur:
-        allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
-    elif user.is_validator_n1:
-        allowed = {ValidationStatus.INITIALISE}
-    else:
-        allowed = set()
-
-    if bonus.status not in allowed:
-        raise HTTPException(status_code=404, detail="Bonus introuvable")
     validations = await Validation.filter(bonus_id=bonus_id).prefetch_related('validator')
     result = []
     for v in validations:
