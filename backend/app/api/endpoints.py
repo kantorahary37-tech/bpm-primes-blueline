@@ -614,9 +614,27 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
 
 # Route GET pour l'historique des validations d'une prime
 @router.get("/bonuses/{bonus_id}/validations", response_model=List[ValidationResponse])
-async def get_bonus_validations(bonus_id: int):
+async def get_bonus_validations(bonus_id: int, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id)
     if not bonus: raise HTTPException(404, "Bonus not found")
+
+    if not (user.is_dg or user.is_drh):
+        if bonus.employee.dept_str != user.department:
+            raise HTTPException(status_code=404, detail="Bonus introuvable")
+
+    if user.is_dg:
+        allowed = {ValidationStatus.EN_ATTENTE_DG}
+    elif user.is_drh:
+        allowed = {ValidationStatus.VALIDE}
+    elif user.is_directeur:
+        allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
+    elif user.is_validator_n1:
+        allowed = {ValidationStatus.INITIALISE}
+    else:
+        allowed = set()
+
+    if bonus.status not in allowed:
+        raise HTTPException(status_code=404, detail="Bonus introuvable")
     validations = await Validation.filter(bonus_id=bonus_id).prefetch_related('validator')
     result = []
     for v in validations:
