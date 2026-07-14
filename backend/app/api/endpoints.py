@@ -793,10 +793,14 @@ async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_curre
     if req.bonus_ids:
         query = query.filter(id__in=req.bonus_ids)
     elif req.month and req.year:
-        query = query.filter(
-            start_date__year=int(req.year),
-            start_date__month=int(req.month),
-        )
+        from datetime import date
+        y, m = int(req.year), int(req.month)
+        start = date(y, m, 1)
+        if m == 12:
+            end = date(y + 1, 1, 1)
+        else:
+            end = date(y, m + 1, 1)
+        query = query.filter(start_date__gte=start, start_date__lt=end)
     else:
         raise HTTPException(400, "Fournir bonus_ids ou month+year")
 
