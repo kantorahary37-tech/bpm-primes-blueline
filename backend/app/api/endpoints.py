@@ -266,13 +266,14 @@ async def list_bonuses(
     end_date: Optional[str] = None,
     was_rejected: Optional[bool] = None,
     show_paid: Optional[bool] = False,
+    all_statuses: Optional[bool] = False,
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee')
     if not (user.is_dg or user.is_drh) and user.department:
         query = query.filter(employee__dept_str=user.department)
 
-    # Filtrer les statuts selon le rôle de l'utilisateur
+    # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
     if user.is_dg:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
     elif user.is_drh:
@@ -284,7 +285,9 @@ async def list_bonuses(
     else:
         allowed_statuses = []
 
-    if status:
+    if all_statuses:
+        pass  # Kanban : toutes les primes du département, tous statuts
+    elif status:
         status_enum = ValidationStatus(status)
         if status_enum not in allowed_statuses:
             raise HTTPException(status_code=403, detail="Vous n'avez pas accès aux primes avec ce statut")
@@ -721,18 +724,7 @@ async def validate_bonus(
             f"Action impossible : la prime est au statut '{bonus.status}', "
             f"attendait '{expected_status}' pour l'étape {step}."
         )
-
-    # Vérification du rôle de l'utilisateur pour cette étape
-    step_role = {"N1": "is_validator_n1", "DIRECTEUR": "is_directeur", "DG": "is_dg"}
-    required_role = step_role.get(step)
-    if not required_role or not getattr(user, required_role, False):
-        raise HTTPException(status_code=403, detail="Vous n'avez pas le rôle requis pour cette étape de validation")
-
-    # Vérification du département (sauf DG qui voit tout)
-    if not user.is_dg:
-        if bonus.employee.dept_str != user.department:
-            raise HTTPException(status_code=403, detail="Cette prime n'est pas dans votre département")
-
+    
     # Création de l'enregistrement de validation (validator_id depuis le JWT)
     await Validation.create(
         bonus_id=bonus.id,
