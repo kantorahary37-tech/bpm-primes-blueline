@@ -586,9 +586,30 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
 
 # Route GET pour une prime spécifique
 @router.get("/bonuses/{bonus_id}", response_model=BonusResponse)
-async def get_bonus(bonus_id: int):
+async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
+
+    # Vérifier le département (sauf DG/DRH)
+    if not (user.is_dg or user.is_drh):
+        if bonus.employee.dept_str != user.department:
+            raise HTTPException(status_code=404, detail="Bonus introuvable")
+
+    # Vérifier que le statut est autorisé pour le rôle
+    if user.is_dg:
+        allowed = {ValidationStatus.EN_ATTENTE_DG}
+    elif user.is_drh:
+        allowed = {ValidationStatus.VALIDE}
+    elif user.is_directeur:
+        allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
+    elif user.is_validator_n1:
+        allowed = {ValidationStatus.INITIALISE}
+    else:
+        allowed = set()
+
+    if bonus.status not in allowed:
+        raise HTTPException(status_code=404, detail="Bonus introuvable")
+
     return bonus
 
 # Route GET pour l'historique des validations d'une prime
