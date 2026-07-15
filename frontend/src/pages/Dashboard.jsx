@@ -183,7 +183,7 @@ const Dashboard = () => {
         <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl text-white ${user?.is_drh ? 'bg-emerald-600' : 'bg-blue-600'}`}>
           <EyeIcon className="w-4 h-4" />
           <h2 className="font-semibold">{user?.is_drh ? 'À marquer payés' : 'À valider par vous'}</h2>
-          <Link to={user?.is_drh ? '/validated' : '/bonuses?view=status'} className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/30 hover:text-white transition-all">
+          <Link to={user?.is_drh ? '/bonuses?status=Prime+valid%C3%A9e' : '/bonuses?view=status'} className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/30 hover:text-white transition-all">
             Voir tout
           </Link>
           <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full bg-white ${user?.is_drh ? 'text-emerald-700' : 'text-blue-700'}`}>
