@@ -61,11 +61,12 @@ const [filterMonth, setFilterMonth] = useState('');
 
   useEffect(() => {
     if (!new URLSearchParams(window.location.search).get('status')) {
-      if (user?.is_dg) setStatusFilter('En attente DG');
+      if (user?.is_admin) setStatusFilter('');
+      else if (user?.is_dg) setStatusFilter('En attente DG');
       else if (user?.is_directeur) setStatusFilter('En attente Directeur');
       else if (user?.is_drh) setStatusFilter('Prime validée');
     }
-  }, [user?.is_dg, user?.is_directeur]);
+  }, [user?.is_admin, user?.is_dg, user?.is_directeur]);
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -469,7 +470,7 @@ const [filterMonth, setFilterMonth] = useState('');
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
           <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
-          {(user?.is_drh || user?.is_dg) && (
+          {(user?.is_admin || user?.is_drh || user?.is_dg) && (
             <button onClick={() => {
               const token = localStorage.getItem('token')
               fetch(`/api/v1/bonuses/export?status=Prime%20valid%C3%A9e&columns=${EXPORT_COLUMNS_LIST.join(',')}`, { headers: { Authorization: `Bearer ${token}` } })
@@ -531,9 +532,15 @@ const [filterMonth, setFilterMonth] = useState('');
           <option value="commission">Commission</option>
         </select>
         {/* Filtre statut : visible uniquement pour DG et DRH (les autres n'ont qu'un seul statut possible) */}
-        {(user?.is_dg || user?.is_drh) && (
+        {(user?.is_admin || user?.is_dg || user?.is_drh) && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+            {user?.is_admin && <option value="">Tous statuts</option>}
+            {user?.is_admin && <option value="Initialisé">Initialisé</option>}
+            {user?.is_admin && <option value="En attente Directeur">En attente Directeur</option>}
+            {user?.is_admin && <option value="En attente DG">En attente DG</option>}
+            {user?.is_admin && <option value="Prime validée">Validée</option>}
+            {user?.is_admin && <option value="Prime rejetée">Rejetée</option>}
             {user?.is_drh && <option value="">Tous statuts</option>}
             {user?.is_drh && <option value="Prime validée">Validée</option>}
             {user?.is_drh && <option value="Prime rejetée">Rejetée</option>}
@@ -546,8 +553,8 @@ const [filterMonth, setFilterMonth] = useState('');
         <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Rechercher un employé..."
           className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 w-48" />
-        {/* Filtre département : visible uniquement pour DG et DRH (Directeur est déjà limité à son département) */}
-        {(user?.is_dg || user?.is_drh) && (
+        {/* Filtre département : visible uniquement pour DG, DRH et Admin */}
+        {(user?.is_dg || user?.is_drh || user?.is_admin) && (
           <select value={depFilter} onChange={(e) => setDepFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
             <option value="">Tous départements</option>

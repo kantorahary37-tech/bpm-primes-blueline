@@ -23,7 +23,7 @@ async def list_employees(
 ):
     query = Employee.all().filter(is_active=True)
 
-    if user.is_dg or user.is_drh:
+    if user.is_admin or user.is_dg or user.is_drh:
         if department:
             query = query.filter(dept_str=department)
     else:

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationDropdown from './NotificationDropdown'
-import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, UserIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon } from './Icons'
+import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, UserIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon } from './Icons'
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: DashboardIcon },
@@ -12,6 +12,8 @@ const navItems = [
 ]
 
 function userRole(user) {
+  if (user?.is_admin) return 'Admin'
+  if (user?.is_admin) return 'Admin'
   if (user?.is_dg) return 'DG'
   if (user?.is_drh) return 'DRH'
   if (user?.is_directeur) return 'Directeur'
@@ -24,6 +26,8 @@ function userDept(user) {
 }
 
 function userColor(user) {
+  if (user?.is_admin) return 'bg-red-100 text-red-700'
+  if (user?.is_admin) return 'bg-red-100 text-red-700'
   if (user?.is_dg) return 'bg-amber-100 text-amber-700'
   if (user?.is_drh) return 'bg-emerald-100 text-emerald-700'
   if (user?.is_directeur) return 'bg-purple-100 text-purple-700'
@@ -59,7 +63,7 @@ export default function Layout({ children }) {
                 <span className="font-semibold text-gray-900 hidden sm:block">BPM Primes</span>
               </Link>
               <nav className="hidden md:flex items-center gap-1">
-                {[...navItems, ...((user?.is_drh || user?.is_dg) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : [])].map((item) => {
+                {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
                   const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
                   const Icon = item.icon
                   return (
@@ -140,7 +144,7 @@ export default function Layout({ children }) {
                   <p className="text-[10px] text-gray-400 truncate">{userDept(user)} · {userRole(user)}</p>
                 </div>
               </div>
-              {[...navItems, ...((user?.is_drh || user?.is_dg) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : [])].map((item) => {
+              {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
                 const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
                 const Icon = item.icon
                 return (

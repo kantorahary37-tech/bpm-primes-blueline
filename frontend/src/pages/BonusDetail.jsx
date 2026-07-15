@@ -248,7 +248,7 @@ const BonusDetail = () => {
 
   const step = getValidStep(bonus.status);
   const TypeIcon = typeIcons[bonus.bonus_type] || ClipboardIcon
-  const canEditAsAdmin = user?.is_dg || user?.is_drh || (user?.is_directeur && bonus.employee?.department === user.department)
+  const canEditAsAdmin = user?.is_admin || user?.is_dg || user?.is_drh || (user?.is_directeur && bonus.employee?.department === user.department)
 
   return (
     <div className="page-container max-w-4xl">
@@ -631,7 +631,7 @@ const BonusDetail = () => {
                 <CheckIcon className="w-4 h-4" /> Valider
               </button>
             )}
-            {user?.is_dg && (
+            {(user?.is_dg || user?.is_admin) && (
               <button className="btn bg-red-500 hover:bg-red-600 text-white border-0" onClick={() => setShowRejectModal(true)}>
                 <XCircleIcon className="w-4 h-4" /> Rejeter
               </button>

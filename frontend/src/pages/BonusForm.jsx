@@ -278,7 +278,7 @@ export default function BonusForm() {
 
   useEffect(() => {
     getEmployees().then(all => {
-      if (connectedUser?.is_dg || connectedUser?.is_drh) {
+      if (connectedUser?.is_admin || connectedUser?.is_dg || connectedUser?.is_drh) {
         setEmployees(all)
       } else {
         setEmployees(all.filter(e => e.department === connectedUser?.department))
@@ -743,7 +743,7 @@ export default function BonusForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-0.5">Rôle</label>
-              <input type="text" value={connectedUser?.is_dg ? 'Directeur Général' : connectedUser?.is_drh ? 'DRH' : connectedUser?.is_directeur ? 'Directeur' : connectedUser?.is_validator_n1 ? 'Validateur N+1' : 'Utilisateur'} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+              <input type="text" value={connectedUser?.is_admin ? 'Admin' : connectedUser?.is_dg ? 'Directeur Général' : connectedUser?.is_drh ? 'DRH' : connectedUser?.is_directeur ? 'Directeur' : connectedUser?.is_validator_n1 ? 'Validateur N+1' : 'Utilisateur'} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
             </div>
           </div>
           <div>

@@ -66,15 +66,15 @@ if LDAP_PASSWORD_ATTR:
 # what LDAP says.  Add or remove entries as needed.
 # ---------------------------------------------------------------------------
 DIRECTORS: dict[str, dict] = {
-    # 'rivo@gulfsat.mg': {
-    #     'name': 'Nantenaina Ulrich', 'poste': 'DSI', 'is_directeur': True,
-    # },
-    # 'dg@blueline.mg': {
-    #     'name': 'Directeur Général', 'poste': 'DG', 'is_dg': True,
-    # },
-    # 'johary.drh@blueline.mg': {
-    #     'name': 'Johary', 'poste': 'DRH', 'is_drh': True,
-    # }
+    'admin@gulfsat.mg': {
+        'name': 'Administrateur BPM',
+        'poste': 'DG',
+        'is_validator_n1': True,
+        'is_directeur': True,
+        'is_drh': True,
+        'is_dg': True,
+        'is_admin': True,
+    },
 }
 
 # Users explicitly marked as N+1 validators (regardless of LDAP manager status)
@@ -237,10 +237,11 @@ async def sync():
     for email in sorted(users_to_create):
         ldap_rec = email_index.get(email)
 
-        is_n1 = email in manager_emails or email in VALIDATORS_N1
+        is_n1 = email in manager_emails or email in VALIDATORS_N1 or bool(DIRECTORS.get(email, {}).get('is_validator_n1'))
         is_dir = bool(DIRECTORS.get(email, {}).get('is_directeur'))
         is_drh = bool(DIRECTORS.get(email, {}).get('is_drh'))
         is_dg = bool(DIRECTORS.get(email, {}).get('is_dg'))
+        is_admin = bool(DIRECTORS.get(email, {}).get('is_admin'))
 
         if ldap_rec:
             name = _full_name(ldap_rec)
@@ -267,6 +268,7 @@ async def sync():
                 existing.is_directeur = is_dir
                 existing.is_drh = is_drh
                 existing.is_dg = is_dg
+                existing.is_admin = is_admin
             await existing.save()
             user_by_email[email] = existing
             users_updated += 1
@@ -287,6 +289,7 @@ async def sync():
                 is_directeur=is_dir,
                 is_drh=is_drh,
                 is_dg=is_dg,
+                is_admin=is_admin,
                 password_hash=get_password_hash(default_password),
             ))
 

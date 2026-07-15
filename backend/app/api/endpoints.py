@@ -149,7 +149,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
 
-    can_edit_any = user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
+    can_edit_any = user.is_admin or user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
 
     if not can_edit_any:
         if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
@@ -270,11 +270,13 @@ async def list_bonuses(
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee')
-    if not (user.is_dg or user.is_drh) and user.department:
+    if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
         query = query.filter(employee__dept_str=user.department)
 
     # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
-    if user.is_dg:
+    if user.is_admin:
+        allowed_statuses = [s for s in ValidationStatus]
+    elif user.is_dg:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
     elif user.is_drh:
         allowed_statuses = [ValidationStatus.VALIDE]
@@ -324,11 +326,13 @@ async def export_bonuses(
     query = Bonus.all().prefetch_related('employee', 'created_by')
 
     # Filtre département selon le rôle
-    if not (user.is_dg or user.is_drh) and user.department:
+    if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
         query = query.filter(employee__dept_str=user.department)
 
     # Filtre statut selon le rôle
-    if user.is_dg:
+    if user.is_admin:
+        allowed_statuses = [s for s in ValidationStatus]
+    elif user.is_dg:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
     elif user.is_drh:
         allowed_statuses = [ValidationStatus.VALIDE]
@@ -356,7 +360,7 @@ async def export_bonuses(
     elif end_date:
         query = query.filter(end_date__lte=end_date)
     if department:
-        if not (user.is_dg or user.is_drh) and department != user.department:
+        if not (user.is_admin or user.is_dg or user.is_drh) and department != user.department:
             raise HTTPException(status_code=403, detail="Vous ne pouvez exporter que les primes de votre département")
         query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
@@ -424,11 +428,13 @@ async def export_bonuses_xlsx(
     query = Bonus.all().prefetch_related('employee', 'created_by')
 
     # Filtre département selon le rôle
-    if not (user.is_dg or user.is_drh) and user.department:
+    if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
         query = query.filter(employee__dept_str=user.department)
 
     # Filtre statut selon le rôle
-    if user.is_dg:
+    if user.is_admin:
+        allowed_statuses = [s for s in ValidationStatus]
+    elif user.is_dg:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
     elif user.is_drh:
         allowed_statuses = [ValidationStatus.VALIDE]
@@ -456,7 +462,7 @@ async def export_bonuses_xlsx(
     elif end_date:
         query = query.filter(end_date__lte=end_date)
     if department:
-        if not (user.is_dg or user.is_drh) and department != user.department:
+        if not (user.is_admin or user.is_dg or user.is_drh) and department != user.department:
             raise HTTPException(status_code=403, detail="Vous ne pouvez exporter que les primes de votre département")
         query = query.filter(employee__dept_str=department)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
@@ -649,13 +655,15 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
 
-    # Vérifier le département (sauf DG/DRH)
-    if not (user.is_dg or user.is_drh):
+    # Vérifier le département (sauf admin/DG/DRH)
+    if not (user.is_admin or user.is_dg or user.is_drh):
         if bonus.employee.dept_str != user.department:
             raise HTTPException(status_code=404, detail="Bonus introuvable")
 
     # Vérifier que le statut est autorisé pour le rôle
-    if user.is_dg:
+    if user.is_admin:
+        allowed = {s for s in ValidationStatus}
+    elif user.is_dg:
         allowed = {ValidationStatus.EN_ATTENTE_DG}
     elif user.is_drh:
         allowed = {ValidationStatus.VALIDE}

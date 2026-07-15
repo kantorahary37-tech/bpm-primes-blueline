@@ -48,6 +48,8 @@ class User(models.Model):
     is_drh = fields.BooleanField(default=False)
     # Boolean : est Directeur Général ?
     is_dg = fields.BooleanField(default=False)
+    # Boolean : est Administrateur (tous les privilèges) ?
+    is_admin = fields.BooleanField(default=False)
     # Mot de passe hashé
     password_hash = fields.CharField(max_length=255, null=True)
     # Token de réinitialisation de mot de passe

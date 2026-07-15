@@ -49,6 +49,7 @@ class UserBase(BaseModel):
     is_directeur: Optional[bool] = False
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
+    is_admin: Optional[bool] = False
 
     _dept = field_validator('department', mode='before')(dept_to_str)
 

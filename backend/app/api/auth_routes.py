@@ -84,4 +84,5 @@ async def get_me(user: User = Depends(get_current_user)):
         "is_directeur": user.is_directeur,
         "is_drh": user.is_drh,
         "is_dg": user.is_dg,
+        "is_admin": user.is_admin,
     }

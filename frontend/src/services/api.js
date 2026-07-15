@@ -175,4 +175,39 @@ export const openFile = async (url) => {
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 };
 
+export const getAdminUsers = async () => {
+  const { data } = await api.get('/admin/users');
+  return data;
+};
+
+export const adminUpdateUser = async (userId, userData) => {
+  const { data } = await api.put(`/admin/users/${userId}`, userData);
+  return data;
+};
+
+export const adminDeleteUser = async (userId) => {
+  const { data } = await api.delete(`/admin/users/${userId}`);
+  return data;
+};
+
+export const adminResetPassword = async (userId) => {
+  const { data } = await api.post(`/admin/users/${userId}/reset-password`);
+  return data;
+};
+
+export const adminCreateUser = async (userData) => {
+  const { data } = await api.post('/admin/users', userData);
+  return data;
+};
+
+export const adminLdapSync = async () => {
+  const { data } = await api.post('/admin/ldap-sync');
+  return data;
+};
+
+export const adminLdapSearch = async (query) => {
+  const { data } = await api.get('/admin/ldap-search', { params: { q: query } });
+  return data;
+};
+
 export default api;

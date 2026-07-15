@@ -117,7 +117,7 @@ const Employees = () => {
     setFilterMonth('');
     setFilterYear('');
     setBonusStatusFilter('');
-    if (!user?.is_dg && !user?.is_drh && user?.department && emp.department !== user.department) {
+    if (!user?.is_admin && !user?.is_dg && !user?.is_drh && user?.department && emp.department !== user.department) {
       setEmpBonuses([]);
       setBonusesLoading(false);
       return;
@@ -190,7 +190,7 @@ const Employees = () => {
       )}
 
       <div className="flex items-center gap-2 mb-4">
-        {user?.is_dg || user?.is_drh ? (
+        {user?.is_admin || user?.is_dg || user?.is_drh ? (
           <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
             <option value="">Tous les départements</option>
@@ -311,7 +311,7 @@ const Employees = () => {
               <div className="flex-1 overflow-y-auto">
                 {bonusesLoading ? (
                   <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm" /></div>
-                ) : !user?.is_dg && !user?.is_drh && selectedEmp.department !== user?.department ? (
+                  ) : !user?.is_admin && !user?.is_dg && !user?.is_drh && selectedEmp.department !== user?.department ? (
                   <p className="text-center text-gray-400 py-6 text-sm">Vous ne pouvez voir que les primes des employés de votre département</p>
                 ) : empBonuses.length === 0 ? (
                   <p className="text-center text-gray-400 py-6 text-sm">Aucune prime pour cet employé</p>

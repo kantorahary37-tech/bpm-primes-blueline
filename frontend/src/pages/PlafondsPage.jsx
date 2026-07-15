@@ -78,7 +78,7 @@ const PlafondsPage = () => {
     fetchAllEmployees();
   }, []);
 
-  const canEdit = (p) => user?.is_dg || user?.is_drh || p.department === user?.department;
+  const canEdit = (p) => user?.is_admin || user?.is_dg || user?.is_drh || p.department === user?.department;
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce plafond ?')) return;
@@ -178,7 +178,7 @@ const PlafondsPage = () => {
       <div className="mb-4">
         <h1 className="text-xl font-bold text-gray-900">Plafonds des Primes</h1>
         <p className="text-sm text-gray-400">
-          {user?.is_dg || user?.is_drh
+          {user?.is_admin || user?.is_dg || user?.is_drh
             ? 'Accès total — cliquer un montant pour le modifier'
             : `Vous ne pouvez modifier que les plafonds de votre département (${user?.department})`}
         </p>
@@ -201,7 +201,7 @@ const PlafondsPage = () => {
             </thead>
             <tbody>
               {departments.map(dept => {
-                const canEditDept = user?.is_dg || user?.is_drh || dept === user?.department;
+                const canEditDept = user?.is_admin || user?.is_dg || user?.is_drh || dept === user?.department;
                 return (
                   <tr key={dept} className={!canEditDept ? 'opacity-50' : 'hover'}>
                     <td className="font-medium text-gray-900">{dept}</td>
@@ -248,7 +248,7 @@ const PlafondsPage = () => {
           </table>
         </div>
 
-        {(user?.is_dg || user?.is_drh) && (
+        {(user?.is_admin || user?.is_dg || user?.is_drh) && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-2 flex items-center gap-2 border-b bg-violet-50 text-violet-700 border-violet-200">
               <MoonIcon className="w-4 h-4" />
@@ -290,7 +290,7 @@ const PlafondsPage = () => {
           </div>
         )}
 
-        {(user?.is_dg || user?.is_drh) && (
+        {(user?.is_admin || user?.is_dg || user?.is_drh) && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-2 flex items-center gap-2 border-b bg-amber-50 text-amber-700 border-amber-200">
               <CalendarIcon className="w-4 h-4" />

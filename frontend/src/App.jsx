@@ -12,6 +12,7 @@ import PlafondsPage from './pages/PlafondsPage'
 import ValidatedBonuses from './pages/ValidatedBonuses'
 import ArchivePage from './pages/ArchivePage'
 import Employees from './pages/Employees'
+import UsersPage from './pages/UsersPage'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
 import ForgotPassword from './pages/ForgotPassword'
@@ -48,8 +49,9 @@ function AppContent() {
       <Route path="/bonuses/edit/:id" element={<ProtectedRoute><BonusForm /></ProtectedRoute>} />
       <Route path="/kanban/:type" element={<ProtectedRoute><BonusKanban /></ProtectedRoute>} />
       <Route path="/validated" element={<ProtectedRoute><ValidatedBonuses /></ProtectedRoute>} />
-      <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg']}><ArchivePage /></RestrictedRoute>} />
+      <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg', 'is_admin']}><ArchivePage /></RestrictedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
+      <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin']}><UsersPage /></RestrictedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>
   )

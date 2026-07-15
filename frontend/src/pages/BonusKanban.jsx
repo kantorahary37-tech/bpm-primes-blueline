@@ -48,7 +48,8 @@ const BonusKanban = () => {
       .finally(() => setLoading(false));
   }, [type]);
 
-  const myStatus = user?.is_dg ? 'En attente DG'
+  const myStatus = user?.is_admin ? null
+    : user?.is_dg ? 'En attente DG'
     : user?.is_directeur ? 'En attente Directeur'
     : user?.is_validator_n1 ? 'Initialisé'
     : null;
