@@ -1,11 +1,12 @@
 import secrets
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Depends
 from app.models import User, Department
 from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.email_service import send_reset_email
+from app.rate_limit import check_rate_limit, record_failed_attempt, reset_attempts
 
 router = APIRouter()
 
@@ -55,10 +56,19 @@ async def reset_password(data: ResetPasswordRequest):
     return {"message": "Mot de passe réinitialisé avec succès."}
 
 @router.post("/login", response_model=Token)
-async def login(data: LoginRequest):
+async def login(data: LoginRequest, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+
+    allowed, message = check_rate_limit(client_ip)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=message)
+
     user = await User.get_or_none(email=data.email)
     if not user or not verify_password(data.password, user.password_hash):
+        record_failed_attempt(client_ip)
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    reset_attempts(client_ip)
     token = create_access_token({"sub": str(user.id)})
     return {"access_token": token, "token_type": "bearer"}
 

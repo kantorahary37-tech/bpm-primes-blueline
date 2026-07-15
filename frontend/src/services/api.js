@@ -62,7 +62,7 @@ export const updateEmployee = async (id, employeeData) => {
   return data;
 };
 
-export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false) => {
+export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false, allStatuses = false) => {
   const params = {};
   if (status) params.status = status;
   if (employeeId) params.employee_id = employeeId;
@@ -70,6 +70,7 @@ export const getBonuses = async (status = null, employeeId = null, bonusType = n
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
   if (showPaid) params.show_paid = true;
+  if (allStatuses) params.all_statuses = true;
   const { data } = await api.get('/bonuses/', { params });
   return data;
 };
@@ -96,6 +97,11 @@ export const markBonusesPaid = async (payload) => {
 
 export const getBonusValidations = async (id) => {
   const { data } = await api.get(`/bonuses/${id}/validations`);
+  return data;
+};
+
+export const getAuditLogs = async (id) => {
+  const { data } = await api.get(`/bonuses/${id}/audit-logs`);
   return data;
 };
 
@@ -130,6 +136,43 @@ export const updatePrimeMax = async (id, primemaxData) => {
 export const deletePrimeMax = async (id) => {
   const { data } = await api.delete(`/primemax/${id}`);
   return data;
+};
+
+export const getNotifications = async () => {
+  const { data } = await api.get('/notifications');
+  return data;
+};
+
+export const getUnreadCount = async () => {
+  const { data } = await api.get('/notifications/unread-count');
+  return data;
+};
+
+export const markAsRead = async (id) => {
+  const { data } = await api.put(`/notifications/${id}/read`);
+  return data;
+};
+
+export const markAllRead = async () => {
+  const { data } = await api.put('/notifications/read-all');
+  return data;
+};
+
+export const uploadFile = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post('/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+export const openFile = async (url) => {
+  const path = url.startsWith('/uploads/') ? url.replace('/uploads/', '/api/v1/uploads/') : url;
+  const { data } = await api.get(path, { responseType: 'blob' });
+  const blobUrl = URL.createObjectURL(new Blob([data]));
+  window.open(blobUrl, '_blank');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 };
 
 export default api;

@@ -86,6 +86,11 @@ const Dashboard = () => {
 
   const myPending = useMemo(() => {
     if (!user) return [];
+    if (user.is_drh) {
+      const toPay = bonuses.filter(b => b.status === 'Prime validée');
+      toPay.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return toPay;
+    }
     const myStatuses = [];
     if (user.is_validator_n1) myStatuses.push('Initialisé');
     if (user.is_directeur) myStatuses.push('En attente Directeur');
@@ -175,20 +180,20 @@ const Dashboard = () => {
       </div>
 
       <div className="mb-6">
-        <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-blue-600 text-white">
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl text-white ${user?.is_drh ? 'bg-emerald-600' : 'bg-blue-600'}`}>
           <EyeIcon className="w-4 h-4" />
-          <h2 className="font-semibold">À valider par vous</h2>
-          <Link to="/bonuses?view=status" className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-blue-100 hover:bg-white/30 hover:text-white transition-all">
+          <h2 className="font-semibold">{user?.is_drh ? 'À marquer payés' : 'À valider par vous'}</h2>
+          <Link to={user?.is_drh ? '/validated' : '/bonuses?view=status'} className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/30 hover:text-white transition-all">
             Voir tout
           </Link>
-          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white text-blue-700">
+          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full bg-white ${user?.is_drh ? 'text-emerald-700' : 'text-blue-700'}`}>
             {myPending.length}
           </span>
         </div>
 
         {myPending.length === 0 ? (
           <div className="p-8 text-center text-gray-400 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            Aucune prime en attente de votre validation
+            {user?.is_drh ? 'Aucune prime à payer' : 'Aucune prime en attente de votre validation'}
           </div>
         ) : (
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">

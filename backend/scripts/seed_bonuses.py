@@ -8,7 +8,7 @@ sys.path.append('.')
 
 from app.db_config import TORTOISE_ORM
 from tortoise import Tortoise, run_async
-from app.models import Employee, User, Bonus, PrimeMax
+from app.models import Employee, User, Bonus, Validation, PrimeMax
 from datetime import date, datetime
 
 random.seed(42)

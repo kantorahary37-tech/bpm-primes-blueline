@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getBonus, getBonusValidations, validateBonus } from '../services/api';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getBonus, getBonusValidations, getAuditLogs, validateBonus, openFile } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
-import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon } from '../components/Icons';
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -32,8 +32,10 @@ const EXPORT_COLUMNS = {
 const BonusDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [bonus, setBonus] = useState(null);
   const [validations, setValidations] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
@@ -64,6 +66,7 @@ const BonusDetail = () => {
           }),
         }));
         setValidations([creation, ...timeline]);
+        getAuditLogs(id).then(setAuditLogs).catch(() => {});
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -186,7 +189,11 @@ const BonusDetail = () => {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-sm text-gray-900">{label}</h4>
-          <span className="text-xs text-gray-600">{totalEval}%</span>
+          <span className="text-xs text-gray-600">
+            {items[0] && 'coeff' in items[0]
+              ? `${items.reduce((s, i) => s + (i.coeff || 0), 0)} coeff`
+              : `${totalEval}%`}
+          </span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
           <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -196,17 +203,17 @@ const BonusDetail = () => {
             <thead>
               <tr className="border-b border-gray-300">
                 <th className="text-left py-2 pr-2 font-medium text-gray-600 text-xs">Critères</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Objectif</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Note</th>
-                <th className="text-right py-2 pl-2 font-medium text-gray-600 text-xs">Valeur (Ar)</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Coefficient</th>
+                <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Note /10</th>
+                <th className="text-right py-2 pl-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
                 <tr key={i} className="border-b border-gray-200">
                   <td className="py-2 pr-2 text-gray-900">{item.criteria}</td>
-                  <td className="py-2 px-2 text-center text-gray-800">{item.objective}</td>
-                  <td className="py-2 px-2 text-center font-medium text-gray-900">{item.evaluation ?? 0}</td>
+                  <td className="py-2 px-2 text-center text-gray-800">{item.coeff ?? item.objective ?? 0}</td>
+                  <td className="py-2 px-2 text-center font-medium text-gray-900">{item.note ?? item.evaluation ?? 0}</td>
                   <td className="py-2 pl-2 text-right font-medium text-gray-900">{formatAr(item.value)}</td>
                 </tr>
               ))}
@@ -241,6 +248,7 @@ const BonusDetail = () => {
 
   const step = getValidStep(bonus.status);
   const TypeIcon = typeIcons[bonus.bonus_type] || ClipboardIcon
+  const canEditAsAdmin = user?.is_dg || user?.is_drh || (user?.is_directeur && bonus.employee?.department === user.department)
 
   return (
     <div className="page-container max-w-4xl">
@@ -252,7 +260,7 @@ const BonusDetail = () => {
         </div>
       )}
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/bonuses" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></Link>
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></button>
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <TypeIcon className="w-5 h-5" />
@@ -318,7 +326,7 @@ const BonusDetail = () => {
               <EvaluationTable
                 label="Quantitatif"
                 items={bonus.details.quantitative}
-                totalEval={bonus.details.quantitative?.reduce((s, i) => s + (i.evaluation || 0), 0)}
+                totalEval={bonus.details.quantitative?.reduce((s, i) => s + ((i.note ?? i.evaluation) || 0), 0)}
                 totalValue={bonus.details.total_quantitative || 0}
                 primeMax={bonus.details.prime_max || bonus.total_amount}
                 color="bg-blue-500"
@@ -327,26 +335,61 @@ const BonusDetail = () => {
               <EvaluationTable
                 label="Qualitatif"
                 items={bonus.details.qualitative}
-                totalEval={bonus.details.qualitative?.reduce((s, i) => s + (i.evaluation || 0), 0)}
+                totalEval={bonus.details.qualitative?.reduce((s, i) => s + ((i.note ?? i.evaluation) || 0), 0)}
                 totalValue={bonus.details.total_qualitative || 0}
                 primeMax={bonus.details.prime_max || bonus.total_amount}
                 color="bg-violet-500"
               />
-              <div className="border-t-2 border-blue-200 pt-4 mt-4">
-                <div className="flex items-center justify-between text-lg font-bold text-blue-700">
-                  <span>Total général</span>
-                  <span>{formatAr(bonus.total_amount)} / {formatAr(bonus.details.prime_max || bonus.total_amount)} Ar</span>
+              <div className="border-t border-gray-300 pt-3 mt-3">
+                <div className="flex items-center justify-between text-[11px] text-gray-600">
+                  <span>Total évaluation <span className="text-gray-400">/ {formatAr(bonus.details?.prime_max || bonus.total_amount)} Ar</span></span>
+                  <span>{formatAr(bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0))} Ar</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
+                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.min(((bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0)) / (bonus.details?.prime_max || bonus.total_amount || 1)) * 100, 100)}%` }} />
                 </div>
               </div>
             </div>
           </Section>
         )}
 
+        {bonus.bonus_type === 'mensuel' && bonus.details?.others?.length > 0 && (
+          <Section title="Autres primes" icon={PlusIcon}>
+            <div className="space-y-2">
+              {bonus.details.others.map((o, i) => (
+                <div key={i} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{o.libelle || 'Prime sans libellé'}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {o.type}
+                      {o.debut_mois || o.debut_annee || o.fin_mois || o.fin_annee ? (
+                        ` · ${o.debut_mois || '?'}/${o.debut_annee || '?'} → ${o.fin_mois || '?'}/${o.fin_annee || '?'}`
+                      ) : ''}
+                    </p>
+                    {o.file?.url && (
+                      <button type="button" onClick={() => openFile(o.file.url)} className="text-[11px] text-blue-600 hover:underline mt-1 inline-block">Voir la pièce jointe</button>
+                    )}
+                  </div>
+                  <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} Ar</span>
+                </div>
+              ))}
+              <div className="border-t border-amber-200 pt-3 mt-3 flex items-center justify-between text-[11px] text-gray-600">
+                <span>Autres primes</span>
+                <span>{formatAr(bonus.details.others.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0))} Ar</span>
+              </div>
+              <div className="card-blueline p-3 mt-3 border-l-4 border-l-blue-500 bg-blue-50/40 flex items-center justify-between">
+                <p className="text-sm font-bold text-gray-900">Total général</p>
+                <p className="text-2xl font-bold text-brand-600">{formatAr(bonus.total_amount)} Ar</p>
+              </div>
+            </div>
+          </Section>
+        )}
+
         {bonus.bonus_type === 'astreinte' && bonus.details && (
-          <Section title="Détails astreinte" icon={MoonIcon}>
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
-                <p className="text-xs text-gray-600">Semaines</p>
+          <Section title="Récapitulatif astreinte" icon={MoonIcon}>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-400">Semaines</p>
                 <p className="font-semibold text-gray-900">{bonus.details.weeks || '—'}</p>
               </div>
               <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
@@ -359,92 +402,64 @@ const BonusDetail = () => {
               </div>
             </div>
 
-            {bonus.details.disponibilites?.length > 0 && (
-              <div className="mb-6">
-                <h4 className="font-semibold text-sm text-gray-700 mb-2">Disponibilité</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Employé</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Nombre</th>
-                        <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bonus.details.disponibilites.map((d, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="py-1.5 text-gray-900">{d.employee_name || `#${d.employee_id}`}</td>
-                          <td className="py-1.5 text-center">{d.nombre}</td>
-                          <td className="py-1.5 text-right font-medium">{formatAr(parseInt(d.nombre) * (bonus.details.weekly_max || 0))}</td>
-                        </tr>
-                      ))}
-                      <tr className="font-semibold bg-gray-50">
-                        <td colSpan={2} className="py-1.5 text-gray-900">Total Disponibilité</td>
-                        <td className="py-1.5 text-right text-violet-600">{formatAr(bonus.details.total_dispo)} Ar</td>
-                      </tr>
-                    </tbody>
-                  </table>
+            <div className="space-y-1.5 mb-4 text-sm">
+              {bonus.details.total_dispo > 0 && (
+                <div className="flex items-center justify-between py-1 px-3 rounded-lg bg-blue-50/50">
+                  <span className="text-gray-600">
+                    Disponibilité <span className="text-gray-400 font-medium">
+                      {bonus.details.disponibilites?.reduce((s, d) => s + (parseInt(d.nombre) || 0), 0)} sem
+                    </span>
+                  </span>
+                  <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_dispo)} Ar</span>
                 </div>
-              </div>
-            )}
+              )}
+              {bonus.details.total_interv > 0 && (
+                <div className="flex items-center justify-between py-1 px-3 rounded-lg bg-violet-50/50">
+                  <span className="text-gray-600">
+                    Interventions <span className="text-gray-400 font-medium">{bonus.details.interventions?.length || 0} × {formatAr(bonus.details.intervention_rate)}</span>
+                  </span>
+                  <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_interv)} Ar</span>
+                </div>
+              )}
+            </div>
 
             {bonus.details.interventions?.length > 0 && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-sm text-gray-700">Interventions</h4>
-                </div>
+              <div>
+                <h4 className="font-semibold text-sm text-gray-700 mb-2">Détail des interventions</h4>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Employé</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Date</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Heure</th>
-                        <th className="text-left py-2 font-medium text-gray-600 text-xs">Motif</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Type</th>
-                        <th className="text-center py-2 font-medium text-gray-600 text-xs">Ticket</th>
-                        <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-1.5 font-medium text-gray-400 text-xs">Date</th>
+                        <th className="text-center py-1.5 font-medium text-gray-400 text-xs">Heure</th>
+                        <th className="text-left py-1.5 font-medium text-gray-400 text-xs">Motif</th>
+                        <th className="text-center py-1.5 font-medium text-gray-400 text-xs">Type</th>
+                        <th className="text-center py-1.5 font-medium text-gray-400 text-xs">Ticket</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bonus.details.interventions.map((iv, i) => (
-                        <tr key={i} className="border-b border-gray-200">
-                          <td className="py-1.5 text-gray-900">{iv.employee_name || `#${iv.employee_id}`}</td>
-                          <td className="py-1.5 text-center text-gray-800 text-xs">{iv.date || '—'}</td>
-                          <td className="py-1.5 text-center text-gray-800 text-xs">{iv.heure || '—'}</td>
-                          <td className="py-1.5 text-gray-800 text-xs">{iv.motif || '—'}</td>
-                          <td className="py-1.5 text-center text-xs">
-                            {iv.type === 'exceptionnelle' ? 'Exceptionnelle' : iv.type === 'ponctuelle' ? 'Ponctuelle' : 'Intervention'}
+                        <tr key={i} className="border-b border-gray-50">
+                          <td className="py-1 text-gray-900 text-xs">{iv.date || '—'}</td>
+                          <td className="py-1 text-center text-gray-500 text-xs">{iv.heure || '—'}</td>
+                          <td className="py-1 text-gray-500 text-xs">{iv.motif || '—'}</td>
+                          <td className="py-1 text-center text-xs">
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                              iv.type === 'exceptionnelle' ? 'bg-amber-100 text-amber-700' :
+                              iv.type === 'ponctuelle' ? 'bg-blue-100 text-blue-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {iv.type === 'exceptionnelle' ? 'Exceptionnelle' : iv.type === 'ponctuelle' ? 'Ponctuelle' : 'Intervention'}
+                            </span>
                           </td>
-                          <td className="py-1.5 text-center text-xs">{iv.ticket || '—'}</td>
-                          <td className="py-1.5 text-right font-medium">{formatAr(bonus.details.intervention_rate)}</td>
+                          <td className="py-1 text-center text-xs font-mono">{iv.ticket || '—'}</td>
                         </tr>
                       ))}
-                      <tr className="font-semibold bg-gray-50">
-                        <td colSpan={6} className="py-1.5 text-gray-900">Total Interventions</td>
-                        <td className="py-1.5 text-right text-violet-600">{formatAr(bonus.details.total_interv)} Ar</td>
-                      </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
-
-            <div className="border-t border-gray-200 pt-4 mt-4 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Prime exceptionnelle</span>
-                <span className="font-medium text-gray-900">{formatAr(bonus.details.exceptionnelle || 0)} Ar</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Prime ponctuelle</span>
-                <span className="font-medium text-gray-900">{formatAr(bonus.details.ponctuelle || 0)} Ar</span>
-              </div>
-              <div className="flex items-center justify-between text-lg font-bold text-violet-700 border-t border-gray-200 pt-3 mt-3">
-                <span>Total Général</span>
-                <span>{formatAr(bonus.total_amount)} Ar</span>
-              </div>
-            </div>
           </Section>
         )}
 
@@ -516,9 +531,98 @@ const BonusDetail = () => {
           <Timeline items={validations} />
         </Section>
 
+        {auditLogs.length > 0 && (
+          <Section title="Historique des modifications" icon={ClockIcon}>
+            <div className="space-y-1.5">
+              {auditLogs.map((log, i) => {
+                const iconMap = {
+                  MODIFICATION: { icon: EditIcon, bg: 'bg-amber-100 text-amber-600' },
+                  PAIEMENT: { icon: CheckIcon, bg: 'bg-emerald-100 text-emerald-600' },
+                  REJET: { icon: XCircleIcon, bg: 'bg-red-100 text-red-600' },
+                }
+                const cfg = iconMap[log.action] || { icon: null, bg: 'bg-blue-100 text-blue-600' }
+                const Icon = cfg.icon
+                const changes = (log.description || '').split('; ').filter(Boolean)
+
+                const fieldLabels = {
+                  total_amount: 'Montant total',
+                  performance_score: 'Score',
+                  absences: 'Absences',
+                  retard: 'Retards',
+                  prime_mensuel_amount: 'Prime mensuelle',
+                  nb_jours_astreinte: 'Jours astreinte',
+                  taux_jour: 'Taux journalier',
+                  prime_astreinte_amount: 'Prime astreinte',
+                  ca_realise: 'CA réalisé',
+                  ca_objectif: 'CA objectif',
+                  taux_commission: 'Taux commission',
+                  commission_amount: 'Commission',
+                  details: 'Détails',
+                  statut: 'Statut',
+                }
+
+                const formatVal = (v) => {
+                  if (!v || v === 'None' || v === 'null') return '—'
+                  return v
+                }
+
+                return (
+                  <div key={i} className="flex gap-2.5 items-start group">
+                    <div className={`w-5 h-5 rounded-full ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                      {Icon ? <Icon className="w-2.5 h-2.5" /> : <span className="text-[10px]">•</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-gray-700">
+                          {log.user_name && <span className="font-medium">{log.user_name}</span>}
+                          <span className="text-gray-400 mx-1">·</span>
+                          <span className="text-gray-500">
+                            {log.action === 'MODIFICATION' ? 'Modification' : log.action === 'PAIEMENT' ? 'Paiement' : log.action === 'REJET' ? 'Rejet' : log.action}
+                          </span>
+                        </p>
+                        <span className="text-[11px] text-gray-400 shrink-0">
+                          {new Date(log.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {changes.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {changes.map((c, j) => {
+                            const match = c.match(/^(\w+): (.+) → (.+)$/)
+                            if (match) {
+                              const [, field, oldVal, newVal] = match
+                              const label = fieldLabels[field] || field
+                              if (field === 'details') return <p key={j} className="text-[11px] text-gray-400 italic">Détails modifiés (critères, notes, coefficients)</p>
+                              return (
+                                <p key={j} className="text-[11px] text-gray-600 leading-relaxed">
+                                  <span className="font-medium text-gray-700">{label}</span>
+                                  <span className="text-gray-400"> : </span>
+                                  <span className="text-gray-400 line-through">{formatVal(oldVal)}</span>
+                                  <span className="text-gray-300 mx-1">→</span>
+                                  <span className="font-medium text-gray-800">{formatVal(newVal)}</span>
+                                </p>
+                              )
+                            }
+                            if (c.startsWith('détails')) return <p key={j} className="text-[11px] text-gray-400 italic">Détails modifiés (critères, notes, coefficients)</p>
+                            return <p key={j} className="text-[11px] text-gray-500">{c}</p>
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Section>
+        )}
+
         {step && (
           <div className="flex gap-3 justify-end pt-2">
-            {bonus.status === 'Initialisé' && bonus.was_rejected ? (
+            {canEditAsAdmin && (
+              <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
+                <EditIcon className="w-4 h-4" /> Modifier
+              </Link>
+            )}
+            {!canEditAsAdmin && bonus.status === 'Initialisé' && bonus.was_rejected ? (
               <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
                 <EditIcon className="w-4 h-4" /> Modifier
               </Link>

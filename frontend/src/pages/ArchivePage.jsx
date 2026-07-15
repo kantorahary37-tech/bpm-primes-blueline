@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getBonuses } from '../services/api';
-import { ArrowLeftIcon, ChevronLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, ChevronLeftIcon, DownloadIcon } from '../components/Icons';
 
 const PAGE_SIZE = 4;
 
@@ -62,6 +62,21 @@ const ArchivePage = () => {
         <Link to="/" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></Link>
         <h1 className="text-2xl font-bold text-gray-900">Archive des primes payées</h1>
         <span className="text-xs font-medium bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full">{bonuses.length} payée(s)</span>
+        <button onClick={() => {
+          const token = localStorage.getItem('token');
+          fetch('/api/v1/bonuses/export?show_paid=true', { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.blob())
+            .then(blob => {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `archive_payees_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            });
+        }} className="btn btn-sm bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-emerald-600 gap-1.5 shadow-sm">
+          <DownloadIcon className="w-4 h-4" /> Exporter
+        </button>
       </div>
 
       {monthGroups.length === 0 ? (

@@ -7,6 +7,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [isRateLimit, setIsRateLimit] = useState(false)
   const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
@@ -19,8 +20,16 @@ export default function Login() {
     try {
       await login(email, password)
       navigate('/')
-    } catch {
-      setError('Email ou mot de passe incorrect')
+    } catch (err) {
+      const status = err?.response?.status
+      const detail = err?.response?.data?.detail
+      if (status === 429) {
+        setError(detail || 'Trop de tentatives. Veuillez patienter.')
+        setIsRateLimit(true)
+      } else {
+        setError('Email ou mot de passe incorrect')
+        setIsRateLimit(false)
+      }
     } finally {
       setLoading(false)
     }
@@ -39,8 +48,12 @@ export default function Login() {
 
         <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-8">
           {error && (
-            <div className="flex items-center gap-2 bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
-              <ExclamationIcon className="w-4 h-4" />
+            <div className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 mb-4 ${
+              isRateLimit
+                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                : 'bg-red-50 text-red-700'
+            }`}>
+              <ExclamationIcon className="w-4 h-4 shrink-0" />
               {error}
             </div>
           )}

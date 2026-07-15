@@ -77,6 +77,11 @@ DIRECTORS: dict[str, dict] = {
     # }
 }
 
+# Users explicitly marked as N+1 validators (regardless of LDAP manager status)
+VALIDATORS_N1: list[str] = [
+    'vonjy.rakotoniaina@staff.blueline.mg',
+]
+
 # ---------------------------------------------------------------------------
 # LDAP helpers
 # ---------------------------------------------------------------------------
@@ -219,6 +224,7 @@ async def sync():
     users_to_create: set[str] = (
         manager_emails
         | set(DIRECTORS.keys())
+        | set(VALIDATORS_N1)
         | set(existing_users.keys())
     )
 
@@ -231,7 +237,7 @@ async def sync():
     for email in sorted(users_to_create):
         ldap_rec = email_index.get(email)
 
-        is_n1 = email in manager_emails
+        is_n1 = email in manager_emails or email in VALIDATORS_N1
         is_dir = bool(DIRECTORS.get(email, {}).get('is_directeur'))
         is_drh = bool(DIRECTORS.get(email, {}).get('is_drh'))
         is_dg = bool(DIRECTORS.get(email, {}).get('is_dg'))
