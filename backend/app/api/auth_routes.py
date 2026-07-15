@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status, Request
 from fastapi import Depends
 from app.models import User, Department
-from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.email_service import send_reset_email
 from app.rate_limit import check_rate_limit, record_failed_attempt, reset_attempts
@@ -84,3 +84,11 @@ async def get_me(user: User = Depends(get_current_user)):
         "is_drh": user.is_drh,
         "is_dg": user.is_dg,
     }
+
+@router.post("/change-password")
+async def change_password(data: ChangePasswordRequest, user: User = Depends(get_current_user)):
+    if not verify_password(data.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Mot de passe actuel incorrect")
+    user.password_hash = get_password_hash(data.new_password)
+    await user.save()
+    return {"message": "Mot de passe modifié avec succès"}

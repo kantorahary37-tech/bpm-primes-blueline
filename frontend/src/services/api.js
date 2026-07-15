@@ -41,6 +41,11 @@ export const resetPassword = async (token, newPassword) => {
   return data;
 };
 
+export const changePassword = async (currentPassword, newPassword) => {
+  const { data } = await api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword });
+  return data;
+};
+
 export const getUsers = async () => {
   const { data } = await api.get('/users/');
   return data;

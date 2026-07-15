@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationDropdown from './NotificationDropdown'
+import ChangePasswordModal from './ChangePasswordModal'
 import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, UserIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon } from './Icons'
 
 const navItems = [
@@ -36,6 +37,7 @@ export default function Layout({ children }) {
   const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [pwdOpen, setPwdOpen] = useState(false)
   const menuRef = useRef(null)
 
   useEffect(() => {
@@ -102,7 +104,7 @@ export default function Layout({ children }) {
                       <p className="text-xs text-gray-400 truncate mt-0.5">{user?.email}</p>
                       <p className="text-[11px] text-gray-400 truncate mt-0.5">{userDept(user)} · {userRole(user)}</p>
                     </div>
-                    <button className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                    <button onClick={() => { setPwdOpen(true); setUserMenuOpen(false) }} className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
                       <LockIcon className="w-4 h-4 text-gray-400" />
                       Changer mot de passe
                     </button>
@@ -158,7 +160,7 @@ export default function Layout({ children }) {
                 )
               })}
               <hr className="my-2 border-gray-100" />
-              <button className="flex items-center gap-3 px-3 py-2.5 w-full text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+              <button onClick={() => { setPwdOpen(true); setMobileOpen(false) }} className="flex items-center gap-3 px-3 py-2.5 w-full text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
                 <LockIcon className="w-5 h-5 text-gray-400" />
                 Changer mot de passe
               </button>
@@ -175,6 +177,7 @@ export default function Layout({ children }) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {children}
       </main>
+      <ChangePasswordModal open={pwdOpen} onClose={() => setPwdOpen(false)} />
     </div>
   )
 }
