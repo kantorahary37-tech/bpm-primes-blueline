@@ -214,7 +214,7 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     except Exception:
         pass  # Audit log failure must not block the modification
 
-    if can_edit_any and changes:
+    if changes:
         employee = await Employee.get(id=bonus.employee_id).prefetch_related('manager')
         recipients = []
 

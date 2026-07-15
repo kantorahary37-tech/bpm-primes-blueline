@@ -19,8 +19,13 @@ export default function Login() {
     try {
       await login(email, password)
       navigate('/')
-    } catch {
-      setError('Email ou mot de passe incorrect')
+    } catch (err) {
+      const status = err?.response?.status
+      if (status === 429) {
+        setError(err.response.data?.detail || 'Trop de tentatives. Veuillez patienter.')
+      } else {
+        setError('Email ou mot de passe incorrect')
+      }
     } finally {
       setLoading(false)
     }
@@ -39,7 +44,11 @@ export default function Login() {
 
         <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-8">
           {error && (
-            <div className="flex items-center gap-2 bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
+            <div className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 mb-4 ${
+              error.includes('Trop de tentatives') || error.includes('patienter')
+                ? 'bg-orange-50 text-orange-700'
+                : 'bg-red-50 text-red-700'
+            }`}>
               <ExclamationIcon className="w-4 h-4" />
               {error}
             </div>
