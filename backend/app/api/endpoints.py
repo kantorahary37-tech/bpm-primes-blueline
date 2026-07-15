@@ -149,11 +149,21 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
 
-    can_edit_any = user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
+    # Vérifier le département (sauf DG)
+    if not user.is_dg and bonus.employee.dept_str != user.department:
+        raise HTTPException(status_code=403, detail="Vous ne pouvez pas modifier une prime d'un autre département")
 
-    if not can_edit_any:
-        if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
-            raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé' ou 'En attente Directeur'")
+    # Vérifier le rôle et le statut
+    can_edit = False
+    if user.is_dg and bonus.status == ValidationStatus.EN_ATTENTE_DG:
+        can_edit = True
+    elif user.is_directeur and bonus.status == ValidationStatus.EN_ATTENTE_DIRECTEUR:
+        can_edit = True
+    elif user.is_validator_n1 and bonus.status == ValidationStatus.INITIALISE:
+        can_edit = True
+    
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas autorisé à modifier cette prime")
 
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
@@ -169,8 +179,6 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
-    if can_edit_any and bonus.status != ValidationStatus.INITIALISE:
-        update_data['status'] = ValidationStatus.INITIALISE
     update_data['was_rejected'] = False
 
     SCALAR_FIELDS = [
@@ -700,15 +708,12 @@ async def validate_bonus(
     step: str,
     user: User = Depends(get_current_user)
 ):
-    # Récupération de la prime ou erreur 404
-    bonus = await Bonus.get_or_none(id=bonus_id)
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
     
-    # Vérification : si déjà validé, ON BLOQUE
     if bonus.status == ValidationStatus.VALIDE:
         raise HTTPException(status_code=400, detail="Bonus déjà validé - aucune action possible")
     
-    # Validation du workflow : chaque étape n'est possible que si le statut actuel correspond
     expected_status = {
         "N1": ValidationStatus.INITIALISE,
         "DIRECTEUR": ValidationStatus.EN_ATTENTE_DIRECTEUR,
@@ -725,7 +730,20 @@ async def validate_bonus(
             f"attendait '{expected_status}' pour l'étape {step}."
         )
     
-    # Création de l'enregistrement de validation (validator_id depuis le JWT)
+    # Vérifier que l'utilisateur a le rôle correspondant à l'étape
+    allowed_roles = {
+        "N1": user.is_validator_n1,
+        "DIRECTEUR": user.is_directeur,
+        "DG": user.is_dg,
+    }
+    if not allowed_roles.get(step, False):
+        raise HTTPException(status_code=403, detail=f"Vous n'avez pas le rôle requis pour l'étape '{step}'")
+    
+    # Vérifier le département (sauf DG)
+    if not user.is_dg:
+        if bonus.employee.dept_str != user.department:
+            raise HTTPException(status_code=403, detail="Vous ne pouvez pas valider une prime d'un autre département")
+    
     await Validation.create(
         bonus_id=bonus.id,
         validator_id=user.id,
