@@ -85,15 +85,7 @@ const BonusDetail = () => {
       await validateBonus(bonus.id, { action: 'VALIDER' }, step);
       showToast('success', 'Prime validée avec succès !');
       setShowValidateModal(false);
-      const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
-      setBonus(b);
-      const timeline = v.map((entry) => ({
-        ...entry,
-        date: new Date(entry.validated_at).toLocaleDateString('fr-FR', {
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        }),
-      }));
-      setValidations(timeline);
+      navigate('/bonuses');
     } catch (err) {
       showToast('error', err.response?.data?.detail || 'Erreur lors de la validation');
       setShowValidateModal(false);
@@ -107,15 +99,7 @@ const BonusDetail = () => {
       showToast('success', 'Prime rejetée — retour au statut Initialisé');
       setShowRejectModal(false);
       setMotifRejet('');
-      const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
-      setBonus(b);
-      const timeline = v.map((entry) => ({
-        ...entry,
-        date: new Date(entry.validated_at).toLocaleDateString('fr-FR', {
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        }),
-      }));
-      setValidations(timeline);
+      navigate('/bonuses');
     } catch (err) {
       showToast('error', err.response?.data?.detail || 'Erreur lors du rejet');
     }
