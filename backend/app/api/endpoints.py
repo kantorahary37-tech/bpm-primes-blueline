@@ -792,8 +792,12 @@ async def validate_bonus(
                     type="REJET",
                     message=f"{employee.name} — Prime rejetée{motif}",
                 )
-        except Exception:
-            pass
+            else:
+                import logging
+                logging.warning(f"Pas de manager pour l'employé {employee.name} (id={employee.id})")
+        except Exception as e:
+            import logging
+            logging.error(f"Erreur notification rejet: {e}")
 
     # Sauvegarde de la prime
     await bonus.save()
