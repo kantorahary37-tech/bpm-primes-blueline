@@ -131,7 +131,7 @@ const Dashboard = () => {
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-        {(user?.is_validator_n1 ? [
+        {(user?.is_validator_n1 || user?.is_directeur ? [
           { icon: ClipboardIcon, label: 'À valider', value: stats.pending, sub: formatAmount(stats.totalAmount), bg: 'bg-orange-50', text: 'text-orange-600' },
           { icon: CheckIcon, label: 'Validées ce mois', value: validationStats.validated_this_month, sub: 'Par vous', bg: 'bg-emerald-50', text: 'text-emerald-600' },
           { icon: ClockIcon, label: 'Rejetées', value: validationStats.rejected_total, sub: 'À corriger', bg: 'bg-red-50', text: 'text-red-600' },
