@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status, Request
 from fastapi import Depends
-from app.models import User, Department
+from app.models import User, Department, Validation
 from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.email_service import send_reset_email
@@ -83,6 +83,36 @@ async def get_me(user: User = Depends(get_current_user)):
         "is_directeur": user.is_directeur,
         "is_drh": user.is_drh,
         "is_dg": user.is_dg,
+    }
+
+@router.get("/me/validation-stats")
+async def get_validation_stats(user: User = Depends(get_current_user)):
+    now = datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Validations ce mois (action = VALIDER, step correspondant au rôle)
+    step = "N1" if user.is_validator_n1 else "DIRECTEUR" if user.is_directeur else "DG" if user.is_dg else None
+    
+    validated_this_month = 0
+    rejected_total = 0
+    
+    if step:
+        validated_this_month = await Validation.filter(
+            validator_id=user.id,
+            step=step,
+            action="VALIDER",
+            validated_at__gte=month_start,
+        ).count()
+        
+        rejected_total = await Validation.filter(
+            validator_id=user.id,
+            step=step,
+            action="REJETER",
+        ).count()
+
+    return {
+        "validated_this_month": validated_this_month,
+        "rejected_total": rejected_total,
     }
 
 @router.post("/change-password")

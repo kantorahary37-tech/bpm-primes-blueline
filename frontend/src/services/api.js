@@ -31,6 +31,11 @@ export const getMe = async () => {
   return data;
 };
 
+export const getValidationStats = async () => {
+  const { data } = await api.get('/auth/me/validation-stats');
+  return data;
+};
+
 export const forgotPassword = async (email) => {
   const { data } = await api.post('/auth/forgot-password', { email });
   return data;

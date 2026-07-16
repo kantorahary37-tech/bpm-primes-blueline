@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { getBonuses, getEmployees } from '../services/api';
+import { getBonuses, getEmployees, getValidationStats } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -40,14 +40,20 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [bonuses, setBonuses] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [validationStats, setValidationStats] = useState({ validated_this_month: 0, rejected_total: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [b, e] = await Promise.all([getBonuses(), getEmployees(user?.department)]);
+        const [b, e, vs] = await Promise.all([
+          getBonuses(),
+          getEmployees(user?.department),
+          user?.is_drh ? null : getValidationStats(),
+        ]);
         setBonuses(b);
         setEmployees(e);
+        if (vs) setValidationStats(vs);
         setLoading(false);
       } catch (err) {
         console.error('Erreur:', err);
@@ -125,12 +131,17 @@ const Dashboard = () => {
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-        {[
+        {(user?.is_validator_n1 ? [
+          { icon: ClipboardIcon, label: 'À valider', value: stats.pending, sub: formatAmount(stats.totalAmount), bg: 'bg-orange-50', text: 'text-orange-600' },
+          { icon: CheckIcon, label: 'Validées ce mois', value: validationStats.validated_this_month, sub: 'Par vous', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+          { icon: ClockIcon, label: 'Rejetées', value: validationStats.rejected_total, sub: 'À corriger', bg: 'bg-red-50', text: 'text-red-600' },
+          { icon: EmployeesIcon, label: `Mon équipe (${user?.department || ''})`, value: stats.employees, sub: 'Employés', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
+        ] : [
           { icon: ClipboardIcon, label: 'Total Primes', value: stats.total, sub: formatAmount(stats.totalAmount), bg: 'bg-blue-50', text: 'text-blue-600' },
           { icon: ClockIcon, label: 'En attente', value: stats.pending, sub: 'Non validées', bg: 'bg-amber-50', text: 'text-amber-600' },
           { icon: CheckIcon, label: 'Validées', value: stats.validated, sub: 'Approuvées', bg: 'bg-emerald-50', text: 'text-emerald-600', to: '/validated' },
           { icon: EmployeesIcon, label: `Employés (${user?.department || 'tous'})`, value: stats.employees, sub: 'Actifs', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
-        ].map((card, i) => {
+        ]).map((card, i) => {
           const Icon = card.icon;
           const Tag = card.to ? Link : 'div';
           return (
