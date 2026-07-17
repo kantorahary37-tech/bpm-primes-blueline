@@ -165,6 +165,8 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if not can_edit:
         raise HTTPException(status_code=403, detail="Vous n'êtes pas autorisé à modifier cette prime")
 
+    update_data = data.dict(exclude_unset=True)
+
     # Si DG ou Directeur modifie, la prime revient à Initialisé pour re-validation
     if (user.is_dg or user.is_directeur) and bonus.status != ValidationStatus.INITIALISE:
         update_data['status'] = ValidationStatus.INITIALISE
