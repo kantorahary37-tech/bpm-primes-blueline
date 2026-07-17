@@ -150,6 +150,7 @@ export default function BonusForm() {
   const [importFeedback, setImportFeedback] = useState('')
   const [importError, setImportError] = useState('')
 
+  const [editLoaded, setEditLoaded] = useState(!isEditing)
   const [others, setOthers] = useState([])
   const otherTypes = ['temporaire', 'periodique', 'autres']
 
@@ -335,6 +336,7 @@ export default function BonusForm() {
           montant: o.montant || 0,
         })));
       }
+      setEditLoaded(true);
     });
   }, [id]);
 
@@ -364,7 +366,15 @@ export default function BonusForm() {
   const totalValue = totalQuantiValue + totalQualiValue
   const notesInvalid = totalValue === 0
 
-  if (!['mensuel', 'astreinte', 'commission'].includes(editType)) {
+  if (!editLoaded) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    )
+  }
+
+  if (editLoaded && !['mensuel', 'astreinte', 'commission'].includes(editType)) {
     return (
       <div className="page-container">
         <div className="card-blueline p-8 text-center">
