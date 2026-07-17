@@ -143,15 +143,15 @@ async def batch_validate_bonuses(
                     bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
 
                     if request.step == "N1":
-                        directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+                        directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                         if directeur and directeur.id != user.id:
                             notif_recipients.append(directeur)
                     elif request.step == "DIRECTEUR":
-                        dg = await User.filter(is_dg=True).first()
+                        dg = await User.filter(is_dg=True, is_admin=False).first()
                         if dg and dg.id != user.id:
                             notif_recipients.append(dg)
                     elif request.step == "DG":
-                        drh = await User.filter(is_drh=True).first()
+                        drh = await User.filter(is_drh=True, is_admin=False).first()
                         if drh and drh.id != user.id:
                             notif_recipients.append(drh)
 
@@ -293,14 +293,14 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
         recipients = []
 
         if user.is_dg:
-            directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+            directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
             if directeur and directeur.id != user.id:
                 recipients.append(directeur)
-            n1 = await User.filter(is_validator_n1=True, dept_str=employee.dept_str).first()
+            n1 = await User.filter(is_validator_n1=True, is_admin=False, dept_str=employee.dept_str).first()
             if n1 and n1.id != user.id and (not directeur or n1.id != directeur.id):
                 recipients.append(n1)
         elif user.is_directeur:
-            n1 = await User.filter(is_validator_n1=True, dept_str=employee.dept_str).first()
+            n1 = await User.filter(is_validator_n1=True, is_admin=False, dept_str=employee.dept_str).first()
             if n1 and n1.id != user.id:
                 recipients.append(n1)
 
@@ -861,15 +861,15 @@ async def validate_bonus(
             bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
 
             if step == "N1":
-                directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+                directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                 if directeur and directeur.id != user.id:
                     notif_recipients.append(directeur)
             elif step == "DIRECTEUR":
-                dg = await User.filter(is_dg=True).first()
+                dg = await User.filter(is_dg=True, is_admin=False).first()
                 if dg and dg.id != user.id:
                     notif_recipients.append(dg)
             elif step == "DG":
-                drh = await User.filter(is_drh=True).first()
+                drh = await User.filter(is_drh=True, is_admin=False).first()
                 if drh and drh.id != user.id:
                     notif_recipients.append(drh)
 
@@ -905,10 +905,10 @@ async def validate_bonus(
             bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
 
             notif_recipients = []
-            if creator and creator.id != user.id:
+            if creator and creator.id != user.id and not creator.is_admin:
                 notif_recipients.append(creator)
             empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
-            if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
+            if empl_manager and empl_manager.id != user.id and not empl_manager.is_admin and (not creator or empl_manager.id != creator.id):
                 notif_recipients.append(empl_manager)
 
             for r in notif_recipients:
