@@ -47,7 +47,7 @@ function AppContent() {
       <Route path="/bonuses/:id" element={<ProtectedRoute><BonusDetail /></ProtectedRoute>} />
       <Route path="/bonuses/edit/:id" element={<ProtectedRoute><BonusForm /></ProtectedRoute>} />
       <Route path="/kanban/:type" element={<ProtectedRoute><BonusKanban /></ProtectedRoute>} />
-      <Route path="/validated" element={<ProtectedRoute><ValidatedBonuses /></ProtectedRoute>} />
+      <Route path="/validated" element={<RestrictedRoute roles={['is_dg', 'is_drh']}><ValidatedBonuses /></RestrictedRoute>} />
       <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg']}><ArchivePage /></RestrictedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
