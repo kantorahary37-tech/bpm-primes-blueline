@@ -147,23 +147,13 @@ async def batch_validate_bonuses(
                         if directeur and directeur.id != user.id:
                             notif_recipients.append(directeur)
                     elif request.step == "DIRECTEUR":
-                        if creator and creator.id != user.id:
-                            notif_recipients.append(creator)
-                        empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
-                        if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
-                            notif_recipients.append(empl_manager)
                         dg = await User.filter(is_dg=True).first()
                         if dg and dg.id != user.id:
                             notif_recipients.append(dg)
                     elif request.step == "DG":
-                        if creator and creator.id != user.id:
-                            notif_recipients.append(creator)
-                        empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
-                        if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
-                            notif_recipients.append(empl_manager)
-                        directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
-                        if directeur and directeur.id != user.id:
-                            notif_recipients.append(directeur)
+                        drh = await User.filter(is_drh=True).first()
+                        if drh and drh.id != user.id:
+                            notif_recipients.append(drh)
 
                     for r in notif_recipients:
                         await Notification.create(
@@ -875,23 +865,13 @@ async def validate_bonus(
                 if directeur and directeur.id != user.id:
                     notif_recipients.append(directeur)
             elif step == "DIRECTEUR":
-                if creator and creator.id != user.id:
-                    notif_recipients.append(creator)
-                empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
-                if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
-                    notif_recipients.append(empl_manager)
                 dg = await User.filter(is_dg=True).first()
                 if dg and dg.id != user.id:
                     notif_recipients.append(dg)
             elif step == "DG":
-                if creator and creator.id != user.id:
-                    notif_recipients.append(creator)
-                empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
-                if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
-                    notif_recipients.append(empl_manager)
-                directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
-                if directeur and directeur.id != user.id:
-                    notif_recipients.append(directeur)
+                drh = await User.filter(is_drh=True).first()
+                if drh and drh.id != user.id:
+                    notif_recipients.append(drh)
 
             for r in notif_recipients:
                 await Notification.create(
