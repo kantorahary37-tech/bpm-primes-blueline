@@ -1,4 +1,5 @@
 import secrets
+import asyncio
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Depends
@@ -41,7 +42,7 @@ async def forgot_password(data: ForgotPasswordRequest):
         user.reset_token_expires = datetime.utcnow() + timedelta(minutes=15)
         await user.save()
         reset_link = f"http://localhost:3000/reset-password?token={token}"
-        send_reset_email(data.email, reset_link)
+        asyncio.create_task(send_reset_email(data.email, reset_link))
     return {"message": "Si cet email existe, un lien de réinitialisation a été envoyé."}
 
 @router.post("/reset-password")

@@ -1,5 +1,6 @@
 import smtplib
 import os
+import asyncio
 from email.message import EmailMessage
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.blueline.mg")
@@ -19,7 +20,11 @@ def _resolve_email(to_email: str) -> str:
     return to_email
 
 
-def send_reset_email(to_email: str, reset_link: str) -> bool:
+async def send_reset_email(to_email: str, reset_link: str) -> bool:
+    return await asyncio.to_thread(_send_reset_email_sync, to_email, reset_link)
+
+
+def _send_reset_email_sync(to_email: str, reset_link: str) -> bool:
     try:
         msg = EmailMessage()
         msg["Subject"] = "Réinitialisation de votre mot de passe - BPM Primes"
@@ -47,7 +52,14 @@ def send_reset_email(to_email: str, reset_link: str) -> bool:
         return False
 
 
-def send_bonus_notification_email(to_email: str, to_name: str, sender_name: str,
+async def send_bonus_notification_email(to_email: str, to_name: str, sender_name: str,
+                                  employee_name: str, changes_summary: str,
+                                  bonus_url: str) -> bool:
+    return await asyncio.to_thread(_send_bonus_notification_email_sync, to_email, to_name, sender_name,
+                                   employee_name, changes_summary, bonus_url)
+
+
+def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name: str,
                                   employee_name: str, changes_summary: str,
                                   bonus_url: str) -> bool:
     try:

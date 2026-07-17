@@ -11,6 +11,7 @@ from fastapi import HTTPException
 import io
 import os
 import csv
+import asyncio
 from datetime import datetime
 from tortoise.expressions import Q
 from openpyxl import Workbook
@@ -170,10 +171,10 @@ async def batch_validate_bonuses(
                             type=notif_type, message=notif_msg,
                         )
                         if r.email:
-                            send_bonus_notification_email(
+                            asyncio.create_task(send_bonus_notification_email(
                                 r.email, r.name, user.name,
                                 employee.name, f"Prime validée (étape {request.step})", bonus_url,
-                            )
+                            ))
                 except Exception:
                     pass
 
@@ -346,10 +347,10 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
                 print(f"[NOTIF] Notification créée pour {r.name}")
                 if r.email:
                     bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
-                    send_bonus_notification_email(
+                    asyncio.create_task(send_bonus_notification_email(
                         r.email, r.name, user.name,
                         employee.name, summary, bonus_url,
-                    )
+                    ))
             except Exception as e:
                 print(f"[NOTIF] Erreur création notification pour {r.name}: {e}")
 
@@ -899,10 +900,10 @@ async def validate_bonus(
                     type=notif_type, message=notif_message,
                 )
                 if r.email:
-                    send_bonus_notification_email(
+                    asyncio.create_task(send_bonus_notification_email(
                         r.email, r.name, user.name,
                         employee.name, f"Prime validée (étape {step})", bonus_url,
-                    )
+                    ))
         except Exception:
             pass
 
@@ -938,10 +939,10 @@ async def validate_bonus(
                     message=f"{employee.name} — Prime rejetée{motif}",
                 )
                 if r.email:
-                    send_bonus_notification_email(
+                    asyncio.create_task(send_bonus_notification_email(
                         r.email, r.name, user.name,
                         employee.name, f"Prime rejetée{motif}", bonus_url,
-                    )
+                    ))
         except Exception:
             pass
 
