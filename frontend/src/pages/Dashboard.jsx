@@ -21,7 +21,6 @@ const typeLabels = {
 
 const statusLabel = (bonus) => {
   if (!bonus) return '';
-  if (bonus.status === 'En attente Directeur') return `En attente Directeur ${bonus.employee?.department || ''}`;
   return bonus.status;
 };
 
@@ -207,7 +206,9 @@ const Dashboard = () => {
                       {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
                     </div>
                     <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-                      <span className="font-medium">{bonus.employee?.name || 'N/A'}</span>
+                      <span className="font-medium" title={bonus.employee?.name || 'N/A'}>
+                        {bonus.employee?.matricule || 'N/A'}{bonus.employee?.name && bonus.employee.name.split(' ')[0].length <= 12 ? ` ${bonus.employee.name.split(' ')[0]}` : ''}
+                      </span>
                     </span>
                     <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                       {statusLabel(bonus)}
