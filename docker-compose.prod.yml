@@ -29,7 +29,7 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:mysecretpassword@db:5432/bpm_primes_db
     expose:
-      - 8000
+      - "8000"
 
   nginx:
     build:
@@ -37,10 +37,17 @@ services:
       dockerfile: frontend/Dockerfile.prod
     container_name: bpm_nginx
     restart: unless-stopped
-    ports:
-      - "80:80"
     depends_on:
       - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Your nginx configuration
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+      # Let's Encrypt certificates
+      - /etc/letsencrypt:/etc/letsencrypt:ro
 
 volumes:
   postgres_data:
