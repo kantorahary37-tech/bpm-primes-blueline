@@ -105,6 +105,23 @@ async def batch_validate_bonuses(
                 ))
                 continue
 
+            # Vérifier que l'utilisateur a le rôle correspondant à l'étape
+            allowed_roles = {
+                "N1": user.is_validator_n1,
+                "DIRECTEUR": user.is_directeur,
+                "DG": user.is_dg,
+            }
+            if not allowed_roles.get(request.step, False):
+                results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Rôle non autorisé pour cette étape"))
+                continue
+
+            # Vérifier le département (sauf DG)
+            if not user.is_dg:
+                bonus_emp = await Employee.get_or_none(id=bonus.employee_id)
+                if bonus_emp and bonus_emp.dept_str != user.department:
+                    results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Prime d'un autre département"))
+                    continue
+
             await Validation.create(
                 bonus_id=bonus.id,
                 validator_id=user.id,
