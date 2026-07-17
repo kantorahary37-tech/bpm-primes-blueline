@@ -221,9 +221,6 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
         if user.is_dg:
             if employee.manager:
                 recipients.append(employee.manager)
-            directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
-            if directeur and directeur.id != user.id:
-                recipients.append(directeur)
         elif user.is_directeur:
             if employee.manager:
                 recipients.append(employee.manager)
