@@ -14,7 +14,6 @@ const typeLabels = {
 
 const statusLabel = (bonus) => {
   if (!bonus) return '';
-  if (bonus.status === 'En attente Directeur') return `En attente Directeur ${bonus.employee?.department || ''}`;
   return bonus.status;
 };
 
@@ -102,7 +101,9 @@ const BonusKanban = () => {
                           {b.bonus_type === 'mensuel' ? 'M' : b.bonus_type === 'astreinte' ? 'A' : 'C'}
                         </span>
                         <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-                          <span className="font-medium">{b.employee?.name || 'N/A'}</span>
+                          <span className="font-medium" title={b.employee?.name || 'N/A'}>
+                            {b.employee?.matricule || 'N/A'}{b.employee?.name && b.employee.name.split(' ')[0].length <= 12 ? ` ${b.employee.name.split(' ')[0]}` : ''}
+                          </span>
                         </span>
                         <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(b.status)} ${b.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                           {statusLabel(b)}
