@@ -165,19 +165,9 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if not can_edit:
         raise HTTPException(status_code=403, detail="Vous n'êtes pas autorisé à modifier cette prime")
 
-    update_data = data.dict(exclude_unset=True)
-    if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
-        employee = await Employee.get(id=bonus.employee_id)
-        primemax = await PrimeMax.filter(dept_str=employee.dept_str, bonus_type=bonus.bonus_type).first()
-        # Le plafond ne s'applique qu'à l'évaluation, pas aux "Autres primes"
-        details = update_data.get('details') or (bonus.details or {})
-        others_list = details.get('others', []) if isinstance(details, dict) else []
-        others_total = sum(float(o.get('montant', 0) or 0) for o in others_list)
-        eval_amount = float(update_data['total_amount']) - others_total
-        if primemax and eval_amount > primemax.amount:
-            raise HTTPException(400, f"Le montant de l'évaluation dépasse le plafond autorisé ({primemax.amount} Ar)")
-    if 'employee_id' in update_data:
-        del update_data['employee_id']
+    # Si DG ou Directeur modifie, la prime revient à Initialisé pour re-validation
+    if (user.is_dg or user.is_directeur) and bonus.status != ValidationStatus.INITIALISE:
+        update_data['status'] = ValidationStatus.INITIALISE
 
     update_data['was_rejected'] = False
 
