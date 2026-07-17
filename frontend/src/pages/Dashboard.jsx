@@ -45,7 +45,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [b, e] = await Promise.all([getBonuses(), getEmployees(user?.department)]);
+        const [b, e] = await Promise.all([getBonuses(null, null, null, null, null, false, true), getEmployees(user?.department)]);
         setBonuses(b);
         setEmployees(e);
         setLoading(false);

@@ -87,6 +87,9 @@ export default function BonusForm() {
     else navigate(`/bonuses/${id}`);
   };
 
+  const [bonusStatus, setBonusStatus] = useState('')
+  const isReadOnly = isEditing && bonusStatus === 'En attente DG' && !connectedUser?.is_dg && !connectedUser?.is_admin && !connectedUser?.is_drh
+
   const [employees, setEmployees] = useState([])
   const [selectedEmp, setSelectedEmp] = useState(null)
 
@@ -302,6 +305,7 @@ export default function BonusForm() {
     if (!isEditing || !id) return;
     getBonus(id).then((b) => {
       setEditType(b.bonus_type);
+      setBonusStatus(b.status || '');
       setSelectedEmp(b.employee || null);
       if (b.employee) setEmployee({ department: b.employee.department || '', service: '', name: b.employee.name, function: '', matricule: b.employee.matricule });
       setParams((p) => ({ ...p, startDate: b.start_date, endDate: b.end_date }));
@@ -349,11 +353,16 @@ export default function BonusForm() {
     !o.libelle?.trim() ||
     !o.type ||
     (o.type === 'autres' && !o.typeCustom?.trim()) ||
-    !(parseFloat(o.montant) > 0)
+    !(parseFloat(o.montant) > 0) ||
+    !o.file ||
+    !o.debut_mois || !o.debut_annee || !o.fin_mois || !o.fin_annee
   )
+  const employeeInvalid = !selectedEmp
+  const salesInvalid = sales.some(s => !s.designation?.trim() || !(parseFloat(s.nombre) > 0))
   const totalQuantiValue = quantitative.reduce((s, i) => s + i.value, 0)
   const totalQualiValue = qualitative.reduce((s, i) => s + i.value, 0)
   const totalValue = totalQuantiValue + totalQualiValue
+  const notesInvalid = totalValue === 0
 
   if (!['mensuel', 'astreinte', 'commission'].includes(editType)) {
     return (
@@ -843,6 +852,11 @@ export default function BonusForm() {
           <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Commission par vente</p></div></div>
         </div>
         {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+        {isReadOnly && (
+          <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2">
+            <ExclamationIcon className="w-4 h-4" /> Cette prime a été modifiée par le DG. Vous pouvez consulter les détails mais pas modifier.
+          </div>
+        )}
         <form onSubmit={handleSubmitCommission} className="space-y-3">
           {sharedHeader}
           <div className="card-blueline p-4">
@@ -922,7 +936,7 @@ export default function BonusForm() {
 
           <div className="flex gap-3 justify-end">
             <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-            <button type="submit" disabled={loading} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+            <button type="submit" disabled={loading || isReadOnly || employeeInvalid || salesInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
               {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
             </button>
           </div>
@@ -966,6 +980,11 @@ export default function BonusForm() {
           <div className="flex items-center gap-2"><MoonIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime d'Astreinte</h1><p className="text-sm text-base-content/50">Gestion des astreintes et interventions</p></div></div>
         </div>
         {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+        {isReadOnly && (
+          <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2">
+            <ExclamationIcon className="w-4 h-4" /> Cette prime a été modifiée par le DG. Vous pouvez consulter les détails mais pas modifier.
+          </div>
+        )}
         <form onSubmit={handleSubmitAstreinte} className="space-y-3">
           {sharedHeader}
 
@@ -1154,7 +1173,7 @@ export default function BonusForm() {
 
           <div className="flex gap-3 justify-end">
             <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-            <button type="submit" disabled={loading || coeffInvalid || periodInvalid || otherInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+            <button type="submit" disabled={loading || coeffInvalid || periodInvalid || otherInvalid || isReadOnly || primeCount === 0} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
               {loading ? <span className="loading loading-spinner" /> : `Créer les primes (${primeCount})`}
             </button>
           </div>
@@ -1172,6 +1191,12 @@ export default function BonusForm() {
       </div>
 
       {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+
+      {isReadOnly && (
+        <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2">
+          <ExclamationIcon className="w-4 h-4" /> Cette prime a été modifiée par le DG. Vous pouvez consulter les détails mais pas modifier.
+        </div>
+      )}
 
       <form onSubmit={handleSubmitMensuel}>
         {sharedHeader}
@@ -1211,12 +1236,12 @@ export default function BonusForm() {
                         className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.5" value={item.coeff}
+                      <input type="number" min="0" max="10" step="0.1" value={item.coeff}
                         onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'coeff', e.target.value, 'quanti')}
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.5"
+                      <input type="number" min="0" max="10" step="0.1"
                         value={item.note}
                           onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'note', e.target.value, 'quanti')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
@@ -1309,12 +1334,12 @@ export default function BonusForm() {
                         className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.5" value={item.coeff}
+                      <input type="number" min="0" max="10" step="0.1" value={item.coeff}
                         onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'coeff', e.target.value, 'quali')}
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.5"
+                      <input type="number" min="0" max="10" step="0.1"
                         value={item.note}
                           onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'note', e.target.value, 'quali')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
@@ -1426,7 +1451,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4 mt-3 border-l-4 border-l-amber-500 bg-amber-50/30">
           {others.length > 0 && otherInvalid && (
             <div className="mb-3 bg-red-50 text-red-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">
-              <ExclamationIcon className="w-4 h-4" /> Chaque « Autre prime » doit avoir un libellé, un type et un montant renseignés (le montant doit être supérieur à 0).
+              <ExclamationIcon className="w-4 h-4" /> Chaque « Autre prime » doit avoir un libellé, un type, un montant supérieur à 0, une période (début et fin) et une pièce jointe.
             </div>
           )}
           <div className="flex items-center justify-between mb-3">
@@ -1581,7 +1606,7 @@ export default function BonusForm() {
 
         <div className="flex gap-3 justify-end">
           <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-          <button type="submit" disabled={loading || coeffInvalid || periodInvalid || otherInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+          <button type="submit" disabled={loading || coeffInvalid || periodInvalid || otherInvalid || isReadOnly || employeeInvalid || notesInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
             {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
           </button>
         </div>

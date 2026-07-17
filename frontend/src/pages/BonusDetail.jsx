@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getBonus, getBonusValidations, getAuditLogs, validateBonus, openFile } from '../services/api';
+import { getBonus, getBonusValidations, getAuditLogs, validateBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
-import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, EyeIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon } from '../components/Icons';
+import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon, LockIcon, PaperclipIcon } from '../components/Icons';
+import FilePreview from '../components/FilePreview';
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -42,12 +44,7 @@ const BonusDetail = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportColumns, setExportColumns] = useState([]);
   const [motifRejet, setMotifRejet] = useState('');
-  const [toast, setToast] = useState(null);
-
-  const showToast = (type, message) => {
-    setToast({ type, message });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
     Promise.all([getBonus(id), getBonusValidations(id)])
@@ -81,22 +78,17 @@ const BonusDetail = () => {
   const confirmValidate = async () => {
     const step = getValidStep(bonus.status);
     if (!step) return;
+    setValidating(true);
     try {
       await validateBonus(bonus.id, { action: 'VALIDER' }, step);
-      showToast('success', 'Prime validée avec succès !');
+      toast.success('Prime validée avec succès !');
       setShowValidateModal(false);
-      const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
-      setBonus(b);
-      const timeline = v.map((entry) => ({
-        ...entry,
-        date: new Date(entry.validated_at).toLocaleDateString('fr-FR', {
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        }),
-      }));
-      setValidations(timeline);
+      setTimeout(() => navigate('/bonuses'), 1500);
     } catch (err) {
-      showToast('error', err.response?.data?.detail || 'Erreur lors de la validation');
+      toast.error(err.response?.data?.detail || 'Erreur lors de la validation');
       setShowValidateModal(false);
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -104,7 +96,7 @@ const BonusDetail = () => {
     if (!motifRejet.trim()) return;
     try {
       await validateBonus(bonus.id, { action: 'REJETER', motif_rejet: motifRejet }, getValidStep(bonus.status));
-      showToast('success', 'Prime rejetée — retour au statut Initialisé');
+      toast.success('Prime rejetée — retour au statut Initialisé');
       setShowRejectModal(false);
       setMotifRejet('');
       const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
@@ -117,7 +109,7 @@ const BonusDetail = () => {
       }));
       setValidations(timeline);
     } catch (err) {
-      showToast('error', err.response?.data?.detail || 'Erreur lors du rejet');
+      toast.error(err.response?.data?.detail || 'Erreur lors du rejet');
     }
   };
 
@@ -185,13 +177,15 @@ const BonusDetail = () => {
   const EvaluationTable = ({ label, items, totalEval, totalValue, primeMax, color }) => {
     if (!items || items.length === 0) return null;
     const pct = primeMax > 0 ? (totalValue / primeMax) * 100 : 0;
+    const totalCoeff = items.reduce((s, i) => s + ((i.coeff ?? parseFloat(i.objective)) || 0), 0);
+    const totalNote = items.reduce((s, i) => s + ((i.note ?? i.evaluation) || 0), 0);
     return (
       <div>
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-sm text-gray-900">{label}</h4>
           <span className="text-xs text-gray-600">
             {items[0] && 'coeff' in items[0]
-              ? `${items.reduce((s, i) => s + (i.coeff || 0), 0)} coeff`
+              ? `${totalCoeff} coeff`
               : `${totalEval}%`}
           </span>
         </div>
@@ -219,7 +213,8 @@ const BonusDetail = () => {
               ))}
               <tr className="font-semibold bg-gray-50">
                 <td className="py-2 pr-2 text-gray-900">Total {label}</td>
-                <td colSpan={2}></td>
+                <td className="py-2 px-2 text-center text-gray-800">{totalCoeff}</td>
+                <td className="py-2 px-2 text-center font-medium text-gray-900">{totalNote}</td>
                 <td className="py-2 pl-2 text-right text-blue-600">{formatAr(totalValue)}</td>
               </tr>
             </tbody>
@@ -248,38 +243,53 @@ const BonusDetail = () => {
 
   const step = getValidStep(bonus.status);
   const TypeIcon = typeIcons[bonus.bonus_type] || ClipboardIcon
-  const canEditAsAdmin = user?.is_admin || user?.is_dg || user?.is_drh || (user?.is_directeur && bonus.employee?.department === user.department)
+  const canEditAsAdmin = user?.is_admin || user?.is_dg || user?.is_drh || (user?.is_directeur && bonus.employee?.department === user.department && bonus.status !== 'En attente DG')
 
   return (
     <div className="page-container max-w-4xl">
-      {toast && (
-        <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
-          toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
-          {toast.message}
-        </div>
-      )}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></button>
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-            <TypeIcon className="w-5 h-5" />
+      {/* Header */}
+      <div className="bg-gradient-to-r from-white via-gray-50 to-white rounded-2xl border border-gray-200/80 p-5 mb-5 shadow-sm">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors">
+            <ArrowLeftIcon className="w-5 h-5 text-gray-500" />
+          </button>
+
+          {/* Employee initials avatar */}
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+            {(bonus.employee?.name || 'N')[0]}
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Prime {typeIcons[bonus.bonus_type] ? ['Mensuelle', 'd\'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(bonus.bonus_type)] : bonus.bonus_type}</h1>
-            <p className="text-xs text-gray-400">{bonus.employee?.name || 'N/A'}</p>
+
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-gray-900 truncate">
+              Prime {typeIcons[bonus.bonus_type] ? ['Mensuelle', 'd\'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(bonus.bonus_type)] : bonus.bonus_type}
+            </h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-sm text-gray-500">{bonus.employee?.name || 'N/A'}</p>
+              <span className="text-gray-300">·</span>
+              <p className="text-xs text-gray-400">{bonus.employee?.department || ''}</p>
+            </div>
           </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
+              {statusLabel(bonus)}
+            </span>
+            {((bonus.status === 'En attente DG' && !user?.is_dg) || bonus.status === 'Prime validée') && (
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                <LockIcon className="w-3 h-3" />
+                Lecture seule
+              </span>
+            )}
+          </div>
+
+          <button onClick={() => {
+            const allCols = [...EXPORT_COLUMNS.common, ...(EXPORT_COLUMNS[bonus.bonus_type] || [])]
+            setExportColumns(allCols)
+            setShowExportModal(true)
+          }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="Exporter cette prime">
+            <DownloadIcon className="w-5 h-5" />
+          </button>
         </div>
-        <span className={`ml-auto text-xs font-medium px-2.5 py-1 rounded-full ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-          {statusLabel(bonus)}
-        </span>
-        <button onClick={() => {
-          const allCols = [...EXPORT_COLUMNS.common, ...(EXPORT_COLUMNS[bonus.bonus_type] || [])]
-          setExportColumns(allCols)
-          setShowExportModal(true)
-        }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Exporter cette prime">
-          <DownloadIcon className="w-5 h-5" />
-        </button>
       </div>
 
       <div className="space-y-5">
@@ -303,7 +313,7 @@ const BonusDetail = () => {
           <div className="flex items-center gap-4">
             <div className="flex-1 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
               <p className="text-xs text-blue-600 font-medium mb-1">Montant total</p>
-              <p className="text-2xl font-bold text-blue-700">{bonus.total_amount} Ar</p>
+              <p className="text-2xl font-bold text-blue-700">{formatAr(bonus.total_amount)} Ar</p>
             </div>
             {bonus.bonus_type === 'mensuel' && bonus.details?.prime_max && (
               <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-300">
@@ -357,20 +367,28 @@ const BonusDetail = () => {
           <Section title="Autres primes" icon={PlusIcon}>
             <div className="space-y-2">
               {bonus.details.others.map((o, i) => (
-                <div key={i} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{o.libelle || 'Prime sans libellé'}</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      {o.type}
-                      {o.debut_mois || o.debut_annee || o.fin_mois || o.fin_annee ? (
-                        ` · ${o.debut_mois || '?'}/${o.debut_annee || '?'} → ${o.fin_mois || '?'}/${o.fin_annee || '?'}`
-                      ) : ''}
-                    </p>
-                    {o.file?.url && (
-                      <button type="button" onClick={() => openFile(o.file.url)} className="text-[11px] text-blue-600 hover:underline mt-1 inline-block">Voir la pièce jointe</button>
-                    )}
+                <div key={i} className="p-3 rounded-lg bg-amber-50/50 border border-amber-100">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{o.libelle || 'Prime sans libellé'}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        {o.type}
+                        {o.debut_mois || o.debut_annee || o.fin_mois || o.fin_annee ? (
+                          ` · ${o.debut_mois || '?'}/${o.debut_annee || '?'} → ${o.fin_mois || '?'}/${o.fin_annee || '?'}`
+                        ) : ''}
+                      </p>
+                    </div>
+                    <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} Ar</span>
                   </div>
-                  <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} Ar</span>
+                  {o.file?.url && (
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500">
+                      <PaperclipIcon className="w-3 h-3" />
+                      <span className="truncate">{o.file.original_name}</span>
+                    </div>
+                  )}
+                  {o.file?.url && (
+                    <FilePreview file={o.file} />
+                  )}
                 </div>
               ))}
               <div className="border-t border-amber-200 pt-3 mt-3 flex items-center justify-between text-[11px] text-gray-600">
@@ -527,95 +545,34 @@ const BonusDetail = () => {
           </Section>
         )}
 
-        <Section title="Historique des validations" icon={EyeIcon}>
-          <Timeline items={validations} />
+        <Section title="Historique complet" icon={ClockIcon}>
+          <Timeline items={[
+            ...validations.map(v => ({ ...v, _sort: v.date })),
+            ...auditLogs.map(log => ({
+              action: log.action,
+              step: log.action,
+              validator_name: log.user_name,
+              description: log.description,
+              note: log.note,
+              motif_rejet: log.description?.includes('Motif') ? log.description.split('Motif :')[1]?.trim() : null,
+              date: new Date(log.created_at).toLocaleDateString('fr-FR', {
+                day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+              }),
+              _sort: new Date(log.created_at).toLocaleDateString('fr-FR', {
+                day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+              }),
+            })),
+          ].sort((a, b) => {
+            const parseDate = (s) => {
+              if (!s) return 0
+              const d = new Date(s)
+              return isNaN(d) ? 0 : d.getTime()
+            }
+            return parseDate(b._sort) - parseDate(a._sort)
+          })} />
         </Section>
 
-        {auditLogs.length > 0 && (
-          <Section title="Historique des modifications" icon={ClockIcon}>
-            <div className="space-y-1.5">
-              {auditLogs.map((log, i) => {
-                const iconMap = {
-                  MODIFICATION: { icon: EditIcon, bg: 'bg-amber-100 text-amber-600' },
-                  PAIEMENT: { icon: CheckIcon, bg: 'bg-emerald-100 text-emerald-600' },
-                  REJET: { icon: XCircleIcon, bg: 'bg-red-100 text-red-600' },
-                }
-                const cfg = iconMap[log.action] || { icon: null, bg: 'bg-blue-100 text-blue-600' }
-                const Icon = cfg.icon
-                const changes = (log.description || '').split('; ').filter(Boolean)
-
-                const fieldLabels = {
-                  total_amount: 'Montant total',
-                  performance_score: 'Score',
-                  absences: 'Absences',
-                  retard: 'Retards',
-                  prime_mensuel_amount: 'Prime mensuelle',
-                  nb_jours_astreinte: 'Jours astreinte',
-                  taux_jour: 'Taux journalier',
-                  prime_astreinte_amount: 'Prime astreinte',
-                  ca_realise: 'CA réalisé',
-                  ca_objectif: 'CA objectif',
-                  taux_commission: 'Taux commission',
-                  commission_amount: 'Commission',
-                  details: 'Détails',
-                  statut: 'Statut',
-                }
-
-                const formatVal = (v) => {
-                  if (!v || v === 'None' || v === 'null') return '—'
-                  return v
-                }
-
-                return (
-                  <div key={i} className="flex gap-2.5 items-start group">
-                    <div className={`w-5 h-5 rounded-full ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                      {Icon ? <Icon className="w-2.5 h-2.5" /> : <span className="text-[10px]">•</span>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs text-gray-700">
-                          {log.user_name && <span className="font-medium">{log.user_name}</span>}
-                          <span className="text-gray-400 mx-1">·</span>
-                          <span className="text-gray-500">
-                            {log.action === 'MODIFICATION' ? 'Modification' : log.action === 'PAIEMENT' ? 'Paiement' : log.action === 'REJET' ? 'Rejet' : log.action}
-                          </span>
-                        </p>
-                        <span className="text-[11px] text-gray-400 shrink-0">
-                          {new Date(log.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      {changes.length > 0 && (
-                        <div className="mt-1 space-y-0.5">
-                          {changes.map((c, j) => {
-                            const match = c.match(/^(\w+): (.+) → (.+)$/)
-                            if (match) {
-                              const [, field, oldVal, newVal] = match
-                              const label = fieldLabels[field] || field
-                              if (field === 'details') return <p key={j} className="text-[11px] text-gray-400 italic">Détails modifiés (critères, notes, coefficients)</p>
-                              return (
-                                <p key={j} className="text-[11px] text-gray-600 leading-relaxed">
-                                  <span className="font-medium text-gray-700">{label}</span>
-                                  <span className="text-gray-400"> : </span>
-                                  <span className="text-gray-400 line-through">{formatVal(oldVal)}</span>
-                                  <span className="text-gray-300 mx-1">→</span>
-                                  <span className="font-medium text-gray-800">{formatVal(newVal)}</span>
-                                </p>
-                              )
-                            }
-                            if (c.startsWith('détails')) return <p key={j} className="text-[11px] text-gray-400 italic">Détails modifiés (critères, notes, coefficients)</p>
-                            return <p key={j} className="text-[11px] text-gray-500">{c}</p>
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </Section>
-        )}
-
-        {step && (
+        {step && bonus.status !== 'Prime validée' && (
           <div className="flex gap-3 justify-end pt-2">
             {canEditAsAdmin && (
               <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
@@ -627,7 +584,7 @@ const BonusDetail = () => {
                 <EditIcon className="w-4 h-4" /> Modifier
               </Link>
             ) : (
-              <button className="btn bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={handleValidate}>
+              <button className="btn bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={handleValidate} disabled={validating}>
                 <CheckIcon className="w-4 h-4" /> Valider
               </button>
             )}
@@ -664,7 +621,7 @@ const BonusDetail = () => {
         <p className="text-sm text-gray-600 mb-6">Êtes-vous sûr de vouloir valider cette prime ?</p>
         <div className="flex gap-2 justify-end">
           <button onClick={() => setShowValidateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
-          <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
+          <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0" disabled={validating}>{validating ? 'Validation...' : 'Valider'}</button>
         </div>
       </Modal>
       <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Exporter la prime" size="lg">

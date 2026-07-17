@@ -5,9 +5,11 @@ from typing import List, Optional
 from enum import Enum
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus
 from app.auth import get_current_user
+from app.email_service import send_bonus_notification_email
 from app.schemas import *
 from fastapi import HTTPException
 import io
+import os
 import csv
 from datetime import datetime
 from tortoise.expressions import Q
@@ -129,6 +131,52 @@ async def batch_validate_bonuses(
                         action="AUTOMATIC",
                         note="Prime validée par DG - Clôture automatique"
                     )
+
+                try:
+                    bonus_full = await Bonus.get(id=bonus.id).prefetch_related('employee', 'created_by')
+                    employee = bonus_full.employee
+                    creator = bonus_full.created_by
+                    notif_recipients = []
+                    notif_type = f"VALID_{request.step}"
+                    notif_msg = f"{employee.name} — Prime validée (étape {request.step})"
+                    bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
+
+                    if request.step == "N1":
+                        directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+                        if directeur and directeur.id != user.id:
+                            notif_recipients.append(directeur)
+                    elif request.step == "DIRECTEUR":
+                        if creator and creator.id != user.id:
+                            notif_recipients.append(creator)
+                        empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
+                        if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
+                            notif_recipients.append(empl_manager)
+                        dg = await User.filter(is_dg=True).first()
+                        if dg and dg.id != user.id:
+                            notif_recipients.append(dg)
+                    elif request.step == "DG":
+                        if creator and creator.id != user.id:
+                            notif_recipients.append(creator)
+                        empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
+                        if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
+                            notif_recipients.append(empl_manager)
+                        directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+                        if directeur and directeur.id != user.id:
+                            notif_recipients.append(directeur)
+
+                    for r in notif_recipients:
+                        await Notification.create(
+                            user=r, bonus=bonus, sender=user,
+                            type=notif_type, message=notif_msg,
+                        )
+                        if r.email:
+                            send_bonus_notification_email(
+                                r.email, r.name, user.name,
+                                employee.name, f"Prime validée (étape {request.step})", bonus_url,
+                            )
+                except Exception:
+                    pass
+
             elif request.action == "REJETER":
                 bonus.status = ValidationStatus.INITIALISE
                 bonus.was_rejected = True
@@ -169,8 +217,15 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
+    old_status = bonus.status
+
     if can_edit_any and bonus.status != ValidationStatus.INITIALISE:
-        update_data['status'] = ValidationStatus.INITIALISE
+        if user.is_dg:
+            update_data['status'] = ValidationStatus.EN_ATTENTE_DG
+        elif user.is_directeur:
+            update_data['status'] = ValidationStatus.EN_ATTENTE_DIRECTEUR
+        else:
+            update_data['status'] = ValidationStatus.INITIALISE
     update_data['was_rejected'] = False
 
     SCALAR_FIELDS = [
@@ -201,6 +256,8 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if str(before["details"]) != str(after["details"]):
         changes.append("détails modifiés (critères, notes, coefficients)")
 
+    print(f"[UPDATE] bonus_id={bonus.id}, user={user.name}, can_edit_any={can_edit_any}, changes={changes}")
+
     changes_data = {"before": {f: _sanitize_for_json(before[f]) for f in SCALAR_FIELDS + ["details", "status"] if str(before[f]) != str(after[f])},
                     "after": {f: _sanitize_for_json(after[f]) for f in SCALAR_FIELDS + ["details", "status"] if str(before[f]) != str(after[f])}}
     try:
@@ -214,19 +271,48 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     except Exception:
         pass  # Audit log failure must not block the modification
 
+    if can_edit_any and changes and user.is_directeur:
+        try:
+            await Validation.create(
+                bonus_id=bonus.id,
+                validator_id=user.id,
+                step="DIRECTEUR",
+                action="MODIFICATION",
+                note="Modification par le Directeur",
+            )
+        except Exception:
+            pass
+
+    if can_edit_any and changes and user.is_dg:
+        try:
+            await Validation.create(
+                bonus_id=bonus.id,
+                validator_id=user.id,
+                step="DG",
+                action="MODIFICATION",
+                note="Modification par le DG",
+            )
+        except Exception:
+            pass
+
     if can_edit_any and changes:
-        employee = await Employee.get(id=bonus.employee_id).prefetch_related('manager')
+        bonus_full = await Bonus.get(id=bonus.id).prefetch_related('employee', 'created_by')
+        employee = bonus_full.employee
+        creator = bonus_full.created_by
         recipients = []
 
         if user.is_dg:
-            if employee.manager:
-                recipients.append(employee.manager)
+            if creator and creator.id != user.id:
+                recipients.append(creator)
+            empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
+            if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
+                recipients.append(empl_manager)
             directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
             if directeur and directeur.id != user.id:
                 recipients.append(directeur)
         elif user.is_directeur:
-            if employee.manager:
-                recipients.append(employee.manager)
+            if creator and creator.id != user.id:
+                recipients.append(creator)
 
         FIELD_LABELS_SHORT = {
             "total_amount": "montant", "performance_score": "score", "status": "statut",
@@ -236,11 +322,17 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
             "ca_realise": "CA réalisé", "ca_objectif": "CA objectif",
             "details": "détails", "absences": "absences", "retard": "retards",
         }
-        changed_fields = set()
+        detailed_parts = []
         for c in changes:
             field = c.split(":")[0]
-            changed_fields.add(FIELD_LABELS_SHORT.get(field, field))
-        summary = ", ".join(sorted(changed_fields))
+            label = FIELD_LABELS_SHORT.get(field, field)
+            value_part = c.split(":", 1)[1].strip() if ":" in c else ""
+            detailed_parts.append(f"{label}: {value_part}" if value_part else label)
+        summary = " | ".join(detailed_parts)
+
+        print(f"[NOTIF] modifier={user.name} (is_dg={user.is_dg}, is_directeur={user.is_directeur}), "
+              f"employee={employee.name}, creator={creator.name if creator else 'NONE'}, "
+              f"recipients={[r.name for r in recipients]}, changes={changes}")
 
         for r in recipients:
             try:
@@ -251,8 +343,15 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
                     type="MODIF_DG" if user.is_dg else "MODIF_DIR",
                     message=f"{employee.name} — {summary}",
                 )
-            except Exception:
-                pass
+                print(f"[NOTIF] Notification créée pour {r.name}")
+                if r.email:
+                    bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
+                    send_bonus_notification_email(
+                        r.email, r.name, user.name,
+                        employee.name, summary, bonus_url,
+                    )
+            except Exception as e:
+                print(f"[NOTIF] Erreur création notification pour {r.name}: {e}")
 
     return updated
 
@@ -760,6 +859,53 @@ async def validate_bonus(
                 action="AUTOMATIC",
                 note="Prime validée par DG - Clôture automatique"
             )
+
+        # Notifications when a step validates a bonus
+        try:
+            bonus_full = await Bonus.get(id=bonus.id).prefetch_related('employee', 'created_by')
+            employee = bonus_full.employee
+            creator = bonus_full.created_by
+            notif_recipients = []
+            notif_type = f"VALID_{step}"
+            notif_message = f"{employee.name} — Prime validée (étape {step})"
+            bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
+
+            if step == "N1":
+                directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+                if directeur and directeur.id != user.id:
+                    notif_recipients.append(directeur)
+            elif step == "DIRECTEUR":
+                if creator and creator.id != user.id:
+                    notif_recipients.append(creator)
+                empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
+                if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
+                    notif_recipients.append(empl_manager)
+                dg = await User.filter(is_dg=True).first()
+                if dg and dg.id != user.id:
+                    notif_recipients.append(dg)
+            elif step == "DG":
+                if creator and creator.id != user.id:
+                    notif_recipients.append(creator)
+                empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
+                if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
+                    notif_recipients.append(empl_manager)
+                directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
+                if directeur and directeur.id != user.id:
+                    notif_recipients.append(directeur)
+
+            for r in notif_recipients:
+                await Notification.create(
+                    user=r, bonus=bonus, sender=user,
+                    type=notif_type, message=notif_message,
+                )
+                if r.email:
+                    send_bonus_notification_email(
+                        r.email, r.name, user.name,
+                        employee.name, f"Prime validée (étape {step})", bonus_url,
+                    )
+        except Exception:
+            pass
+
     elif validation.action == "REJETER":
         bonus.status = ValidationStatus.INITIALISE
         bonus.was_rejected = True
@@ -772,16 +918,30 @@ async def validate_bonus(
 
         # Notification au N+1 (manager) que la prime revient à Initialisé
         try:
-            employee = await Employee.get(id=bonus.employee_id).prefetch_related('manager')
-            if employee.manager:
-                motif = f" — Motif : {validation.motif_rejet}" if validation.motif_rejet else ""
+            bonus_full = await Bonus.get(id=bonus.id).prefetch_related('employee', 'created_by')
+            employee = bonus_full.employee
+            creator = bonus_full.created_by
+            motif = f" — Motif : {validation.motif_rejet}" if validation.motif_rejet else ""
+            bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
+
+            notif_recipients = []
+            if creator and creator.id != user.id:
+                notif_recipients.append(creator)
+            empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
+            if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
+                notif_recipients.append(empl_manager)
+
+            for r in notif_recipients:
                 await Notification.create(
-                    user=employee.manager,
-                    bonus=bonus,
-                    sender=user,
+                    user=r, bonus=bonus, sender=user,
                     type="REJET",
                     message=f"{employee.name} — Prime rejetée{motif}",
                 )
+                if r.email:
+                    send_bonus_notification_email(
+                        r.email, r.name, user.name,
+                        employee.name, f"Prime rejetée{motif}", bonus_url,
+                    )
         except Exception:
             pass
 

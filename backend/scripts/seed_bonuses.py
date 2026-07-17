@@ -33,22 +33,22 @@ QUALI_CRITERIA = [
 ]
 
 
-def make_mensuel_details(prime_max, total_pct):
+def make_mensuel_details(prime_max):
     quanti = []
     for c in QUANTI_CRITERIA:
-        obj = random.randint(10, 20)
-        eval_pct = random.randint(int(obj * 0.5), obj)
+        coeff = random.choice([1, 2])
+        note = round(random.uniform(4, 10), 1)
         quanti.append({
-            "criteria": c, "description": "", "objective": f"{obj}%",
-            "evaluation": eval_pct, "value": round(prime_max * eval_pct / 100, 2),
+            "criteria": c, "description": "", "coeff": coeff,
+            "note": note, "value": round(prime_max * (coeff / 10) * (note / 10), 2),
         })
     quali = []
     for c in QUALI_CRITERIA:
-        obj = random.randint(10, 20)
-        eval_pct = random.randint(int(obj * 0.5), obj)
+        coeff = random.choice([1, 2])
+        note = round(random.uniform(4, 10), 1)
         quali.append({
-            "criteria": c, "description": "", "objective": f"{obj}%",
-            "evaluation": eval_pct, "value": round(prime_max * eval_pct / 100, 2),
+            "criteria": c, "description": "", "coeff": coeff,
+            "note": note, "value": round(prime_max * (coeff / 10) * (note / 10), 2),
         })
     total_quanti = sum(q["value"] for q in quanti)
     total_quali = sum(q["value"] for q in quali)
@@ -157,11 +157,11 @@ async def seed():
 
             key = (dept, "mensuel")
             pm = dept_plafond.get(key, 150000)
-            details = make_mensuel_details(pm, None)
+            details = make_mensuel_details(pm)
             total_eval = details["total_evaluation"]
             amount = min(total_eval, pm)
-            score = round(sum(q["evaluation"] for q in details["quantitative"]) +
-                          sum(q["evaluation"] for q in details["qualitative"]), 2)
+            score = round(sum(q["note"] for q in details["quantitative"]) +
+                          sum(q["note"] for q in details["qualitative"]), 2)
 
             exists = await Bonus.filter(
                 employee=emp, start_date=start, end_date=end,

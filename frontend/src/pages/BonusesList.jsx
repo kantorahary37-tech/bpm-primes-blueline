@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { getBonuses, validateBonus, batchValidateBonuses, markBonusesPaid } from '../services/api';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon, FilterIcon, ChevronLeftIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 
@@ -48,7 +49,6 @@ const [depFilter, setDepFilter] = useState(() => new URLSearchParams(window.loca
 const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
   const [confirmBonus, setConfirmBonus] = useState(null);
   const [payConfirm, setPayConfirm] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -68,11 +68,6 @@ const [filterMonth, setFilterMonth] = useState('');
     }
   }, [user?.is_admin, user?.is_dg, user?.is_directeur]);
 
-  const showToast = (type, message) => {
-    setToast({ type, message });
-    setTimeout(() => setToast(null), 3000);
-  };
-
   const fetchBonuses = async () => {
     try {
       const data = await getBonuses();
@@ -87,7 +82,7 @@ const [filterMonth, setFilterMonth] = useState('');
   useEffect(() => {
     fetchBonuses();
     if (location.state?.success) {
-      setToast({ type: 'success', message: location.state.success });
+      toast.success(location.state.success);
       window.history.replaceState({}, '');
     }
   }, []);
@@ -113,11 +108,11 @@ const [filterMonth, setFilterMonth] = useState('');
     if (!confirmBonus) return;
     try {
       await validateBonus(confirmBonus.bonusId, { action: 'VALIDER' }, confirmBonus.step);
-      showToast('success', 'Prime validée avec succès !');
+      toast.success('Prime validée avec succès !');
       setConfirmBonus(null);
       fetchBonuses();
     } catch (error) {
-      showToast('error', error.response?.data?.detail || "Erreur lors de la validation");
+      toast.error(error.response?.data?.detail || "Erreur lors de la validation");
       setConfirmBonus(null);
     }
   };
@@ -128,12 +123,12 @@ const [filterMonth, setFilterMonth] = useState('');
     const ids = [...selectedBonuses];
     try {
       const res = await batchValidateBonuses(ids, 'VALIDER', step);
-      showToast('success', `${res.total_success} prime(s) validée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
+      toast.success(`${res.total_success} prime(s) validée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
       clearSelection();
       setConfirmBonus(null);
       fetchBonuses();
     } catch (error) {
-      showToast('error', error.response?.data?.detail || "Erreur lors de la validation par lot");
+      toast.error(error.response?.data?.detail || "Erreur lors de la validation par lot");
       setConfirmBonus(null);
     }
   };
@@ -144,12 +139,12 @@ const [filterMonth, setFilterMonth] = useState('');
     const ids = [...selectedBonuses];
     try {
       const res = await batchValidateBonuses(ids, 'REJETER', step, batchReject);
-      showToast('success', `${res.total_success} prime(s) rejetée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
+      toast.success(`${res.total_success} prime(s) rejetée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
       clearSelection();
       setBatchReject(null);
       fetchBonuses();
     } catch (error) {
-      showToast('error', error.response?.data?.detail || "Erreur lors du rejet par lot");
+      toast.error(error.response?.data?.detail || "Erreur lors du rejet par lot");
       setBatchReject(null);
     }
   };
@@ -459,13 +454,6 @@ const [filterMonth, setFilterMonth] = useState('');
 
   return (
     <div>
-      {toast && (
-        <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
-          toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
-          {toast.message}
-        </div>
-      )}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
@@ -936,8 +924,8 @@ const [filterMonth, setFilterMonth] = useState('');
               <button onClick={() => {
                 setPaying(true)
                 markBonusesPaid({ month: payConfirm.month, year: payConfirm.year })
-                  .then(r => { showToast('success', r.message); fetchBonuses(); setPayConfirm(null) })
-                  .catch(e => showToast('error', e.response?.data?.detail || 'Erreur'))
+                  .then(r => { toast.success(r.message); fetchBonuses(); setPayConfirm(null) })
+                  .catch(e => toast.error(e.response?.data?.detail || 'Erreur'))
                   .finally(() => setPaying(false))
               }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>
             </div>
@@ -952,8 +940,8 @@ const [filterMonth, setFilterMonth] = useState('');
               <button onClick={() => {
                 setPaying(true)
                 markBonusesPaid({ bonus_ids: payConfirm.ids })
-                  .then(r => { showToast('success', r.message); clearSelection(); fetchBonuses(); setPayConfirm(null) })
-                  .catch(e => showToast('error', e.response?.data?.detail || 'Erreur'))
+                  .then(r => { toast.success(r.message); clearSelection(); fetchBonuses(); setPayConfirm(null) })
+                  .catch(e => toast.error(e.response?.data?.detail || 'Erreur'))
                   .finally(() => setPaying(false))
               }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>
             </div>

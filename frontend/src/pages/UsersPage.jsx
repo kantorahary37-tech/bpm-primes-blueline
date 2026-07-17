@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getUsers } from '../services/api'
 import Modal from '../components/Modal'
+import toast from 'react-hot-toast'
 import { EditIcon, TrashIcon, SearchIcon, PlusIcon, UsersIcon, ChevronLeftIcon } from '../components/Icons'
 
 const PAGE_SIZE = 15
@@ -18,7 +19,6 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showDelete, setShowDelete] = useState(null)
-  const [toast, setToast] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [ldapSearch, setLdapSearch] = useState('')
   const [ldapResults, setLdapResults] = useState([])
@@ -26,17 +26,12 @@ export default function UsersPage() {
   const [showLdap, setShowLdap] = useState(false)
   const [view, setView] = useState('table')
 
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), type === 'error' ? 5000 : 3000)
-  }
-
   const loadUsers = useCallback(async () => {
     try {
       const data = await getAdminUsers()
       setUsers(data)
     } catch {
-      showToast('Erreur lors du chargement', 'error')
+      toast.error('Erreur lors du chargement')
     } finally {
       setLoading(false)
     }
@@ -83,9 +78,9 @@ export default function UsersPage() {
       await adminUpdateUser(userId, data)
       await loadUsers()
       setEditUser(null)
-      showToast('Utilisateur mis à jour')
+      toast.success('Utilisateur mis à jour')
     } catch (e) {
-      showToast(e.response?.data?.detail || 'Erreur', 'error')
+      toast.error(e.response?.data?.detail || 'Erreur')
     }
   }
 
@@ -94,18 +89,18 @@ export default function UsersPage() {
       await adminDeleteUser(userId)
       await loadUsers()
       setShowDelete(null)
-      showToast('Utilisateur supprimé')
+      toast.success('Utilisateur supprimé')
     } catch (e) {
-      showToast(e.response?.data?.detail || 'Erreur', 'error')
+      toast.error(e.response?.data?.detail || 'Erreur')
     }
   }
 
   const handleResetPassword = async (userId) => {
     try {
       await adminResetPassword(userId)
-      showToast('Mot de passe réinitialisé à testprime')
+      toast.success('Mot de passe réinitialisé à testprime')
     } catch (e) {
-      showToast(e.response?.data?.detail || 'Erreur', 'error')
+      toast.error(e.response?.data?.detail || 'Erreur')
     }
   }
 
@@ -116,7 +111,7 @@ export default function UsersPage() {
       const results = await adminLdapSearch(ldapSearch)
       setLdapResults(results)
     } catch {
-      showToast('Erreur recherche LDAP', 'error')
+      toast.error('Erreur recherche LDAP')
     } finally {
       setLdapLoading(false)
     }
@@ -132,10 +127,10 @@ export default function UsersPage() {
       })
       await loadUsers()
       setLdapResults(prev => prev.filter(r => r.email !== entry.email))
-      showToast(`${entry.name} créé avec succès`)
+      toast.success(`${entry.name} créé avec succès`)
     } catch (e) {
       const msg = e.response?.data?.detail || 'Erreur lors de la création'
-      showToast(msg, 'error')
+      toast.error(msg)
     }
   }
 
@@ -145,12 +140,12 @@ export default function UsersPage() {
       const result = await adminLdapSync()
       if (result.success) {
         await loadUsers()
-        showToast('Synchronisation LDAP terminée avec succès')
+        toast.success('Synchronisation LDAP terminée avec succès')
       } else {
-        showToast('Erreur lors de la synchronisation LDAP', 'error')
+        toast.error('Erreur lors de la synchronisation LDAP')
       }
     } catch {
-      showToast('Erreur de connexion lors de la synchronisation', 'error')
+      toast.error('Erreur de connexion lors de la synchronisation')
     } finally {
       setSyncing(false)
     }
@@ -181,19 +176,6 @@ export default function UsersPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
-      {toast && (
-        <div className="toast toast-end toast-top z-50">
-          <div className={`alert ${toast.type === 'error' ? 'alert-error' : 'alert-success'} shadow-lg`}>
-            {toast.type === 'error' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            )}
-            <span className="font-medium">{toast.msg}</span>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">

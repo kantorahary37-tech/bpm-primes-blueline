@@ -167,12 +167,22 @@ export const uploadFile = async (file) => {
   return data;
 };
 
+const resolveUploadPath = (url) => {
+  if (url.startsWith('/api/v1/')) return url.slice(7);
+  if (url.startsWith('/uploads/')) return url;
+  return url;
+};
+
 export const openFile = async (url) => {
-  const path = url.startsWith('/uploads/') ? url.replace('/uploads/', '/api/v1/uploads/') : url;
-  const { data } = await api.get(path, { responseType: 'blob' });
+  const { data } = await api.get(resolveUploadPath(url), { responseType: 'blob' });
   const blobUrl = URL.createObjectURL(new Blob([data]));
   window.open(blobUrl, '_blank');
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+};
+
+export const getFileBlob = async (url) => {
+  const { data } = await api.get(resolveUploadPath(url), { responseType: 'blob' });
+  return URL.createObjectURL(new Blob([data]));
 };
 
 export const getAdminUsers = async () => {
