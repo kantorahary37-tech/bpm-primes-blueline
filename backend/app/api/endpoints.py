@@ -303,17 +303,16 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
         recipients = []
 
         if user.is_dg:
-            if creator and creator.id != user.id:
-                recipients.append(creator)
-            empl_manager = employee.manager_id and await User.get_or_none(id=employee.manager_id)
-            if empl_manager and empl_manager.id != user.id and (not creator or empl_manager.id != creator.id):
-                recipients.append(empl_manager)
             directeur = await User.filter(is_directeur=True, dept_str=employee.dept_str).first()
             if directeur and directeur.id != user.id:
                 recipients.append(directeur)
+            n1 = await User.filter(is_validator_n1=True, dept_str=employee.dept_str).first()
+            if n1 and n1.id != user.id and (not directeur or n1.id != directeur.id):
+                recipients.append(n1)
         elif user.is_directeur:
-            if creator and creator.id != user.id:
-                recipients.append(creator)
+            n1 = await User.filter(is_validator_n1=True, dept_str=employee.dept_str).first()
+            if n1 and n1.id != user.id:
+                recipients.append(n1)
 
         FIELD_LABELS_SHORT = {
             "total_amount": "montant", "performance_score": "score", "status": "statut",
