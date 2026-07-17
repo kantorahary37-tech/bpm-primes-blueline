@@ -652,6 +652,21 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
         if bonus.employee.dept_str != user.department:
             raise HTTPException(status_code=404, detail="Bonus introuvable")
 
+    # Vérifier que le statut est autorisé pour le rôle
+    if user.is_dg:
+        allowed = {ValidationStatus.EN_ATTENTE_DG}
+    elif user.is_drh:
+        allowed = {ValidationStatus.VALIDE}
+    elif user.is_directeur:
+        allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
+    elif user.is_validator_n1:
+        allowed = {ValidationStatus.INITIALISE}
+    else:
+        allowed = set()
+
+    if bonus.status not in allowed:
+        raise HTTPException(status_code=404, detail="Bonus introuvable")
+
     return bonus
 
 # Route GET pour l'historique des validations d'une prime
