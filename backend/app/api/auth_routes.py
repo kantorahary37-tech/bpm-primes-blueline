@@ -110,7 +110,7 @@ async def get_validation_stats(user: User = Depends(get_current_user)):
             action="REJETER",
         ).count()
 
-    total_validated = await Bonus.filter(status="Prime validée").count()
+    total_validated = await Bonus.filter(status="Prime validée", paid_at__isnull=True).count()
 
     return {
         "validated_this_month": validated_this_month,

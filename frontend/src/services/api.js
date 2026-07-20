@@ -72,7 +72,7 @@ export const updateEmployee = async (id, employeeData) => {
   return data;
 };
 
-export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false, allStatuses = false, viewAllValidated = false) => {
+export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false, allStatuses = false, viewAllValidated = false, validatedByMe = false) => {
   const params = {};
   if (status) params.status = status;
   if (employeeId) params.employee_id = employeeId;
@@ -82,6 +82,7 @@ export const getBonuses = async (status = null, employeeId = null, bonusType = n
   if (showPaid) params.show_paid = true;
   if (allStatuses) params.all_statuses = true;
   if (viewAllValidated) params.view_all_validated = true;
+  if (validatedByMe) params.validated_by_me = true;
   const { data } = await api.get('/bonuses/', { params });
   return data;
 };

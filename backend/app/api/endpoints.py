@@ -282,6 +282,7 @@ async def list_bonuses(
     show_paid: Optional[bool] = False,
     all_statuses: Optional[bool] = False,
     view_all_validated: Optional[bool] = False,
+    validated_by_me: Optional[bool] = False,
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee')
@@ -302,6 +303,11 @@ async def list_bonuses(
 
     if all_statuses:
         pass  # Kanban : toutes les primes du département, tous statuts
+    elif validated_by_me:
+        validated_ids = await Validation.filter(
+            validator_id=user.id, action="VALIDER"
+        ).values_list("bonus_id", flat=True)
+        query = query.filter(id__in=validated_ids, status=ValidationStatus.VALIDE)
     elif view_all_validated:
         query = query.filter(status=ValidationStatus.VALIDE)  # Page validées DG/DRH
     elif status:
