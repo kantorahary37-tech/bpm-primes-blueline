@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status, Request
 from fastapi import Depends
-from app.models import User, Department, Validation
+from app.models import User, Department, Validation, Bonus
 from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.email_service import send_reset_email
@@ -110,9 +110,12 @@ async def get_validation_stats(user: User = Depends(get_current_user)):
             action="REJETER",
         ).count()
 
+    total_validated = await Bonus.filter(status="Prime validée").count()
+
     return {
         "validated_this_month": validated_this_month,
         "rejected_total": rejected_total,
+        "total_validated": total_validated,
     }
 
 @router.post("/change-password")
