@@ -71,6 +71,14 @@ const Employees = () => {
   const [showEmpBonusExportModal, setShowEmpBonusExportModal] = useState(false);
   const [empBonusExportColumns, setEmpBonusExportColumns] = useState(EXPORT_EMP_BONUS_COLUMNS);
 
+  const isBonusClickable = (bonus) => {
+    if (user?.is_dg) return bonus.status === 'En attente DG';
+    if (user?.is_drh) return bonus.status === 'Prime validée';
+    if (user?.is_directeur) return bonus.status === 'En attente Directeur';
+    if (user?.is_validator_n1) return bonus.status === 'Initialisé';
+    return false;
+  };
+
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -124,7 +132,7 @@ const Employees = () => {
     }
     setBonusesLoading(true);
     try {
-      const data = await getBonuses(null, emp.id);
+      const data = await getBonuses(null, emp.id, null, null, null, false, true);
       setEmpBonuses(data);
     } catch (err) {
       console.error(err);
@@ -345,22 +353,31 @@ const Employees = () => {
                       const monthName = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
                       return [
                         <div key={ym} className="px-4 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{monthName}</div>,
-                        ...groups[ym].map(bonus => (
-                          <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
-                            className="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all">
-                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[11px] font-bold">
-                              {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
+                        ...groups[ym].map(bonus => {
+                          const clickable = isBonusClickable(bonus);
+                          const rowContent = (
+                            <div className={`flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg border transition-all ${
+                              clickable
+                                ? 'border-gray-100 hover:border-blue-200 hover:bg-blue-50/40 cursor-pointer'
+                                : 'border-gray-100'
+                            }`}>
+                              <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[11px] font-bold">
+                                {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</p>
+                                <p className="text-[11px] text-gray-400">{bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}</p>
+                              </div>
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
+                                {statusLabel(bonus)}
+                              </span>
+                              <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</p>
-                              <p className="text-[11px] text-gray-400">{bonus.start_date && bonus.end_date ? `${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}` : '—'}</p>
-                            </div>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                              {statusLabel(bonus)}
-                            </span>
-                            <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
-                          </Link>
-                        )),
+                          );
+                          return clickable
+                            ? <Link key={bonus.id} to={`/bonuses/${bonus.id}`}>{rowContent}</Link>
+                            : <div key={bonus.id}>{rowContent}</div>;
+                        }),
                         <div key={`${ym}-sep`} className="border-b border-gray-50 mx-3 last:border-0" />
                       ]
                     })
