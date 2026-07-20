@@ -146,7 +146,7 @@ const Dashboard = () => {
           { icon: CheckIcon, label: 'Validées', value: validationStats.total_validated, sub: 'Non payées', bg: 'bg-emerald-50', text: 'text-emerald-600', to: '/archive' },
           { icon: ClockIcon, label: 'Payées', value: validationStats.total_paid, sub: 'Marquées payées', bg: 'bg-blue-50', text: 'text-blue-600', to: '/archive' },
           { icon: EmployeesIcon, label: `Employés (${user?.department || 'tous'})`, value: stats.employees, sub: 'Actifs', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
-        ]).map((card, i) => {
+        ] : []).map((card, i) => {
           const Icon = card.icon;
           const Tag = card.to ? Link : 'div';
           return (
