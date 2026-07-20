@@ -141,10 +141,10 @@ const Dashboard = () => {
           { icon: ClockIcon, label: 'En attente paiement', value: validationStats.total_validated, sub: 'Validées, non payées', bg: 'bg-amber-50', text: 'text-amber-600', to: '/validated' },
           { icon: CheckIcon, label: 'Payées', value: validationStats.total_paid, sub: 'Marquées payées', bg: 'bg-emerald-50', text: 'text-emerald-600', to: '/archive' },
           { icon: EmployeesIcon, label: `Employés (${user?.department || 'tous'})`, value: stats.employees, sub: 'Actifs', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
-        ] : [
-          { icon: ClipboardIcon, label: 'Total Primes', value: stats.total, sub: formatAmount(stats.totalAmount), bg: 'bg-blue-50', text: 'text-blue-600' },
-          { icon: ClockIcon, label: 'En attente', value: stats.pending, sub: 'Non validées', bg: 'bg-amber-50', text: 'text-amber-600' },
-          { icon: CheckIcon, label: 'Validées', value: validationStats.total_validated, sub: 'Approuvées', bg: 'bg-emerald-50', text: 'text-emerald-600', to: '/validated' },
+        ] : user?.is_dg ? [
+          { icon: ClipboardIcon, label: 'À valider', value: stats.pending, sub: 'En attente DG', bg: 'bg-orange-50', text: 'text-orange-600', to: '/bonuses' },
+          { icon: CheckIcon, label: 'Validées', value: validationStats.total_validated, sub: 'Non payées', bg: 'bg-emerald-50', text: 'text-emerald-600', to: '/archive' },
+          { icon: ClockIcon, label: 'Payées', value: validationStats.total_paid, sub: 'Marquées payées', bg: 'bg-blue-50', text: 'text-blue-600', to: '/archive' },
           { icon: EmployeesIcon, label: `Employés (${user?.department || 'tous'})`, value: stats.employees, sub: 'Actifs', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
         ]).map((card, i) => {
           const Icon = card.icon;
