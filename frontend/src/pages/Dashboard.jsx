@@ -40,7 +40,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [bonuses, setBonuses] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [validationStats, setValidationStats] = useState({ validated_this_month: 0, rejected_total: 0, total_validated: 0 });
+  const [validationStats, setValidationStats] = useState({ validated_this_month: 0, rejected_total: 0, total_validated: 0, total_paid: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -49,7 +49,7 @@ const Dashboard = () => {
         const [b, e, vs] = await Promise.all([
           getBonuses(),
           getEmployees(user?.department),
-          user?.is_drh ? null : getValidationStats(),
+          getValidationStats(),
         ]);
         setBonuses(b);
         setEmployees(e);
@@ -136,6 +136,11 @@ const Dashboard = () => {
           { icon: CheckIcon, label: 'Validées ce mois', value: validationStats.validated_this_month, sub: 'Par vous', bg: 'bg-emerald-50', text: 'text-emerald-600' },
           { icon: ClockIcon, label: 'Rejetées', value: validationStats.rejected_total, sub: 'À corriger', bg: 'bg-red-50', text: 'text-red-600' },
           { icon: EmployeesIcon, label: `Mon équipe (${user?.department || ''})`, value: stats.employees, sub: 'Employés', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
+        ] : user?.is_drh ? [
+          { icon: ClipboardIcon, label: 'Total Primes', value: stats.total, sub: formatAmount(stats.totalAmount), bg: 'bg-blue-50', text: 'text-blue-600' },
+          { icon: ClockIcon, label: 'En attente paiement', value: validationStats.total_validated, sub: 'Validées, non payées', bg: 'bg-amber-50', text: 'text-amber-600', to: '/validated' },
+          { icon: CheckIcon, label: 'Payées', value: validationStats.total_paid, sub: 'Marquées payées', bg: 'bg-emerald-50', text: 'text-emerald-600', to: '/archive' },
+          { icon: EmployeesIcon, label: `Employés (${user?.department || 'tous'})`, value: stats.employees, sub: 'Actifs', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
         ] : [
           { icon: ClipboardIcon, label: 'Total Primes', value: stats.total, sub: formatAmount(stats.totalAmount), bg: 'bg-blue-50', text: 'text-blue-600' },
           { icon: ClockIcon, label: 'En attente', value: stats.pending, sub: 'Non validées', bg: 'bg-amber-50', text: 'text-amber-600' },

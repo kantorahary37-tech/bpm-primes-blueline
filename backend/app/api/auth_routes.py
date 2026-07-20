@@ -111,11 +111,13 @@ async def get_validation_stats(user: User = Depends(get_current_user)):
         ).count()
 
     total_validated = await Bonus.filter(status="Prime validée", paid_at__isnull=True).count()
+    total_paid = await Bonus.filter(status="Prime validée", paid_at__isnull=False).count()
 
     return {
         "validated_this_month": validated_this_month,
         "rejected_total": rejected_total,
         "total_validated": total_validated,
+        "total_paid": total_paid,
     }
 
 @router.post("/change-password")
