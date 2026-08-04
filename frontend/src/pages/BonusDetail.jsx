@@ -55,12 +55,14 @@ const BonusDetail = () => {
           step: 'Création',
           validator_name: '—',
           date: new Date(b.created_at).toLocaleDateString('fr-FR'),
+          _sort: b.created_at,
         };
         const timeline = v.map((entry) => ({
           ...entry,
           date: new Date(entry.validated_at).toLocaleDateString('fr-FR', {
             day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
           }),
+          _sort: entry.validated_at,
         }));
         setValidations([creation, ...timeline]);
         getAuditLogs(id).then(setAuditLogs).catch(() => {});
@@ -106,6 +108,7 @@ const BonusDetail = () => {
         date: new Date(entry.validated_at).toLocaleDateString('fr-FR', {
           day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
         }),
+        _sort: entry.validated_at,
       }));
       setValidations(timeline);
     } catch (err) {
@@ -558,9 +561,7 @@ const BonusDetail = () => {
               date: new Date(log.created_at).toLocaleDateString('fr-FR', {
                 day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
               }),
-              _sort: new Date(log.created_at).toLocaleDateString('fr-FR', {
-                day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-              }),
+              _sort: log.created_at,
             })),
           ].sort((a, b) => {
             const parseDate = (s) => {
