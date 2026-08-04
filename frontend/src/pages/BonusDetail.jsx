@@ -550,7 +550,7 @@ const BonusDetail = () => {
 
         <Section title="Historique complet" icon={ClockIcon}>
           <Timeline items={[
-            ...validations.map(v => ({ ...v, _sort: v.date })),
+            ...validations.map(v => ({ ...v, _sort: v.validated_at ?? v._sort })),
             ...auditLogs.map(log => ({
               action: log.action,
               step: log.action,
@@ -569,7 +569,7 @@ const BonusDetail = () => {
               const d = new Date(s)
               return isNaN(d) ? 0 : d.getTime()
             }
-            return parseDate(b._sort) - parseDate(a._sort)
+            return parseDate(a._sort) - parseDate(b._sort)
           })} />
         </Section>
 
