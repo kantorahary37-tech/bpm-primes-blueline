@@ -117,7 +117,7 @@ export default function EvaluationTemplatesPage() {
     <div className="page-container">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-base-content">Modeles d'evaluation</h1>
+          <h1 className="text-xl font-bold text-base-content">Évaluation</h1>
           <p className="text-sm text-base-content/50 mt-1">Criteres d'evaluation par departement</p>
         </div>
       </div>

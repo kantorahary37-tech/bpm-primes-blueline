@@ -6,7 +6,7 @@ const navItems = [
   { path: '/employees', label: 'Employés', icon: '👥' },
   { path: '/bonuses', label: 'Primes', icon: '💰' },
   { path: '/settings/primemax', label: 'Plafonds', icon: '⚙️' },
-  { path: '/admin/evaluation-templates', label: 'Modeles eval', icon: '📋', roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: '📋', roles: ['is_admin', 'is_dg', 'is_drh'] },
   { path: '/admin/users', label: 'Utilisateurs', icon: '👤', roles: ['is_admin'] },
 ]
 
