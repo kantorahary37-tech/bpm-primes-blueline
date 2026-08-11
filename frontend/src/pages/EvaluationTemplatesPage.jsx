@@ -15,6 +15,7 @@ export default function EvaluationTemplatesPage() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [newQuanti, setNewQuanti] = useState({ criteria_name: '', coeff: 1 })
   const [newQuali, setNewQuali] = useState({ criteria_name: '', coeff: 1 })
+  const [hasChanges, setHasChanges] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -35,6 +36,7 @@ export default function EvaluationTemplatesPage() {
     setSelectedDept(dept)
     setEditQuantitative([...t.quantitative])
     setEditQualitative([...t.qualitative])
+    setHasChanges(false)
   }
 
   const handleSave = async () => {
@@ -57,20 +59,13 @@ export default function EvaluationTemplatesPage() {
         })),
       })
       toast.success('Modele sauvegarde !')
+      setHasChanges(false)
       await load()
     } catch {
       toast.error('Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
     }
-  }
-
-  const handleDeleteCriteria = (section, id) => {
-    if (!id) {
-      if (section === 'quanti') setEditQuantitative(prev => prev.filter((_, i) => i !== [...prev].findIndex(c => !c.id)))
-      return
-    }
-    setConfirmDelete({ section, id })
   }
 
   const doDelete = async () => {
@@ -82,6 +77,7 @@ export default function EvaluationTemplatesPage() {
       } else {
         setEditQualitative(prev => prev.filter(c => c.id !== confirmDelete.id))
       }
+      setHasChanges(true)
       toast.success('Critere supprime')
     } catch {
       toast.error('Erreur lors de la suppression')
@@ -100,11 +96,22 @@ export default function EvaluationTemplatesPage() {
       setEditQualitative(prev => [...prev, item])
       setNewQuali({ criteria_name: '', coeff: 1 })
     }
+    setHasChanges(true)
   }
 
   const updateCriteria = (section, index, field, value) => {
     const setter = section === 'quanti' ? setEditQuantitative : setEditQualitative
     setter(prev => prev.map((c, i) => i === index ? { ...c, [field]: field === 'coeff' ? parseFloat(value) || 0 : value } : c))
+    setHasChanges(true)
+  }
+
+  const removeCriteria = (section, index) => {
+    if (section === 'quanti') {
+      setEditQuantitative(prev => prev.filter((_, i) => i !== index))
+    } else {
+      setEditQualitative(prev => prev.filter((_, i) => i !== index))
+    }
+    setHasChanges(true)
   }
 
   const totalCoeff = (list) => list.reduce((s, c) => s + (parseFloat(c.coeff) || 0), 0)
@@ -113,12 +120,82 @@ export default function EvaluationTemplatesPage() {
     return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs.</p></div></div>
   }
 
+  const renderSection = (title, icon, color, list, setList, section, newInput, setNewInput) => {
+    const total = totalCoeff(list)
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className={`px-5 py-3.5 flex items-center justify-between border-b border-gray-100`}>
+          <div className="flex items-center gap-2.5">
+            <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center text-sm`}>{icon}</div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+              <p className="text-[11px] text-gray-400">{list.length} critere{list.length > 1 ? 's' : ''}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-lg font-bold text-gray-900">{total}</span>
+            <p className="text-[10px] text-gray-400">/ 10 coeff</p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-gray-50">
+          {list.map((c, i) => (
+            <div key={c.id || `new-${section}-${i}`} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50/50 transition-colors group">
+              <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-[11px] font-medium shrink-0">
+                {i + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <input type="text" value={c.criteria_name}
+                  onChange={(e) => updateCriteria(section, i, 'criteria_name', e.target.value)}
+                  className="w-full text-sm font-medium text-gray-900 bg-transparent border-none outline-none focus:ring-0 p-0"
+                  placeholder="Nom du critere..." />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] text-gray-400 hidden sm:inline">Coeff</span>
+                <input type="number" step="0.5" min="0" max="10" value={c.coeff}
+                  onChange={(e) => updateCriteria(section, i, 'coeff', e.target.value)}
+                  className="w-14 text-center text-sm font-semibold text-gray-900 bg-gray-100 rounded-lg border-none outline-none py-1 focus:ring-2 focus:ring-blue-200" />
+              </div>
+              <button onClick={() => {
+                if (c.id) setConfirmDelete({ section, id: c.id })
+                else removeCriteria(section, i)
+              }}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-5 py-3 bg-gray-50/80 border-t border-gray-100">
+          <div className="flex items-center gap-2">
+            <input type="text" placeholder="Ajouter un critere..." value={newInput.criteria_name}
+              onChange={(e) => setNewInput({ ...newInput, criteria_name: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && addCriteria(section)}
+              className="flex-1 text-sm bg-white border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all" />
+            <input type="number" step="0.5" min="0" max="10" value={newInput.coeff}
+              onChange={(e) => setNewInput({ ...newInput, coeff: parseFloat(e.target.value) || 0 })}
+              className="w-14 text-center text-sm font-medium bg-white border border-gray-200 rounded-lg py-1.5 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all" />
+            <button onClick={() => addCriteria(section)}
+              className="w-8 h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="page-container">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-base-content">Modeles d'evaluation</h1>
-          <p className="text-sm text-base-content/50 mt-1">Criteres d'evaluation par departement</p>
+          <h1 className="text-xl font-bold text-gray-900">Modeles d'evaluation</h1>
+          <p className="text-sm text-gray-500 mt-1">Criteres d'evaluation par departement</p>
         </div>
       </div>
 
@@ -127,22 +204,22 @@ export default function EvaluationTemplatesPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <div className="card-blueline p-4">
-              <h2 className="text-sm font-semibold mb-3">Departements</h2>
-              <div className="space-y-1">
+            <div className="bg-white rounded-xl border border-gray-200 p-2">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2">Departements</h2>
+              <div className="space-y-0.5">
                 {templates.map(t => (
                   <button key={t.department} onClick={() => selectDept(t.department)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all ${
                       selectedDept === t.department
-                        ? 'bg-brand-50 text-brand-700 font-medium'
-                        : 'text-base-content/60 hover:bg-base-200'
+                        ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-50'
                     }`}>
                     <div className="flex items-center justify-between">
-                      <span className="truncate">{t.department}</span>
+                      <span className="truncate text-[13px]">{t.department.replace('Direction ', '')}</span>
                       {t.is_default ? (
-                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">defaut</span>
+                        <span className="text-[9px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full font-medium">defaut</span>
                       ) : (
-                        <span className="text-[10px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded">personnalise</span>
+                        <span className="text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full font-medium">custom</span>
                       )}
                     </div>
                   </button>
@@ -154,110 +231,34 @@ export default function EvaluationTemplatesPage() {
           <div className="lg:col-span-2">
             {selectedDept ? (
               <div className="space-y-4">
-                <div className="card-blueline p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-semibold">{selectedDept} - Quantitatif</h2>
-                    <span className="text-xs text-base-content/40">Total coeff : {totalCoeff(editQuantitative)}</span>
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-xs text-base-content/50 border-b border-base-200">
-                        <th className="text-left py-2">Critere</th>
-                        <th className="text-center py-2 w-20">Coeff</th>
-                        <th className="text-center py-2 w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {editQuantitative.map((c, i) => (
-                        <tr key={c.id || `new-q-${i}`} className="border-b border-base-100">
-                          <td className="py-2">
-                            <input type="text" value={c.criteria_name}
-                              onChange={(e) => updateCriteria('quanti', i, 'criteria_name', e.target.value)}
-                              className="input input-bordered input-xs w-full" />
-                          </td>
-                          <td className="py-2 text-center">
-                            <input type="number" step="0.5" min="0" max="10" value={c.coeff}
-                              onChange={(e) => updateCriteria('quanti', i, 'coeff', e.target.value)}
-                              className="input input-bordered input-xs w-16 text-center" />
-                          </td>
-                          <td className="py-2 text-center">
-                            <button onClick={() => handleDeleteCriteria('quanti', c.id)}
-                              className="text-red-400 hover:text-red-600 text-xs">X</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="flex items-center gap-2 mt-2">
-                    <input type="text" placeholder="Nouveau critere..." value={newQuanti.criteria_name}
-                      onChange={(e) => setNewQuanti({ ...newQuanti, criteria_name: e.target.value })}
-                      onKeyDown={(e) => e.key === 'Enter' && addCriteria('quanti')}
-                      className="input input-bordered input-xs flex-1" />
-                    <input type="number" step="0.5" min="0" max="10" value={newQuanti.coeff}
-                      onChange={(e) => setNewQuanti({ ...newQuanti, coeff: parseFloat(e.target.value) || 0 })}
-                      className="input input-bordered input-xs w-16 text-center" />
-                    <button onClick={() => addCriteria('quanti')}
-                      className="btn btn-xs bg-brand-600 text-white border-0">+</button>
-                  </div>
-                </div>
-
-                <div className="card-blueline p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-semibold">{selectedDept} - Qualitatif</h2>
-                    <span className="text-xs text-base-content/40">Total coeff : {totalCoeff(editQualitative)}</span>
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-xs text-base-content/50 border-b border-base-200">
-                        <th className="text-left py-2">Critere</th>
-                        <th className="text-center py-2 w-20">Coeff</th>
-                        <th className="text-center py-2 w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {editQualitative.map((c, i) => (
-                        <tr key={c.id || `new-q-${i}`} className="border-b border-base-100">
-                          <td className="py-2">
-                            <input type="text" value={c.criteria_name}
-                              onChange={(e) => updateCriteria('quali', i, 'criteria_name', e.target.value)}
-                              className="input input-bordered input-xs w-full" />
-                          </td>
-                          <td className="py-2 text-center">
-                            <input type="number" step="0.5" min="0" max="10" value={c.coeff}
-                              onChange={(e) => updateCriteria('quali', i, 'coeff', e.target.value)}
-                              className="input input-bordered input-xs w-16 text-center" />
-                          </td>
-                          <td className="py-2 text-center">
-                            <button onClick={() => handleDeleteCriteria('quali', c.id)}
-                              className="text-red-400 hover:text-red-600 text-xs">X</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="flex items-center gap-2 mt-2">
-                    <input type="text" placeholder="Nouveau critere..." value={newQuali.criteria_name}
-                      onChange={(e) => setNewQuali({ ...newQuali, criteria_name: e.target.value })}
-                      onKeyDown={(e) => e.key === 'Enter' && addCriteria('quali')}
-                      className="input input-bordered input-xs flex-1" />
-                    <input type="number" step="0.5" min="0" max="10" value={newQuali.coeff}
-                      onChange={(e) => setNewQuali({ ...newQuali, coeff: parseFloat(e.target.value) || 0 })}
-                      className="input input-bordered input-xs w-16 text-center" />
-                    <button onClick={() => addCriteria('quali')}
-                      className="btn btn-xs bg-brand-600 text-white border-0">+</button>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <button onClick={handleSave} disabled={saving}
-                    className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0">
-                    {saving ? 'Sauvegarde...' : 'Sauvegarder le modele'}
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-bold text-gray-900">{selectedDept}</h2>
+                  <button onClick={handleSave} disabled={saving || !hasChanges}
+                    className={`btn btn-sm border-0 text-white transition-all ${
+                      hasChanges ? 'bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200' : 'bg-gray-300 cursor-not-allowed'
+                    }`}>
+                    {saving ? (
+                      <span className="flex items-center gap-2"><span className="loading loading-spinner loading-xs"></span> Sauvegarde...</span>
+                    ) : 'Sauvegarder'}
                   </button>
+                </div>
+
+                {renderSection('Evaluation Quantitative', '📊', 'bg-blue-50 text-blue-600', editQuantitative, setEditQuantitative, 'quanti', newQuanti, setNewQuanti)}
+                {renderSection('Evaluation Qualitative', '⭐', 'bg-amber-50 text-amber-600', editQualitative, setEditQualitative, 'quali', newQuali, setNewQuali)}
+
+                <div className="bg-gray-50 rounded-xl border border-gray-200 px-5 py-3 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-500">Total general</span>
+                  <span className="text-xl font-bold text-gray-900">{totalCoeff(editQuantitative) + totalCoeff(editQualitative)} <span className="text-sm font-normal text-gray-400">/ 20</span></span>
                 </div>
               </div>
             ) : (
-              <div className="card-blueline p-8 text-center text-base-content/40 text-sm">
-                Selectionnez un departement pour voir et modifier son modele d'evaluation.
+              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <p className="text-sm text-gray-400">Selectionnez un departement pour voir son modele</p>
               </div>
             )}
           </div>
@@ -267,8 +268,8 @@ export default function EvaluationTemplatesPage() {
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)}>
           <div className="p-6">
-            <h3 className="font-semibold mb-3">Confirmer la suppression</h3>
-            <p className="text-sm text-base-content/60 mb-4">Voulez-vous vraiment supprimer ce critere ?</p>
+            <h3 className="font-semibold mb-2 text-gray-900">Supprimer ce critere ?</h3>
+            <p className="text-sm text-gray-500 mb-5">Cette action est irreversible.</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(null)} className="btn btn-sm btn-ghost">Annuler</button>
               <button onClick={doDelete} className="btn btn-sm bg-red-600 hover:bg-red-700 text-white border-0">Supprimer</button>
