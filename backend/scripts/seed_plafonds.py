@@ -43,6 +43,12 @@ BONUS_TYPE_DEPARTMENTS = {
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
 
+    for dept_name in DEPARTMENTS:
+        dept_obj = await Department.get_or_none(name=dept_name)
+        if not dept_obj:
+            await Department.create(name=dept_name)
+            print(f"  + Departement cree : {dept_name}")
+
     created = 0
     for bonus_type, depts in BONUS_TYPE_DEPARTMENTS.items():
         for dept in depts:
