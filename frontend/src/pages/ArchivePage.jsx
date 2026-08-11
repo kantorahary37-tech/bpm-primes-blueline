@@ -21,7 +21,7 @@ const typeColor = (t) => {
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
-function BonusSection({ title, badge, badgeColor, items, page, setPage, totalPages }) {
+function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPages }) {
   const monthGroups = (() => {
     const groups = {};
     items.forEach(b => {
@@ -41,9 +41,9 @@ function BonusSection({ title, badge, badgeColor, items, page, setPage, totalPag
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-base font-bold text-gray-900">{title}</h2>
-        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-lg font-bold text-gray-900">{items.length} {items.length > 1 ? 'primes' : 'prime'} {label}</h2>
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeColor}`}>{badge}</span>
       </div>
 
       {items.length === 0 ? (
@@ -159,9 +159,9 @@ const ArchivePage = () => {
 
       <div className={isDG ? '' : 'space-y-8'}>
         <BonusSection
-          title="Primes validees"
-          badge={`${validatedUnpaid.length} en attente de paiement`}
-          badgeColor="bg-amber-100 text-amber-700"
+          label="en attente de paiement"
+          badge="Validees"
+          badgeColor="bg-green-100 text-green-700"
           items={validatedUnpaid}
           page={pageUnpaid}
           setPage={setPageUnpaid}
@@ -170,8 +170,8 @@ const ArchivePage = () => {
 
         {!isDG && (
           <BonusSection
-            title="Primes payees"
-            badge={`${validatedPaid.length} payee(s)`}
+            label="payees"
+            badge="Payees"
             badgeColor="bg-emerald-100 text-emerald-700"
             items={validatedPaid}
             page={pagePaid}
