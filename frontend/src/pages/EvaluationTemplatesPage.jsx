@@ -118,7 +118,7 @@ export default function EvaluationTemplatesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-base-content">Évaluation</h1>
-          <p className="text-sm text-base-content/50 mt-1">Criteres d'evaluation par departement</p>
+          <p className="text-sm text-base-content/50 mt-1">Critères d'évaluation mensuelle par département</p>
         </div>
       </div>
 
@@ -128,7 +128,7 @@ export default function EvaluationTemplatesPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
             <div className="card-blueline p-4">
-              <h2 className="text-sm font-semibold mb-3">Departements</h2>
+              <h2 className="text-sm font-semibold mb-3">Départements</h2>
               <div className="space-y-1">
                 {templates.map(t => (
                   <button key={t.department} onClick={() => selectDept(t.department)}
@@ -204,7 +204,7 @@ export default function EvaluationTemplatesPage() {
                     ))}
                   </div>
                   <div className="flex items-center gap-2 px-4 py-3 bg-base-50 border-t border-base-100">
-                    <input type="text" placeholder="Ajouter un critere..." value={newQuanti.criteria_name}
+                    <input type="text" placeholder="Ajouter un critère..." value={newQuanti.criteria_name}
                       onChange={(e) => setNewQuanti({ ...newQuanti, criteria_name: e.target.value })}
                       onKeyDown={(e) => e.key === 'Enter' && addCriteria('quanti')}
                       className="input input-bordered input-sm flex-1 bg-white" />
@@ -254,7 +254,7 @@ export default function EvaluationTemplatesPage() {
                     ))}
                   </div>
                   <div className="flex items-center gap-2 px-4 py-3 bg-base-50 border-t border-base-100">
-                    <input type="text" placeholder="Ajouter un critere..." value={newQuali.criteria_name}
+                    <input type="text" placeholder="Ajouter un critère..." value={newQuali.criteria_name}
                       onChange={(e) => setNewQuali({ ...newQuali, criteria_name: e.target.value })}
                       onKeyDown={(e) => e.key === 'Enter' && addCriteria('quali')}
                       className="input input-bordered input-sm flex-1 bg-white" />
@@ -269,7 +269,7 @@ export default function EvaluationTemplatesPage() {
               </div>
             ) : (
               <div className="card-blueline p-8 text-center text-base-content/40 text-sm">
-                Selectionnez un departement pour voir et modifier son modele d'evaluation.
+                Sélectionnez un département pour voir et modifier son modèle d'évaluation.
               </div>
             )}
           </div>
@@ -280,7 +280,7 @@ export default function EvaluationTemplatesPage() {
         <Modal onClose={() => setConfirmDelete(null)}>
           <div className="p-6">
             <h3 className="font-semibold mb-3">Confirmer la suppression</h3>
-            <p className="text-sm text-base-content/60 mb-4">Voulez-vous vraiment supprimer ce critere ?</p>
+            <p className="text-sm text-base-content/60 mb-4">Voulez-vous vraiment supprimer ce critère ?</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(null)} className="btn btn-sm btn-ghost">Annuler</button>
               <button onClick={doDelete} className="btn btn-sm bg-red-600 hover:bg-red-700 text-white border-0">Supprimer</button>

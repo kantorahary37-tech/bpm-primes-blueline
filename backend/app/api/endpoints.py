@@ -356,38 +356,45 @@ async def list_bonuses(
     was_rejected: Optional[bool] = None,
     show_paid: Optional[bool] = False,
     all_statuses: Optional[bool] = False,
+    archive_mode: Optional[bool] = False,
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee')
-    if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
-        query = query.filter(employee__dept_str=user.department)
 
-    # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
-    if user.is_admin:
-        allowed_statuses = [s for s in ValidationStatus]
-    elif user.is_dg:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
-    elif user.is_drh:
-        allowed_statuses = [ValidationStatus.VALIDE]
-    elif user.is_directeur:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
-    elif user.is_validator_n1:
-        allowed_statuses = [ValidationStatus.INITIALISE]
+    if archive_mode:
+        query = query.filter(status=ValidationStatus.VALIDE)
     else:
-        allowed_statuses = []
+        if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
+            query = query.filter(employee__dept_str=user.department)
 
-    if all_statuses:
-        pass  # Kanban : toutes les primes du département, tous statuts
-    elif status:
-        status_enum = ValidationStatus(status)
-        if status_enum not in allowed_statuses:
-            raise HTTPException(status_code=403, detail="Vous n'avez pas accès aux primes avec ce statut")
-        query = query.filter(status=status_enum)
-    else:
-        query = query.filter(status__in=allowed_statuses)
+        # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
+        if user.is_admin:
+            allowed_statuses = [s for s in ValidationStatus]
+        elif user.is_dg:
+            allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
+        elif user.is_drh:
+            allowed_statuses = [ValidationStatus.VALIDE]
+        elif user.is_directeur:
+            allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+        elif user.is_validator_n1:
+            allowed_statuses = [ValidationStatus.INITIALISE]
+        else:
+            allowed_statuses = []
+
+        if all_statuses:
+            pass  # Kanban : toutes les primes du département, tous statuts
+        elif status:
+            status_enum = ValidationStatus(status)
+            if status_enum not in allowed_statuses:
+                raise HTTPException(status_code=403, detail="Vous n'avez pas accès aux primes avec ce statut")
+            query = query.filter(status=status_enum)
+        else:
+            query = query.filter(status__in=allowed_statuses)
 
     if show_paid:
         query = query.filter(paid_at__isnull=False)
+    elif archive_mode:
+        pass
     else:
         query = query.filter(paid_at__isnull=True)
     if employee_id: query = query.filter(employee_id=employee_id)
