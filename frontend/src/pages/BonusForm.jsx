@@ -306,18 +306,18 @@ export default function BonusForm() {
   }, [selectedEmp?.id, editType])
 
   useEffect(() => {
-    if (!selectedEmp?.department || editType !== 'mensuel' || isEditing || templateLoadedDept === selectedEmp.department) return
-    getEvaluationTemplates(selectedEmp.department).then(data => {
+    if (!connectedUser?.department || editType !== 'mensuel' || isEditing || templateLoadedDept === connectedUser.department) return
+    getEvaluationTemplates(connectedUser.department).then(data => {
       if (data.quantitative && data.quantitative.length > 0) {
         setQuantitative(data.quantitative.map(c => ({ criteria: c.criteria_name, description: c.description || '', coeff: c.coeff, note: 0, value: 0 })))
       }
       if (data.qualitative && data.qualitative.length > 0) {
         setQualitative(data.qualitative.map(c => ({ criteria: c.criteria_name, description: c.description || '', coeff: c.coeff, note: 0, value: 0 })))
       }
-      setTemplateLoadedDept(selectedEmp.department)
+      setTemplateLoadedDept(connectedUser.department)
       setTemplateSaved(false)
     }).catch(() => {})
-  }, [selectedEmp?.department, editType, isEditing])
+  }, [connectedUser?.department, editType, isEditing])
 
   useEffect(() => {
     if (!isEditing || !id) return;
@@ -443,11 +443,11 @@ export default function BonusForm() {
   }
 
   const handleSaveTemplate = async () => {
-    if (!selectedEmp?.department) return
+    if (!connectedUser?.department) return
     setSavingTemplate(true)
     try {
       await saveEvaluationTemplates({
-        department: selectedEmp.department,
+        department: connectedUser.department,
         quantitative: quantitative.map((c, i) => ({
           criteria_name: c.criteria,
           description: c.description || '',
@@ -1463,13 +1463,12 @@ export default function BonusForm() {
         <div className="card-blueline p-3 mb-0">
           <div className="flex items-center justify-between">
             <p className="text-gray-600 text-xs font-medium">
-              Modele d'evaluation du departement
-              {!selectedEmp && <span className="text-gray-400 font-normal ml-1">(selectionnez d'abord un employe)</span>}
+              Modele d'evaluation - {connectedUser?.department || 'Departement'}
             </p>
             {templateSaved ? (
               <span className="text-xs text-green-600 font-medium">Modele sauvegarde !</span>
             ) : (
-              <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate || !selectedEmp?.department}
+              <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate}
                 className="btn btn-xs bg-brand-600 hover:bg-brand-700 text-white border-0">
                 {savingTemplate ? 'Sauvegarde...' : 'Sauvegarder comme modele par defaut'}
               </button>
