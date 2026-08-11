@@ -8,6 +8,11 @@ const navItems = [
   { path: '/settings/primemax', label: 'Plafonds', icon: '⚙️' },
 ]
 
+const adminNavItems = [
+  { path: '/admin/evaluation-templates', label: 'Modeles eval', icon: '📋', roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { path: '/admin/users', label: 'Utilisateurs', icon: '👤', roles: ['is_admin'] },
+]
+
 export default function Sidebar({ open, onClose }) {
   const { pathname } = useLocation()
   const { user, logout } = useAuth()
@@ -43,6 +48,30 @@ export default function Sidebar({ open, onClose }) {
                 </Link>
               )
             })}
+            {adminNavItems.some(item => item.roles.some(r => user?.[r])) && (
+              <>
+                <div className="border-t border-base-200 my-2"></div>
+                <p className="px-3 text-[10px] uppercase tracking-wider text-base-content/30 font-semibold">Administration</p>
+                {adminNavItems.filter(item => item.roles.some(r => user?.[r])).map((item) => {
+                  const active = pathname === item.path || pathname.startsWith(item.path)
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={onClose}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        active
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'text-base-content/60 hover:bg-base-200 hover:text-base-content'
+                      }`}
+                    >
+                      <span className="text-lg">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </>
+            )}
           </nav>
 
           <div className="border-t border-base-200 p-4">

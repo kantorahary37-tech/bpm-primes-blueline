@@ -230,4 +230,19 @@ export const saveEvaluationTemplates = async (payload) => {
   return data;
 };
 
+export const getAllEvaluationTemplates = async () => {
+  const { data } = await api.get('/evaluation-templates/all');
+  return data;
+};
+
+export const deleteEvaluationTemplate = async (templateId) => {
+  const { data } = await api.delete(`/evaluation-templates/${templateId}`);
+  return data;
+};
+
+export const deleteDepartmentTemplates = async (department) => {
+  const { data } = await api.delete(`/evaluation-templates/department/${encodeURIComponent(department)}`);
+  return data;
+};
+
 export default api;
