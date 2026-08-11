@@ -220,4 +220,14 @@ export const adminLdapSearch = async (query) => {
   return data;
 };
 
+export const getEvaluationTemplates = async (department) => {
+  const { data } = await api.get('/evaluation-templates', { params: { department } });
+  return data;
+};
+
+export const saveEvaluationTemplates = async (payload) => {
+  const { data } = await api.post('/evaluation-templates', payload);
+  return data;
+};
+
 export default api;

@@ -212,3 +212,20 @@ class NotificationResponse(BaseModel):
 
 class UnreadCountResponse(BaseModel):
     count: int
+
+# --- Evaluation Template ---
+class EvaluationTemplateItem(BaseModel):
+    criteria_name: str
+    description: Optional[str] = ''
+    coeff: float
+    sort_order: int = 0
+
+class EvaluationTemplateSaveRequest(BaseModel):
+    department: str
+    quantitative: List[EvaluationTemplateItem]
+    qualitative: List[EvaluationTemplateItem]
+
+class EvaluationTemplateResponse(BaseModel):
+    department: str
+    quantitative: List[EvaluationTemplateItem]
+    qualitative: List[EvaluationTemplateItem]

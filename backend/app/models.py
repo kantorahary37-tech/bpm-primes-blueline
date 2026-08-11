@@ -191,6 +191,18 @@ class AuditLog(models.Model):
     changes = fields.JSONField(null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
 
+# Modèle Template d'évaluation (table "evaluationtemplate")
+class EvaluationTemplate(models.Model):
+    id = fields.IntField(pk=True)
+    department = fields.ForeignKeyField('models.Department', related_name='evaluation_templates')
+    section = fields.CharField(max_length=20)  # "quantitative" ou "qualitative"
+    criteria_name = fields.CharField(max_length=255)
+    description = fields.CharField(max_length=255, null=True, default='')
+    coeff = fields.DecimalField(max_digits=5, decimal_places=1)
+    sort_order = fields.IntField(default=0)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
 # Modèle Notification (table "notification")
 class Notification(models.Model):
     id = fields.IntField(pk=True)

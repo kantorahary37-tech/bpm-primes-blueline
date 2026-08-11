@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import Modal from '../components/Modal'
@@ -279,6 +279,9 @@ export default function BonusForm() {
   const [customMode, setCustomMode] = useState(null)
   const [customCriteria, setCustomCriteria] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [templateSaved, setTemplateSaved] = useState(false)
+  const [templateLoadedDept, setTemplateLoadedDept] = useState(null)
 
   useEffect(() => {
     getEmployees().then(all => {
@@ -301,6 +304,20 @@ export default function BonusForm() {
       setParams(p => ({ ...p, maxPrime: empMax ?? deptMax }))
     }).catch(() => {})
   }, [selectedEmp?.id, editType])
+
+  useEffect(() => {
+    if (!connectedUser?.department || editType !== 'mensuel' || isEditing || templateLoadedDept === connectedUser.department) return
+    getEvaluationTemplates(connectedUser.department).then(data => {
+      if (data.quantitative && data.quantitative.length > 0) {
+        setQuantitative(data.quantitative.map(c => ({ criteria: c.criteria_name, description: c.description || '', coeff: c.coeff, note: 0, value: 0 })))
+      }
+      if (data.qualitative && data.qualitative.length > 0) {
+        setQualitative(data.qualitative.map(c => ({ criteria: c.criteria_name, description: c.description || '', coeff: c.coeff, note: 0, value: 0 })))
+      }
+      setTemplateLoadedDept(connectedUser.department)
+      setTemplateSaved(false)
+    }).catch(() => {})
+  }, [connectedUser?.department, editType, isEditing])
 
   useEffect(() => {
     if (!isEditing || !id) return;
@@ -423,6 +440,33 @@ export default function BonusForm() {
 
   const handleConfigChange = (field, value) => {
     setAstreinteConfig({ ...astreinteConfig, [field]: value })
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!connectedUser?.department) return
+    setSavingTemplate(true)
+    try {
+      await saveEvaluationTemplates({
+        department: connectedUser.department,
+        quantitative: quantitative.map((c, i) => ({
+          criteria_name: c.criteria,
+          description: c.description || '',
+          coeff: c.coeff,
+          sort_order: i,
+        })),
+        qualitative: qualitative.map((c, i) => ({
+          criteria_name: c.criteria,
+          description: c.description || '',
+          coeff: c.coeff,
+          sort_order: i,
+        })),
+      })
+      setTemplateSaved(true)
+    } catch (err) {
+      setError("Erreur lors de la sauvegarde du modele")
+    } finally {
+      setSavingTemplate(false)
+    }
   }
 
   const addDispoRow = () => {
@@ -1415,6 +1459,22 @@ export default function BonusForm() {
           </div>
         </div>
       </div>
+
+        <div className="card-blueline p-3 mb-0">
+          <div className="flex items-center justify-between">
+            <p className="text-gray-600 text-xs font-medium">
+              Modele d'evaluation - {connectedUser?.department || 'Departement'}
+            </p>
+            {templateSaved ? (
+              <span className="text-xs text-green-600 font-medium">Modele sauvegarde !</span>
+            ) : (
+              <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate}
+                className="btn btn-xs bg-brand-600 hover:bg-brand-700 text-white border-0">
+                {savingTemplate ? 'Sauvegarde...' : 'Sauvegarder comme modele par defaut'}
+              </button>
+            )}
+          </div>
+        </div>
 
         <div className="card-blueline p-3 mb-0">
           <div className="flex flex-col gap-1.5">
