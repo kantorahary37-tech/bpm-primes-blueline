@@ -113,7 +113,7 @@ async def save_evaluation_templates(
 
 @router.get("/evaluation-templates/all")
 async def get_all_templates(user: User = Depends(get_current_user)):
-    if not (user.is_admin or user.is_dg or user.is_drh):
+    if not user.is_admin:
         raise HTTPException(403, "Acces reserve aux administrateurs")
 
     departments = await Department.all()
@@ -141,7 +141,7 @@ async def get_all_templates(user: User = Depends(get_current_user)):
 
 @router.delete("/evaluation-templates/{template_id}")
 async def delete_template(template_id: int, user: User = Depends(get_current_user)):
-    if not (user.is_admin or user.is_dg or user.is_drh):
+    if not user.is_admin:
         raise HTTPException(403, "Acces reserve aux administrateurs")
 
     tpl = await EvaluationTemplate.filter(id=template_id).first()
@@ -154,7 +154,7 @@ async def delete_template(template_id: int, user: User = Depends(get_current_use
 
 @router.delete("/evaluation-templates/department/{department}")
 async def delete_all_department_templates(department: str, user: User = Depends(get_current_user)):
-    if not (user.is_admin or user.is_dg or user.is_drh):
+    if not user.is_admin:
         raise HTTPException(403, "Acces reserve aux administrateurs")
 
     dept = await Department.filter(name=department).first()
