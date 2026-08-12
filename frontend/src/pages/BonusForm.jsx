@@ -1470,7 +1470,7 @@ export default function BonusForm() {
             ) : (
               <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate || coeffInvalid}
                 className="btn btn-xs bg-brand-600 hover:bg-brand-700 text-white border-0 disabled:bg-gray-300 disabled:text-gray-500 disabled:border-0">
-                {savingTemplate ? 'Sauvegarde...' : 'Sauvegarder comme modèle par defaut'}
+                {savingTemplate ? 'Sauvegarde...' : 'Sauvegarder comme modèle par défaut'}
               </button>
             )}
           </div>

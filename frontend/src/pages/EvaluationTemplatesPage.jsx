@@ -161,7 +161,7 @@ export default function EvaluationTemplatesPage() {
                       {editQuantitative.length} critere(s) quantitatif(s) · {editQualitative.length} critere(s) qualitatif(s) · Coeff total : {totalCoeff(editQuantitative) + totalCoeff(editQualitative)}/10
                     </p>
                     {(totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10 && (
-                      <p className="text-xs text-red-500 font-medium mt-1">Le total des coefficients doit etre egal a 10</p>
+                      <p className="text-xs text-red-500 font-medium mt-1">Le total des coefficients doit etre égal a 10</p>
                     )}
                   </div>
                   <button onClick={handleSave} disabled={saving || (totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10}
@@ -175,7 +175,7 @@ export default function EvaluationTemplatesPage() {
                   <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-b border-blue-100">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      <h3 className="text-sm font-semibold text-blue-800">Evaluation Quantitative</h3>
+                      <h3 className="text-sm font-semibold text-blue-800">Évaluation Quantitative</h3>
                     </div>
                     <span className="text-xs font-mono text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
                       Total coeff : {totalCoeff(editQuantitative)}
@@ -225,7 +225,7 @@ export default function EvaluationTemplatesPage() {
                   <div className="flex items-center justify-between px-4 py-3 bg-emerald-50 border-b border-emerald-100">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      <h3 className="text-sm font-semibold text-emerald-800">Evaluation Qualitative</h3>
+                      <h3 className="text-sm font-semibold text-emerald-800">Évaluation Qualitative</h3>
                     </div>
                     <span className="text-xs font-mono text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
                       Total coeff : {totalCoeff(editQualitative)}
