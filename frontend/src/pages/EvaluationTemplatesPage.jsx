@@ -160,9 +160,12 @@ export default function EvaluationTemplatesPage() {
                     <p className="text-xs text-base-content/40 mt-0.5">
                       {editQuantitative.length} critere(s) quantitatif(s) · {editQualitative.length} critere(s) qualitatif(s) · Coeff total : {totalCoeff(editQuantitative) + totalCoeff(editQualitative)}/10
                     </p>
+                    {(totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10 && (
+                      <p className="text-xs text-red-500 font-medium mt-1">Le total des coefficients doit etre egal a 10</p>
+                    )}
                   </div>
-                  <button onClick={handleSave} disabled={saving}
-                    className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0">
+                  <button onClick={handleSave} disabled={saving || (totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10}
+                    className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0 disabled:bg-gray-300 disabled:text-gray-500">
                     {saving ? 'Sauvegarde...' : 'Sauvegarder'}
                   </button>
                 </div>
