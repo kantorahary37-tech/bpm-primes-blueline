@@ -56,7 +56,7 @@ export default function EvaluationTemplatesPage() {
           sort_order: i,
         })),
       })
-      toast.success('Modele sauvegarde !')
+      toast.success('Modèle sauvegardé !')
       await load()
     } catch {
       toast.error('Erreur lors de la sauvegarde')

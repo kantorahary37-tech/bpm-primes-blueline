@@ -69,15 +69,15 @@ async def save_evaluation_templates(
     user: User = Depends(get_current_user),
 ):
     if not (user.is_admin or user.is_dg or user.is_drh or user.is_validator_n1 or user.is_directeur):
-        raise HTTPException(403, "Vous n'avez pas le droit de modifier les modeles d'evaluation")
+        raise HTTPException(403, "Vous n'avez pas le droit de modifier les modèles d'évaluation")
 
     dept = await Department.filter(name=data.department).first()
     if not dept:
-        raise HTTPException(404, "Departement introuvable")
+        raise HTTPException(404, "Département introuvable")
 
     if not (user.is_admin or user.is_dg or user.is_drh):
         if user.department and user.department != data.department:
-            raise HTTPException(403, "Vous ne pouvez modifier que les modeles de votre departement")
+            raise HTTPException(403, "Vous ne pouvez modifier que les modèles de votre département")
 
     await EvaluationTemplate.filter(department_id=dept.id).delete()
 

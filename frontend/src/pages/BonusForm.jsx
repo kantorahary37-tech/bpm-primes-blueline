@@ -463,7 +463,7 @@ export default function BonusForm() {
       })
       setTemplateSaved(true)
     } catch (err) {
-      setError("Erreur lors de la sauvegarde du modele")
+      setError("Erreur lors de la sauvegarde du modèle")
     } finally {
       setSavingTemplate(false)
     }
@@ -1463,14 +1463,14 @@ export default function BonusForm() {
         <div className="card-blueline p-3 mb-0">
           <div className="flex items-center justify-between">
             <p className="text-gray-600 text-xs font-medium">
-              Modele d'evaluation - {connectedUser?.department || 'Departement'}
+              Modèle d'évaluation - {connectedUser?.department || 'Departement'}
             </p>
             {templateSaved ? (
-              <span className="text-xs text-green-600 font-medium">Modele sauvegarde !</span>
+              <span className="text-xs text-green-600 font-medium">Modèle sauvegardé !</span>
             ) : (
               <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate || coeffInvalid}
                 className="btn btn-xs bg-brand-600 hover:bg-brand-700 text-white border-0 disabled:bg-gray-300 disabled:text-gray-500 disabled:border-0">
-                {savingTemplate ? 'Sauvegarde...' : 'Sauvegarder comme modele par defaut'}
+                {savingTemplate ? 'Sauvegarde...' : 'Sauvegarder comme modèle par defaut'}
               </button>
             )}
           </div>
