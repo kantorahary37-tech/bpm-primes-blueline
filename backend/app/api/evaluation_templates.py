@@ -6,6 +6,7 @@ from app.schemas import (
     EvaluationTemplateResponse,
     EvaluationTemplateItem,
 )
+from typing import List
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -68,15 +69,15 @@ async def save_evaluation_templates(
     user: User = Depends(get_current_user),
 ):
     if not (user.is_admin or user.is_dg or user.is_drh or user.is_validator_n1 or user.is_directeur):
-        raise HTTPException(403, "Vous n'avez pas le droit de modifier les modeles d'evaluation")
+        raise HTTPException(403, "Vous n'avez pas le droit de modifier les modèles d'évaluation")
 
     dept = await Department.filter(name=data.department).first()
     if not dept:
-        raise HTTPException(404, "Departement introuvable")
+        raise HTTPException(404, "Département introuvable")
 
     if not (user.is_admin or user.is_dg or user.is_drh):
         if user.department and user.department != data.department:
-            raise HTTPException(403, "Vous ne pouvez modifier que les modeles de votre departement")
+            raise HTTPException(403, "Vous ne pouvez modifier que les modèles de votre département")
 
     await EvaluationTemplate.filter(department_id=dept.id).delete()
 
@@ -108,3 +109,57 @@ async def save_evaluation_templates(
         quantitative=data.quantitative,
         qualitative=data.qualitative,
     )
+
+
+@router.get("/evaluation-templates/all")
+async def get_all_templates(user: User = Depends(get_current_user)):
+    if not user.is_admin:
+        raise HTTPException(403, "Acces reserve aux administrateurs")
+
+    departments = await Department.all()
+    result = []
+
+    for dept in departments:
+        rows = await EvaluationTemplate.filter(department_id=dept.id).order_by("sort_order")
+        quanti = [
+            {"criteria_name": r.criteria_name, "description": r.description or "", "coeff": float(r.coeff), "sort_order": r.sort_order, "id": r.id}
+            for r in rows if r.section == "quantitative"
+        ]
+        quali = [
+            {"criteria_name": r.criteria_name, "description": r.description or "", "coeff": float(r.coeff), "sort_order": r.sort_order, "id": r.id}
+            for r in rows if r.section == "qualitative"
+        ]
+        result.append({
+            "department": dept.name,
+            "quantitative": quanti if quanti else [DEFAULT_QUANTI[i] | {"id": None} for i in range(len(DEFAULT_QUANTI))],
+            "qualitative": quali if quali else [DEFAULT_QUALI[i] | {"id": None} for i in range(len(DEFAULT_QUALI))],
+            "is_default": not rows,
+        })
+
+    return result
+
+
+@router.delete("/evaluation-templates/{template_id}")
+async def delete_template(template_id: int, user: User = Depends(get_current_user)):
+    if not user.is_admin:
+        raise HTTPException(403, "Acces reserve aux administrateurs")
+
+    tpl = await EvaluationTemplate.filter(id=template_id).first()
+    if not tpl:
+        raise HTTPException(404, "Critere introuvable")
+
+    await tpl.delete()
+    return {"message": "Critere supprime"}
+
+
+@router.delete("/evaluation-templates/department/{department}")
+async def delete_all_department_templates(department: str, user: User = Depends(get_current_user)):
+    if not user.is_admin:
+        raise HTTPException(403, "Acces reserve aux administrateurs")
+
+    dept = await Department.filter(name=department).first()
+    if not dept:
+        raise HTTPException(404, "Departement introuvable")
+
+    count = await EvaluationTemplate.filter(department_id=dept.id).delete()
+    return {"message": f"{count} critere(s) supprime(s)"}

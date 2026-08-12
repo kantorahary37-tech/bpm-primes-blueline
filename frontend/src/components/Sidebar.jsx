@@ -6,6 +6,8 @@ const navItems = [
   { path: '/employees', label: 'Employés', icon: '👥' },
   { path: '/bonuses', label: 'Primes', icon: '💰' },
   { path: '/settings/primemax', label: 'Plafonds', icon: '⚙️' },
+  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: '📋', roles: ['is_admin'] },
+  { path: '/admin/users', label: 'Utilisateurs', icon: '👤', roles: ['is_admin'] },
 ]
 
 export default function Sidebar({ open, onClose }) {
@@ -25,7 +27,7 @@ export default function Sidebar({ open, onClose }) {
           </div>
 
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => {
+            {navItems.filter(item => !item.roles || item.roles.some(r => user?.[r])).map((item) => {
               const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
               return (
                 <Link

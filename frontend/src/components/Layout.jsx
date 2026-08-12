@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, UserIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon } from './Icons'
+import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, UserIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon } from './Icons'
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: DashboardIcon },
@@ -62,7 +62,7 @@ export default function Layout({ children }) {
                 <span className="font-semibold text-gray-900 hidden sm:block">BPM Primes</span>
               </Link>
               <nav className="hidden md:flex items-center gap-1">
-                {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
+                {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
                   const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
                   const Icon = item.icon
                   return (
@@ -142,7 +142,7 @@ export default function Layout({ children }) {
                   <p className="text-[10px] text-gray-400 truncate">{userDept(user)} · {userRole(user)}</p>
                 </div>
               </div>
-              {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
+              {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
                 const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
                 const Icon = item.icon
                 return (

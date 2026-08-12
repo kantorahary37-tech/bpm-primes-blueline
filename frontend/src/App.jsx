@@ -14,6 +14,7 @@ import ValidatedBonuses from './pages/ValidatedBonuses'
 import ArchivePage from './pages/ArchivePage'
 import Employees from './pages/Employees'
 import UsersPage from './pages/UsersPage'
+import EvaluationTemplatesPage from './pages/EvaluationTemplatesPage'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
 import ForgotPassword from './pages/ForgotPassword'
@@ -53,6 +54,7 @@ function AppContent() {
       <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg', 'is_admin']}><ArchivePage /></RestrictedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin']}><UsersPage /></RestrictedRoute>} />
+      <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin']}><EvaluationTemplatesPage /></RestrictedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>
   )
