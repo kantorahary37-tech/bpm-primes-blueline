@@ -60,4 +60,29 @@ try:
 except Exception as e:
     print(f"evaluation_template check skipped: {e}")
 
+print("Ensuring commissionconfig table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "commissionconfig" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "product_name" VARCHAR(255) NOT NULL UNIQUE,
+            "rate" DECIMAL(15,2) NOT NULL,
+            "objectif" INT NOT NULL DEFAULT 0,
+            "group_name" VARCHAR(100) NOT NULL DEFAULT '',
+            "active" BOOLEAN NOT NULL DEFAULT TRUE,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("commissionconfig table OK")
+except Exception as e:
+    print(f"commissionconfig check skipped: {e}")
+
 print("Starting application...")

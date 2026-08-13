@@ -160,6 +160,21 @@ class Validation(models.Model):
     # Date de validation
     validated_at = fields.DatetimeField(auto_now_add=True)
 
+# Modèle Barème commission (table "commissionconfig")
+class CommissionConfig(models.Model):
+    # Clé primaire
+    id = fields.IntField(pk=True)
+    # Nom exact du produit (doit correspondre aux colonnes du CSV)
+    product_name = fields.CharField(max_length=100, unique=True)
+    # Taux de commission par vente (en Ar)
+    rate = fields.IntField()
+    # Nombre minimum de ventes pour bénéficier du doublement
+    objectif = fields.IntField(default=0)
+    # Groupe d'appartenance (objectif partagé)
+    group_name = fields.CharField(max_length=100, null=True, default='')
+    # Produit actif ou non
+    active = fields.BooleanField(default=True)
+
 # Modèle Prime Max (table "primemax")
 class PrimeMax(models.Model):
     # Clé primaire

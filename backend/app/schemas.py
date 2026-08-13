@@ -213,6 +213,65 @@ class NotificationResponse(BaseModel):
 class UnreadCountResponse(BaseModel):
     count: int
 
+# --- Barème Commission ---
+class CommissionConfigCreate(BaseModel):
+    product_name: str
+    rate: float
+    objectif: int = 0
+    group_name: str = ''
+    active: bool = True
+
+class CommissionConfigUpdate(BaseModel):
+    product_name: Optional[str] = None
+    rate: Optional[float] = None
+    objectif: Optional[int] = None
+    group_name: Optional[str] = None
+    active: Optional[bool] = None
+
+class CommissionConfigResponse(BaseModel):
+    id: int
+    product_name: str
+    rate: float
+    objectif: int
+    group_name: str
+    active: bool
+    class Config:
+        from_attributes = True
+
+# Détail d'une ligne de calcul (par produit, pour un employé)
+class CommissionLine(BaseModel):
+    designation: str
+    nombre: float
+    taux: float
+    objectif: int
+    doublé: bool = False
+    montant: float
+
+# Ligne d'aperçu par employé
+class CommissionEmployeePreview(BaseModel):
+    employee_id: int
+    matricule: str
+    name: str
+    department: str
+    total: float
+    lines: List[CommissionLine]
+
+class CommissionPreviewResponse(BaseModel):
+    period: Dict[str, Any]
+    employees: List[CommissionEmployeePreview]
+    matched_products: List[str]
+    ignored_employees: List[str]
+    ignored_columns: List[str]
+    total_amount: float
+    count: int
+
+# Résultat de la création effective
+class CommissionImportResult(BaseModel):
+    created: List[Dict[str, Any]]
+    skipped: List[Dict[str, Any]]
+    total_amount: float
+    count: int
+
 # --- Evaluation Template ---
 class EvaluationTemplateItem(BaseModel):
     criteria_name: str
