@@ -1,0 +1,7 @@
+Note_globale = Σ(note_i × coeff_i) / Σ(coeff_i)  [sur tous les critères des deux sections]
+
+Note_globale = (Note_Q × Coeff_Q + Note_L × Coeff_L) / (Coeff_Q + Coeff_L)
+             = (7.325 × 4 + 5.667 × 3) / (4 + 3)
+             = (29.30 + 17.00) / 7
+             = 46.30 / 7
+             = 6.61
