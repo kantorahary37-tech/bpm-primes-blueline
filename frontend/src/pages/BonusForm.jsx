@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import Modal from '../components/Modal'
@@ -264,15 +264,14 @@ export default function BonusForm() {
       [empId]: { ...prev[empId], [field]: parseFloat(value) || 0 }
     }))
   }
-  const [commissionConfig, setCommissionConfig] = useState({
-    periodStart: monthStart, periodEnd: monthEnd, rate: 15000,
-  })
-  const [sales, setSales] = useState([
-    { key: 1, designation: '', nombre: 1, description: '' },
-  ])
-  const [commissionOptions, setCommissionOptions] = useState({
-    saveAsDefault: false, customize: false,
-  })
+  // --- État du flux CSV commission (création) ---
+  const [commCsvFile, setCommCsvFile] = useState(null)
+  const [commPreview, setCommPreview] = useState(null)
+  const [commLoading, setCommLoading] = useState(false)
+  // Tableau des ventes (utilisé uniquement en édition d'une prime commission existante)
+  const [sales, setSales] = useState([])
+  // Prime chargée en édition
+  const [loadedBonus, setLoadedBonus] = useState(null)
 
   const [showAddQuanti, setShowAddQuanti] = useState(false)
   const [showAddQuali, setShowAddQuali] = useState(false)
@@ -322,6 +321,7 @@ export default function BonusForm() {
   useEffect(() => {
     if (!isEditing || !id) return;
     getBonus(id).then((b) => {
+      setLoadedBonus(b);
       setEditType(b.bonus_type);
       setBonusStatus(b.status || '');
       setSelectedEmp(b.employee || null);
@@ -336,7 +336,6 @@ export default function BonusForm() {
         if (d.disponibilites) setDisponibilites(d.disponibilites.map((s, i) => ({ ...s, key: i + 1 })));
         if (d.interventions) setInterventions(d.interventions.map((s, i) => ({ ...s, key: i + 1 })));
         if (d.weekly_max) setAstreinteConfig((c) => ({ ...c, weeklyMax: d.weekly_max, interventionRate: d.intervention_rate }));
-        if (d.rate) setCommissionConfig((c) => ({ ...c, rate: d.rate }));
         if (d.exceptionnelle !== undefined) setAdditionalPrimes((p) => ({ ...p, exceptionnelle: d.exceptionnelle }));
         if (d.ponctuelle !== undefined) setAdditionalPrimes((p) => ({ ...p, ponctuelle: d.ponctuelle }));
         if (d.others) setOthers(d.others.map((o, i) => ({
@@ -377,7 +376,6 @@ export default function BonusForm() {
     !o.debut_mois || !o.debut_annee || !o.fin_mois || !o.fin_annee
   )
   const employeeInvalid = !selectedEmp
-  const salesInvalid = sales.some(s => !s.designation?.trim() || !(parseFloat(s.nombre) > 0))
   const totalQuantiValue = quantitative.reduce((s, i) => s + i.value, 0)
   const totalQualiValue = qualitative.reduce((s, i) => s + i.value, 0)
   const totalValue = totalQuantiValue + totalQualiValue
@@ -572,55 +570,58 @@ export default function BonusForm() {
     }
   }
 
-  const handleCommissionConfigChange = (field, value) => {
-    setCommissionConfig({ ...commissionConfig, [field]: value })
-  }
-
-  const addSaleRow = () => {
-    setSales([...sales, { key: Date.now(), designation: '', nombre: 1, description: '' }])
-  }
-
-  const removeSaleRow = (index) => {
-    setSales(sales.filter((_, i) => i !== index))
-  }
-
-  const handleSaleChange = (index, field, value) => {
-    const newData = [...sales]
-    newData[index][field] = value
-    setSales(newData)
+  const handlePreviewCommission = async () => {
+    setError('')
+    setCommPreview(null)
+    if (!commCsvFile) { setError("Sélectionnez d'abord le fichier CSV 4D des ventes."); return }
+    if (!params.startDate || !params.endDate) { setError('Sélectionnez la période.'); return }
+    setCommLoading(true)
+    try {
+      const data = await previewCommissionImport(commCsvFile, params.startDate, params.endDate)
+      setCommPreview(data)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Erreur lors du calcul des commissions.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setCommLoading(false)
+    }
   }
 
   const handleSubmitCommission = async (e) => {
     e.preventDefault()
     setError('')
-    setLoading(true)
-    if (selectedEmp) {
-      const allowed = BONUS_TYPE_DEPARTMENTS.commission
-      if (!allowed.includes(selectedEmp.department)) {
-        setError(`Le département "${selectedEmp.department}" n'est pas autorisé pour les commissions.`)
-        setLoading(false); return
-      }
-    }
-    const amount = sales.reduce((s, row) => s + (parseFloat(row.nombre) || 0) * commissionConfig.rate, 0)
+    if (!commPreview || !commCsvFile) { setError("Calculez d'abord les commissions (aperçu)."); return }
+    setCommLoading(true)
     try {
-      await saveBonus({
-        employee_id: selectedEmp?.id,
+      const result = await importCommissionBonuses(commCsvFile, params.startDate, params.endDate)
+      const totalAr = (result.total_amount ?? 0).toLocaleString('fr-FR')
+      const msg = `${result.count} prime(s) commission créée(s) pour un total de ${totalAr} Ar.`
+        + (result.skipped?.length ? ` ${result.skipped.length} employé(s) ignoré(s) (prime déjà existante sur la période).` : '')
+      navigate('/bonuses', { state: { success: msg } })
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Erreur lors de la création des primes commission.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setCommLoading(false)
+    }
+  }
+
+  const handleSubmitCommissionEdit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      await updateBonus(id, {
         start_date: params.startDate,
         end_date: params.endDate,
         bonus_type: 'commission',
-        taux_commission: commissionConfig.rate,
-        commission_amount: amount,
-        total_amount: amount,
-        ca_realise: amount,
-        details: {
-          rate: commissionConfig.rate,
-          sales: sales.map((s) => ({
-            designation: s.designation, nombre: s.nombre, description: s.description,
-          })),
-          total: amount,
-        },
+        total_amount: parseFloat(loadedBonus?.total_amount ?? 0),
+        commission_amount: loadedBonus?.commission_amount != null
+          ? parseFloat(loadedBonus.commission_amount)
+          : parseFloat(loadedBonus?.total_amount ?? 0),
+        details: loadedBonus?.details,
       })
-      navigateAfterSave()
+      navigate(`/bonuses/${id}`)
     } catch (err) {
       setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : `Erreur (${err.response?.status}): ${err.response?.data?.detail || err.message || "inconnue"}`)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -744,11 +745,16 @@ export default function BonusForm() {
   const sharedHeader = (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
       <div className="card-blueline p-3">
-        <h2 className="font-semibold text-base-content mb-2 text-sm">{editType === 'astreinte' ? 'Responsable' : "Informations de l'employé"}</h2>
+        <h2 className="font-semibold text-base-content mb-2 text-sm">{editType === 'astreinte' ? 'Responsable' : editType === 'commission' && !isEditing ? 'Import CSV 4D' : "Informations de l'employé"}</h2>
         <div className="space-y-1.5">
           {editType === 'astreinte' ? (
             <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2">
               Les employés sont définis dans les tableaux ci-dessous. Une prime sera créée par employé.
+            </div>
+          ) : editType === 'commission' && !isEditing ? (
+            <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2 space-y-1">
+              <p>Les primes commission sont calculées à partir du <b>fichier CSV 4D</b> des ventes du mois (séparateur <b>;</b>).</p>
+              <p>Une prime <b>Initialisée</b> sera créée par employé trouvé (matricule exact) ayant réalisé au moins une vente.</p>
             </div>
           ) : isEditing ? (
             <div className="space-y-1.5">
@@ -897,103 +903,194 @@ export default function BonusForm() {
   )
 
   if (editType === 'commission') {
-    const totalCommission = sales.reduce((s, row) => s + (parseFloat(row.nombre) || 0) * commissionConfig.rate, 0)
+    const fmtAr = (n) => (parseFloat(n) || 0).toLocaleString('fr-FR')
+
+    // ----- Mode édition : consultation des détails, enregistrement tel quel -----
+    if (isEditing) {
+      const editTotal = parseFloat(loadedBonus?.total_amount ?? 0)
+      return (
+        <div className="page-container !px-2 max-w-full">
+          <div className="flex items-center gap-3 mb-6">
+            <Link to={`/bonuses/${id}`} className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
+            <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Prime commission (import CSV 4D)</p></div></div>
+          </div>
+          {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+          <form onSubmit={handleSubmitCommissionEdit} className="space-y-3">
+            {sharedHeader}
+            <div className="card-blueline p-4">
+              <h2 className="font-semibold text-base-content text-sm mb-3">Détail des commissions</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-300">
+                      <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
+                      <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
+                      <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Taux (Ar)</th>
+                      <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Objectif</th>
+                      <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Doublé</th>
+                      <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sales.map((sale, i) => (
+                      <tr key={i} className="border-b border-gray-200">
+                        <td className="py-1.5 px-2 text-gray-900">{sale.designation || '—'}</td>
+                        <td className="py-1.5 px-2 text-center">{sale.nombre ?? 0}</td>
+                        <td className="py-1.5 px-2 text-right">{fmtAr(sale.taux)}</td>
+                        <td className="py-1.5 px-2 text-center">{sale.objectif ?? '—'}</td>
+                        <td className="py-1.5 px-2 text-center">{sale.doublé ? 'Oui' : 'Non'}</td>
+                        <td className="py-1.5 px-2 text-right font-medium">{fmtAr(sale.montant)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-semibold border-t-2 border-brand-200">
+                      <td colSpan={5} className="py-2 px-2 text-right">Total commission</td>
+                      <td className="py-2 px-2 text-right text-brand-600">{fmtAr(editTotal)} Ar</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Link to={`/bonuses/${id}`} className="btn btn-ghost">Retour</Link>
+              <button type="submit" disabled={loading || isReadOnly} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+                {loading ? <span className="loading loading-spinner" /> : 'Enregistrer'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )
+    }
+
+    // ----- Mode création : import CSV 4D + aperçu + validation -----
+    const previewCount = commPreview?.count ?? 0
+    const totalAmount = commPreview?.total_amount ?? 0
 
     return (
       <div className="page-container !px-2 max-w-full">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-          <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Commission par vente</p></div></div>
+          <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Calcul à partir du fichier CSV 4D des ventes</p></div></div>
         </div>
         {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
-        {isReadOnly && (
-          <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2">
-            <ExclamationIcon className="w-4 h-4" /> Cette prime a été modifiée par le DG. Vous pouvez consulter les détails mais pas modifier.
-          </div>
-        )}
         <form onSubmit={handleSubmitCommission} className="space-y-3">
           {sharedHeader}
           <div className="card-blueline p-4">
-            <h2 className="font-semibold text-base-content text-sm mb-2">Configuration commission</h2>
-            <div className="max-w-xs">
-              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Commission par vente (Ar)</label>
-              <input type="number" value={commissionConfig.rate} onChange={(e) => handleCommissionConfigChange('rate', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            <h2 className="font-semibold text-base-content text-sm mb-2">Fichier CSV 4D des ventes</h2>
+            <div className="flex flex-col md:flex-row md:items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Fichier (séparateur ;, encodage UTF-8)</label>
+                <input type="file" accept=".csv,text/csv" onChange={(e) => { setCommCsvFile(e.target.files[0] || null); setCommPreview(null) }}
+                  className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+              </div>
+              <button type="button" onClick={handlePreviewCommission} disabled={commLoading}
+                className="btn bg-brand-600 hover:bg-brand-700 text-white border-0 shrink-0">
+                {commLoading ? <span className="loading loading-spinner loading-sm" /> : 'Calculer les commissions'}
+              </button>
             </div>
+            <p className="text-[11px] text-base-content/40 mt-2">
+              Colonnes attendues : Nom ; Matricule ; &lt;produits&gt;. Les noms de produits doivent correspondre au barème (page Barème commission). Employés ou produits non trouvés : ignorés.
+            </p>
           </div>
 
-          <div className="card-blueline p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-base-content">Détail des commissions</h2>
-              <button type="button" onClick={addSaleRow} className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0">+ Ajouter</button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-300">
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Désignation</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-700 w-24">Nombre</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Description</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 w-36">Montant (Ar)</th>
-                    <th className="w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.map((row, i) => (
-                    <tr key={row.key} className="border-b border-gray-200">
-                      <td className="py-1 px-2">
-                        <input type="text" value={row.designation} onChange={(e) => handleSaleChange(i, 'designation', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Ex: Airfiber, 4G Litebox" />
-                      </td>
-                      <td className="py-1 px-2 text-center">
-                        <input type="number" value={row.nombre} min="0" onChange={(e) => handleSaleChange(i, 'nombre', e.target.value)}
-                        className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
-                      </td>
-                      <td className="py-1 px-2">
-                        <input type="text" value={row.description} onChange={(e) => handleSaleChange(i, 'description', e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="Client / contrat..." />
-                      </td>
-                      <td className="py-1 px-2 text-right font-medium">
-                        {((parseFloat(row.nombre) || 0) * commissionConfig.rate).toLocaleString('fr-FR')}
-                      </td>
-                      <td className="py-1 px-2 text-center">
-                        <button type="button" onClick={() => removeSaleRow(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="font-semibold border-t-2 border-brand-200">
-                    <td colSpan="3" className="py-2 px-2 text-right">Total commission</td>
-                    <td className="py-2 px-2 text-right text-brand-600">{totalCommission.toLocaleString('fr-FR')} Ar</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
+          {commPreview && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="card-blueline p-3">
+                  <p className="text-xs text-base-content/50">Primes à créer</p>
+                  <p className="text-xl font-bold text-base-content">{commPreview.count}</p>
+                </div>
+                <div className="card-blueline p-3">
+                  <p className="text-xs text-base-content/50">Total commission</p>
+                  <p className="text-xl font-bold text-brand-600">{fmtAr(totalAmount)} Ar</p>
+                </div>
+                <div className="card-blueline p-3">
+                  <p className="text-xs text-base-content/50">Produits reconnus</p>
+                  <p className="text-base font-medium text-base-content">{commPreview.matched_products?.length ?? 0}</p>
+                </div>
+              </div>
 
-          <div className="card-blueline p-6">
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={commissionOptions.saveAsDefault} onChange={(e) => setCommissionOptions({ ...commissionOptions, saveAsDefault: e.target.checked })}
-                  className="checkbox checkbox-sm border-base-300 rounded [--chkbg:theme(colors.brand.600)] checked:border-brand-600" />
-                <span className="text-sm text-base-content/70">Définir comme modèle par défaut</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={commissionOptions.customize} onChange={(e) => setCommissionOptions({ ...commissionOptions, customize: e.target.checked })}
-                  className="checkbox checkbox-sm border-base-300 rounded [--chkbg:theme(colors.brand.600)] checked:border-brand-600" />
-                <span className="text-sm text-base-content/70">Personnaliser son modèle</span>
-              </label>
-            </div>
-          </div>
+              <div className="card-blueline p-4">
+                <h2 className="font-semibold text-base-content text-sm mb-3">Aperçu par employé</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-300">
+                        <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Matricule</th>
+                        <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Employé</th>
+                        <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
+                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
+                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Taux (Ar)</th>
+                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Objectif</th>
+                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Doublé</th>
+                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {commPreview.employees.map((emp) => (
+                        <Fragment key={emp.employee_id}>
+                          {emp.lines.map((line, i) => (
+                            <tr key={i} className="border-b border-gray-200">
+                              {i === 0 && (
+                                <>
+                                  <td className="py-1.5 px-2 text-gray-900 font-medium align-top" rowSpan={emp.lines.length}>{emp.matricule}</td>
+                                  <td className="py-1.5 px-2 text-gray-900 align-top" rowSpan={emp.lines.length}>
+                                    {emp.name}
+                                    <span className="block text-[11px] text-gray-400">{emp.department}</span>
+                                  </td>
+                                </>
+                              )}
+                              <td className="py-1.5 px-2 text-gray-800">{line.designation}</td>
+                              <td className="py-1.5 px-2 text-center">{line.nombre}</td>
+                              <td className="py-1.5 px-2 text-right">{fmtAr(line.taux)}</td>
+                              <td className="py-1.5 px-2 text-center">{line.objectif}</td>
+                              <td className="py-1.5 px-2 text-center">{line.doublé ? <span className="badge badge-success badge-sm">Oui</span> : '—'}</td>
+                              <td className="py-1.5 px-2 text-right font-medium">{fmtAr(line.montant)}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-50 border-b border-gray-200">
+                            <td colSpan={7} className="py-1.5 px-2 text-right text-gray-700 font-medium">Total {emp.name}</td>
+                            <td className="py-1.5 px-2 text-right text-brand-600 font-semibold">{fmtAr(emp.total)}</td>
+                          </tr>
+                        </Fragment>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="font-semibold border-t-2 border-brand-200">
+                        <td colSpan={7} className="py-2 px-2 text-right">Total général</td>
+                        <td className="py-2 px-2 text-right text-brand-600">{fmtAr(totalAmount)} Ar</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
 
-          <div className="flex gap-3 justify-end">
-            <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
-            <button type="submit" disabled={loading || isReadOnly || employeeInvalid || salesInvalid} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
-              {loading ? <span className="loading loading-spinner" /> : 'Valider/Suivant'}
-            </button>
-          </div>
+                {(commPreview.ignored_employees?.length > 0 || commPreview.ignored_columns?.length > 0) && (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    {commPreview.ignored_employees?.length > 0 && (
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                        <p className="font-medium text-amber-800 mb-1">Employés ignorés (matricule introuvable) : {commPreview.ignored_employees.length}</p>
+                        <p className="text-amber-700 break-words">{commPreview.ignored_employees.join(', ')}</p>
+                      </div>
+                    )}
+                    {commPreview.ignored_columns?.length > 0 && (
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                        <p className="font-medium text-amber-800 mb-1">Colonnes ignorées (hors barème) : {commPreview.ignored_columns.length}</p>
+                        <p className="text-amber-700 break-words">{commPreview.ignored_columns.join(', ')}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
+                <button type="submit" disabled={commLoading || previewCount === 0} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+                  {commLoading ? <span className="loading loading-spinner" /> : `Valider et créer ${previewCount} prime(s) commission`}
+                </button>
+              </div>
+            </>
+          )}
         </form>
       </div>
     )

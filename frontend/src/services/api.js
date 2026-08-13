@@ -221,6 +221,49 @@ export const adminLdapSearch = async (query) => {
   return data;
 };
 
+export const getCommissionConfig = async (includeInactive = false) => {
+  const { data } = await api.get('/commission-config', { params: { include_inactive: includeInactive } });
+  return data;
+};
+
+export const createCommissionConfig = async (configData) => {
+  const { data } = await api.post('/commission-config', configData);
+  return data;
+};
+
+export const updateCommissionConfig = async (id, configData) => {
+  const { data } = await api.put(`/commission-config/${id}`, configData);
+  return data;
+};
+
+export const deleteCommissionConfig = async (id) => {
+  const { data } = await api.delete(`/commission-config/${id}`);
+  return data;
+};
+
+// Import CSV 4D : aperçu puis création
+export const previewCommissionImport = async (file, startDate, endDate) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('start_date', startDate);
+  formData.append('end_date', endDate);
+  const { data } = await api.post('/bonuses/commission/preview', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+export const importCommissionBonuses = async (file, startDate, endDate) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('start_date', startDate);
+  formData.append('end_date', endDate);
+  const { data } = await api.post('/bonuses/commission/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
 export const getEvaluationTemplates = async (department) => {
   const { data } = await api.get('/evaluation-templates', { params: { department } });
   return data;

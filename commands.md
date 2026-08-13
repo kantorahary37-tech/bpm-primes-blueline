@@ -6,6 +6,7 @@ Ajout des montants de plafond des primes et des données d'utilisateurs
 docker compose exec backend python -m scripts.sync_ldap
 docker compose exec backend python -m scripts.seed_plafonds
 docker compose exec backend python -m scripts.seed_bonuses
+docker compose exec backend python -m scripts.seed_commission_config
 ```
 
 Lancement de Docker en dev mode :

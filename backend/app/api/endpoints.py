@@ -1,5 +1,5 @@
 # Imports FastAPI pour les routes et les erreurs
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from enum import Enum
@@ -12,12 +12,14 @@ import io
 import os
 import csv
 import asyncio
+import json
 from datetime import datetime
-from tortoise.expressions import Q
+from passlib.context import CryptContext
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, numbers
 from openpyxl.utils import get_column_letter
 from decimal import Decimal
+import openpyxl
 
 
 def _sanitize_for_json(v):
@@ -72,6 +74,7 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
     initial_status = ValidationStatus.EN_ATTENTE_DIRECTEUR if user.is_directeur else ValidationStatus.INITIALISE
     obj = await Bonus.create(**bonus.dict(), created_by_id=user.id, status=initial_status)
     return await Bonus.get(id=obj.id).prefetch_related('employee')
+
 
 # Route POST pour validation par lot
 @router.post("/bonuses/batch/validate", response_model=BatchValidateResponse)
