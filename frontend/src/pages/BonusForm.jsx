@@ -273,6 +273,10 @@ export default function BonusForm() {
   const [commissionOptions, setCommissionOptions] = useState({
     saveAsDefault: false, customize: false,
   })
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importProgress, setImportProgress] = useState(0)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSuccess, setImportSuccess] = useState(false)
 
   const [showAddQuanti, setShowAddQuanti] = useState(false)
   const [showAddQuali, setShowAddQuali] = useState(false)
@@ -590,6 +594,41 @@ export default function BonusForm() {
     setSales(newData)
   }
 
+const handleImportClick = async () => {
+    if (!importFile) return
+    setImportProgress(1)
+    setImportError(null)
+    setImportSuccess(false)
+    
+    const formData = new FormData()
+    formData.append('file', importFile)
+    formData.append('employee_id', selectedEmp?.id || '')
+    formData.append('start_date', params.startDate)
+    formData.append('end_date', params.endDate)
+    
+try {
+      const response = await api.post('/bonuses/import-commission', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      // Response contains the bonus with details
+      setImportSuccess(true)
+      setImportProgress(0)
+      setImportFile(null)
+      
+      // Ajouter les ventes importées au tableau en transformant les champs
+      const newSales = response.details?.sales || []
+      setSales(prev => [...prev, ...newSales.map(s => ({
+        key: Date.now() + Math.random(),
+        designation: s.designation,
+        nombre: s.ventes,  // Mapper ventes -> nombre
+        description: s.objectif || '',  // Mapper objectif -> description (ou laisser vide)
+      }))]
+    } catch (err) {
+      setImportError("Erreur lors de l'importation : " + (err.response?.data?.detail || err.message))
+      setImportProgress(0)
+    }
+  }  // Fin de handleImportClick
+
   const handleSubmitCommission = async (e) => {
     e.preventDefault()
     setError('')
@@ -601,6 +640,14 @@ export default function BonusForm() {
         setLoading(false); return
       }
     }
+    
+    // Si des ventes sont importées, les ajouter au tableau des ventes
+    if (importSuccess && importedSales && importedSales.length > 0) {
+      setSales(prev => [...prev, ...importedSales.map(s => ({ key: Date.now() + Math.random(), ...s }))])
+      setImportSuccess(false)
+      setImportFile(null)
+    }
+    
     const amount = sales.reduce((s, row) => s + (parseFloat(row.nombre) || 0) * commissionConfig.rate, 0)
     try {
       await saveBonus({
@@ -919,6 +966,21 @@ export default function BonusForm() {
               <label className="block text-sm font-medium text-base-content/70 mb-0.5">Commission par vente (Ar)</label>
               <input type="number" value={commissionConfig.rate} onChange={(e) => handleCommissionConfigChange('rate', e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Importer des ventes (CSV/Excel)</label>
+              <input type="file" accept=".csv,.xlsx" onChange={(e) => setImportFile(e.target.files[0])}
+                className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+              <button type="button" onClick={handleImportClick} disabled={importProgress}
+                className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0 w-full mt-2">
+                {importProgress > 0 ? 'Importation en cours...' : 'Importer'}
+              </button>
+              {importError && (
+                <p className="text-sm text-red-500 mt-1">{importError}</p>
+              )}
+              {importSuccess && (
+                <p className="text-sm text-green-500 mt-1">Import réussi !</p>
+              )}
             </div>
           </div>
 
