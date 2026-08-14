@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
 import { PlusIcon, CheckIcon, XCircleIcon } from '../components/Icons';
 
-const EMPTY_FORM = { product_name: '', rate: '', objectif: '', group_name: '', active: true };
+const EMPTY_FORM = { product_name: '', rate: '', objectif: '', group_name: '', active: true, is_gpv: false };
 
 const CommissionConfigPage = () => {
   const { user } = useAuth();
@@ -47,6 +47,7 @@ const CommissionConfigPage = () => {
       objectif: config.objectif != null ? config.objectif.toString() : '',
       group_name: config.group_name || '',
       active: config.active,
+      is_gpv: !!config.is_gpv,
     });
     setError('');
     setShowModal(true);
@@ -69,6 +70,7 @@ const CommissionConfigPage = () => {
           objectif,
           group_name: form.group_name?.trim() || '',
           active: form.active,
+          is_gpv: !!form.is_gpv,
         });
       } else {
         await createCommissionConfig({
@@ -77,6 +79,7 @@ const CommissionConfigPage = () => {
           objectif,
           group_name: form.group_name?.trim() || '',
           active: form.active,
+          is_gpv: !!form.is_gpv,
         });
       }
       setShowModal(false);
@@ -157,6 +160,7 @@ const CommissionConfigPage = () => {
                 <thead>
                   <tr>
                     <th className="text-gray-500 font-medium text-xs uppercase tracking-wider">Produit</th>
+                    <th className="text-gray-500 font-medium text-xs uppercase tracking-wider text-center">Point de vente</th>
                     <th className="text-gray-500 font-medium text-xs uppercase tracking-wider text-right">Taux (Ar/vente)</th>
                     <th className="text-gray-500 font-medium text-xs uppercase tracking-wider text-center">Objectif</th>
                     <th className="text-gray-500 font-medium text-xs uppercase tracking-wider text-center">Actif</th>
@@ -167,6 +171,11 @@ const CommissionConfigPage = () => {
                   {items.map(c => (
                     <tr key={c.id} className={!c.active ? 'opacity-50' : ''}>
                       <td className="font-medium text-gray-900">{c.product_name}</td>
+                      <td className="text-center">
+                        {c.is_gpv
+                          ? <span className="badge badge-primary badge-sm border-0">GPV</span>
+                          : <span className="badge badge-ghost badge-sm text-gray-500">Petit PDV</span>}
+                      </td>
                       <td className="text-right font-medium text-sm">{parseFloat(c.rate).toLocaleString('fr-FR')}</td>
                       <td className="text-center text-sm text-gray-600">{c.objectif}</td>
                       <td className="text-center">
@@ -209,6 +218,24 @@ const CommissionConfigPage = () => {
               onChange={(e) => setForm({ ...form, product_name: e.target.value })}
               placeholder="Ex : Unlimited 30"
               className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-base-content/70 mb-0.5">Type de point de vente</label>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="pdv" checked={!form.is_gpv}
+                  onChange={() => setForm({ ...form, is_gpv: false })}
+                  className="radio radio-sm border-base-300 rounded-full [--chkbg:theme(colors.brand.600)] checked:border-brand-600" />
+                <span className="text-sm text-base-content/70">Petit point de vente</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="pdv" checked={!!form.is_gpv}
+                  onChange={() => setForm({ ...form, is_gpv: true })}
+                  className="radio radio-sm border-base-300 rounded-full [--chkbg:theme(colors.brand.600)] checked:border-brand-600" />
+                <span className="text-sm text-base-content/70">Grand point de vente (GPV)</span>
+              </label>
+            </div>
+            <p className="text-[11px] text-base-content/40 mt-1">GPV = objectifs plus élevés ; les deux lignes du même produit peuvent coexister.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

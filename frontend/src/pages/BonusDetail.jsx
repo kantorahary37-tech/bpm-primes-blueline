@@ -487,10 +487,18 @@ const BonusDetail = () => {
 
         {bonus.bonus_type === 'commission' && (
           <Section title="Détails commission" icon={ChartIcon}>
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
               <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
                 <p className="text-xs text-gray-600">Produits</p>
                 <p className="font-semibold text-gray-900">{(bonus.details?.sales || []).length}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Point de vente</p>
+                <p className="font-semibold text-gray-900">
+                  {bonus.details?.is_gpv
+                    ? <span className="badge badge-primary badge-sm border-0">GPV</span>
+                    : <span className="badge badge-ghost badge-sm text-gray-500">Petit PDV</span>}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
                 <p className="text-xs text-emerald-600 font-medium">Total commission</p>

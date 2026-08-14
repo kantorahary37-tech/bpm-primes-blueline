@@ -990,7 +990,7 @@ export default function BonusForm() {
               </button>
             </div>
             <p className="text-[11px] text-base-content/40 mt-2">
-              Colonnes attendues : Nom ; Matricule ; &lt;produits&gt;. Les noms de produits doivent correspondre au barème (page Barème commission). Employés ou produits non trouvés : ignorés.
+              Colonnes attendues : Nom ; Matricule ; Point de vente ; &lt;produits&gt;. La colonne « Point de vente » (Grand/Petit) sélectionne le bon objectif du barème. Les noms de produits doivent correspondre au barème (page Barème commission). Employés ou produits non trouvés : ignorés.
             </p>
           </div>
 
@@ -1019,6 +1019,7 @@ export default function BonusForm() {
                       <tr className="border-b border-gray-300">
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Matricule</th>
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Employé</th>
+                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">PDV</th>
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
                         <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
                         <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Taux (Ar)</th>
@@ -1039,6 +1040,14 @@ export default function BonusForm() {
                                     {emp.name}
                                     <span className="block text-[11px] text-gray-400">{emp.department}</span>
                                   </td>
+                                  <td className="py-1.5 px-2 text-center align-top" rowSpan={emp.lines.length}>
+                                    {emp.is_gpv
+                                      ? <span className="badge badge-primary badge-sm border-0">GPV</span>
+                                      : <span className="badge badge-ghost badge-sm text-gray-500">Petit</span>}
+                                    {emp.barème_fallback && (
+                                      <span className="block mt-1 text-[10px] text-amber-600 font-medium">⚠ barème exact absent</span>
+                                    )}
+                                  </td>
                                 </>
                               )}
                               <td className="py-1.5 px-2 text-gray-800">{line.designation}</td>
@@ -1050,7 +1059,7 @@ export default function BonusForm() {
                             </tr>
                           ))}
                           <tr className="bg-gray-50 border-b border-gray-200">
-                            <td colSpan={7} className="py-1.5 px-2 text-right text-gray-700 font-medium">Total {emp.name}</td>
+                            <td colSpan={8} className="py-1.5 px-2 text-right text-gray-700 font-medium">Total {emp.name}</td>
                             <td className="py-1.5 px-2 text-right text-brand-600 font-semibold">{fmtAr(emp.total)}</td>
                           </tr>
                         </Fragment>
@@ -1058,7 +1067,7 @@ export default function BonusForm() {
                     </tbody>
                     <tfoot>
                       <tr className="font-semibold border-t-2 border-brand-200">
-                        <td colSpan={7} className="py-2 px-2 text-right">Total général</td>
+                        <td colSpan={8} className="py-2 px-2 text-right">Total général</td>
                         <td className="py-2 px-2 text-right text-brand-600">{fmtAr(totalAmount)} Ar</td>
                       </tr>
                     </tfoot>
