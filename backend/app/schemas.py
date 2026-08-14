@@ -220,6 +220,7 @@ class CommissionConfigCreate(BaseModel):
     objectif: int = 0
     group_name: str = ''
     active: bool = True
+    is_gpv: bool = False
 
 class CommissionConfigUpdate(BaseModel):
     product_name: Optional[str] = None
@@ -227,6 +228,7 @@ class CommissionConfigUpdate(BaseModel):
     objectif: Optional[int] = None
     group_name: Optional[str] = None
     active: Optional[bool] = None
+    is_gpv: Optional[bool] = None
 
 class CommissionConfigResponse(BaseModel):
     id: int
@@ -235,6 +237,7 @@ class CommissionConfigResponse(BaseModel):
     objectif: int
     group_name: str
     active: bool
+    is_gpv: bool
     class Config:
         from_attributes = True
 
@@ -253,6 +256,8 @@ class CommissionEmployeePreview(BaseModel):
     matricule: str
     name: str
     department: str
+    is_gpv: bool = False
+    barème_fallback: bool = False
     total: float
     lines: List[CommissionLine]
 

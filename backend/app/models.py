@@ -165,7 +165,7 @@ class CommissionConfig(models.Model):
     # Clé primaire
     id = fields.IntField(pk=True)
     # Nom exact du produit (doit correspondre aux colonnes du CSV)
-    product_name = fields.CharField(max_length=100, unique=True)
+    product_name = fields.CharField(max_length=100)
     # Taux de commission par vente (en Ar)
     rate = fields.IntField()
     # Nombre minimum de ventes pour bénéficier du doublement
@@ -174,6 +174,12 @@ class CommissionConfig(models.Model):
     group_name = fields.CharField(max_length=100, null=True, default='')
     # Produit actif ou non
     active = fields.BooleanField(default=True)
+    # Grand point de vente (GPV) : objectifs différents des petits points de vente
+    is_gpv = fields.BooleanField(default=False)
+
+    class Meta:
+        # Un même produit peut exister en deux lignes : une pour GPV, une pour petit PDV
+        unique_together = (("product_name", "is_gpv"),)
 
 # Modèle Prime Max (table "primemax")
 class PrimeMax(models.Model):

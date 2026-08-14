@@ -57,6 +57,19 @@ def normalize_matricule(value):
     return s.lower()
 
 
+def parse_pdv(value):
+    """
+    Cellule CSV 'Point de vente' → is_gpv (Grand point de vente = True).
+    'Grand point de vente' / 'GPV' → True ; 'Petit point de vente' / 'PDV' → False.
+    """
+    if value is None:
+        return False
+    s = str(value).strip().lower()
+    if any(k in s for k in ('grand', 'gpv')):
+        return True
+    return False
+
+
 def parse_ventes(value):
     """Cellule CSV → nombre de ventes (entier ≥ 0). Vide/nul/négatif/non numérique → 0."""
     if value is None:
@@ -77,13 +90,17 @@ def parse_ventes(value):
 
 
 async def load_active_configs():
-    """Charge le barème actif et le map par nom normalisé (insensible à la casse)."""
+    """
+    Charge le barème actif : nom normalisé → {is_gpv: config}.
+    Un même produit peut avoir deux lignes : une pour GPV (objectif élevé)
+    et une pour petit point de vente (objectif bas).
+    """
     configs = await CommissionConfig.filter(active=True)
     by_name = {}
     for c in configs:
         key = normalize_product_name(c.product_name)
         if key:
-            by_name[key] = c
+            by_name.setdefault(key, {})[bool(c.is_gpv)] = c
     return by_name
 
 
@@ -119,6 +136,7 @@ async def compute_commission_rows(content: bytes, by_name: dict):
     # Indices des colonnes spéciales
     nom_idx = None
     matricule_idx = None
+    pdv_idx = None
     product_idxs = {}
     ignored_columns = []
     matched_products = []
@@ -130,6 +148,10 @@ async def compute_commission_rows(content: bytes, by_name: dict):
             continue
         if norm in ('matricule', 'matricule employe', 'matricule employé', 'mat'):
             matricule_idx = i
+            continue
+        if norm in ('point de vente', 'point de vent', 'pdv', 'gpv', 'type de point de vente',
+                    'type pdv', 'categorie point de vente', 'categorie pdv', 'point de vente (gpv)'):
+            pdv_idx = i
             continue
         if norm == '':
             continue
@@ -155,7 +177,7 @@ async def compute_commission_rows(content: bytes, by_name: dict):
             employees_db.setdefault(norm, e)
 
     # Agréger par employé (gère les matricules en double dans le CSV)
-    employees = {}  # matricule → {employee, lines: {product_key: CommissionLine}, total}
+    employees = {}  # matricule → {employee, is_gpv, lines: {product_key: CommissionLine}, total}
     ignored_employees = []
 
     for row in data_rows:
@@ -171,17 +193,29 @@ async def compute_commission_rows(content: bytes, by_name: dict):
             continue
         # Utilise le matricule officiel de la base pour l'agrégation et l'affichage
         matricule = emp.matricule
+        is_gpv = parse_pdv(row[pdv_idx]) if pdv_idx is not None and pdv_idx < len(row) else False
 
         if matricule not in employees:
             employees[matricule] = {
                 'employee': emp,
+                'is_gpv': is_gpv,
                 'lines': {},
                 'total': 0.0,
             }
         entry = employees[matricule]
+        entry['is_gpv'] = entry['is_gpv'] or is_gpv
 
         for norm, idxs in product_idxs.items():
-            config = by_name[norm]
+            # Barème selon le type de point de vente : GPV → objectif élevé, sinon objectif standard
+            configs = by_name.get(norm, {})
+            config = configs.get(is_gpv)
+            if config is None:
+                # Barème exact absent (ex : GPV non configuré) → repli silencieux sur l'autre barème,
+                # signalé dans l'aperçu pour éviter un calcul avec le mauvais objectif.
+                entry['barème_fallback'] = True
+                config = configs.get(not is_gpv)
+            if config is None:
+                continue
             ventes = 0
             for idx in idxs:
                 raw = row[idx] if idx < len(row) else None
@@ -237,6 +271,8 @@ async def build_preview(employees, ignored_employees, ignored_columns, matched_p
             matricule=emp.matricule,
             name=emp.name,
             department=emp.dept_str or '',
+            is_gpv=bool(entry.get('is_gpv')),
+            barème_fallback=bool(entry.get('barème_fallback')),
             total=total,
             lines=lines,
         ))
@@ -306,6 +342,7 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
                 'total': total,
                 'source': 'csv_import',
                 'imported': True,
+                'is_gpv': bool(entry.get('is_gpv')),
             },
         )
         created.append({
@@ -313,6 +350,7 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
             'employee_id': emp.id,
             'matricule': emp.matricule,
             'name': emp.name,
+            'is_gpv': bool(entry.get('is_gpv')),
             'total': total,
         })
 
@@ -343,10 +381,12 @@ async def create_commission_config(
         raise HTTPException(403, "Accès réservé aux administrateurs, DG et DRH.")
 
     existing = await CommissionConfig.filter(
-        product_name__iexact=data.product_name.strip()
+        product_name__iexact=data.product_name.strip(),
+        is_gpv=data.is_gpv,
     ).first()
     if existing:
-        raise HTTPException(409, f"Le produit '{data.product_name}' existe déjà dans le barème.")
+        type_pdv = "GPV" if data.is_gpv else "petit point de vente"
+        raise HTTPException(409, f"Le produit '{data.product_name}' existe déjà pour {type_pdv} dans le barème.")
 
     obj = await CommissionConfig.create(
         product_name=data.product_name.strip(),
@@ -354,6 +394,7 @@ async def create_commission_config(
         objectif=data.objectif,
         group_name=data.group_name or '',
         active=data.active,
+        is_gpv=data.is_gpv,
     )
     return obj
 
@@ -372,13 +413,16 @@ async def update_commission_config(
         raise HTTPException(404, "Produit du barème introuvable.")
 
     update_data = data.dict(exclude_unset=True)
-    if 'product_name' in update_data:
-        new_name = update_data['product_name'].strip()
+    if 'product_name' in update_data or 'is_gpv' in update_data:
+        new_name = update_data.get('product_name', obj.product_name).strip()
+        new_is_gpv = bool(update_data.get('is_gpv', obj.is_gpv))
         dup = await CommissionConfig.filter(
-            product_name__iexact=new_name
+            product_name__iexact=new_name,
+            is_gpv=new_is_gpv,
         ).exclude(id=config_id).first()
         if dup:
-            raise HTTPException(409, f"Le produit '{new_name}' existe déjà dans le barème.")
+            type_pdv = "GPV" if new_is_gpv else "petit point de vente"
+            raise HTTPException(409, f"Le produit '{new_name}' existe déjà pour {type_pdv} dans le barème.")
         update_data['product_name'] = new_name
     if update_data:
         await obj.update_from_dict(update_data)
