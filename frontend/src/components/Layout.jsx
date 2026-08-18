@@ -7,7 +7,7 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: DashboardIcon },
   { path: '/employees', label: 'Employés', icon: EmployeesIcon },
   { path: '/bonuses', label: 'Primes', icon: BonusesIcon },
-  { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon },
+  { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true },
 ]
 
 function userRole(user) {
@@ -62,7 +62,7 @@ export default function Layout({ children }) {
                 <span className="font-semibold text-gray-900 hidden sm:block">BPM Primes</span>
               </Link>
               <nav className="hidden md:flex items-center gap-1">
-                {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin || user?.is_dg || user?.is_drh) ? [{ path: '/admin/commission-config', label: 'Barème commission', icon: ClipboardIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
+                {[...navItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh))), ...((user?.is_admin || user?.is_dg || user?.is_drh) ? [{ path: '/admin/config', label: 'Configuration', icon: SettingsIcon }] : []), ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
                   const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
                   const Icon = item.icon
                   return (
@@ -142,7 +142,7 @@ export default function Layout({ children }) {
                   <p className="text-[10px] text-gray-400 truncate">{userDept(user)} · {userRole(user)}</p>
                 </div>
               </div>
-              {[...navItems, ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin || user?.is_dg || user?.is_drh) ? [{ path: '/admin/commission-config', label: 'Barème commission', icon: ClipboardIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
+              {[...navItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh))), ...((user?.is_admin || user?.is_dg || user?.is_drh) ? [{ path: '/admin/config', label: 'Configuration', icon: SettingsIcon }] : []), ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
                 const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
                 const Icon = item.icon
                 return (

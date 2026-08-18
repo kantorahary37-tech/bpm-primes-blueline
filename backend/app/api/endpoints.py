@@ -35,6 +35,34 @@ def _sanitize_for_json(v):
         return [_sanitize_for_json(x) for x in v]
     return v
 
+
+def bonus_ventilation(b):
+    """
+    Ventilation d'une prime pour l'export : (montant_autres, montant_evaluation, descriptions).
+    - Montant Autres : somme des « autres primes » (details.others)
+    - Montant Evaluation : total − autres (uniquement pour les primes mensuelles)
+    - Descriptions : « Libellé : montant » pour chaque autre prime
+    """
+    details = b.details or {}
+    others = [o for o in (details.get('others') or []) if isinstance(o, dict)]
+    montant_autres = sum(float(o.get('montant') or 0) for o in others)
+    if b.bonus_type == BonusType.MENSUEL:
+        montant_eval = float(b.total_amount) - montant_autres
+        parts = []
+        for o in others:
+            libelle = (o.get('libelle') or '').strip()
+            montant = o.get('montant')
+            if libelle and montant:
+                m = float(montant)
+                montant_str = str(int(m)) if m == int(m) else str(m)
+                parts.append(f"{libelle} : {montant_str}")
+        descriptions = ", ".join(parts)
+    else:
+        montant_eval = ''
+        descriptions = ''
+    montant_autres = montant_autres if montant_autres > 0 else ''
+    return montant_autres, montant_eval, descriptions
+
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # Route POST pour créer une prime
@@ -474,8 +502,9 @@ async def export_bonuses(
 
     all_columns = [
         "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "Montant", "Statut",
-        "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation"
+        "DateDebut", "DateFin", "Montant", "Montant total",
+        "Montant Autres", "Montant Evaluation", "Statut",
+        "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation", "Descriptions"
     ]
     if columns:
         selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
@@ -483,25 +512,30 @@ async def export_bonuses(
         selected = all_columns[:]
 
     extractors = {
-        "Matricule": lambda b: b.employee.matricule,
-        "Nom": lambda b: b.employee.name,
-        "Departement": lambda b: b.employee.department if b.employee.department else '',
-        "TypePrime": lambda b: b.bonus_type.value,
-        "DateDebut": lambda b: b.start_date.isoformat(),
-        "DateFin": lambda b: b.end_date.isoformat(),
-        "Montant": lambda b: str(int(b.total_amount)),
-        "Statut": lambda b: b.status.value,
-        "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
-        "MarqueePayeeLe": lambda b: b.paid_at.strftime('%d/%m/%Y %H:%M') if b.paid_at else '',
-        "CreePar": lambda b: b.created_by.name if b.created_by else '',
-        "DateCreation": lambda b: b.created_at.isoformat() if b.created_at else '',
+        "Matricule": lambda b, vent=None: b.employee.matricule,
+        "Nom": lambda b, vent=None: b.employee.name,
+        "Departement": lambda b, vent=None: b.employee.department if b.employee.department else '',
+        "TypePrime": lambda b, vent=None: b.bonus_type.value,
+        "DateDebut": lambda b, vent=None: b.start_date.isoformat(),
+        "DateFin": lambda b, vent=None: b.end_date.isoformat(),
+        "Montant": lambda b, vent=None: str(int(b.total_amount)),
+        "Montant total": lambda b, vent=None: str(int(b.total_amount)),
+        "Montant Autres": lambda b, vent=None: str(int(vent[0])) if isinstance(vent[0], float) else '',
+        "Montant Evaluation": lambda b, vent=None: str(int(vent[1])) if isinstance(vent[1], float) else '',
+        "Statut": lambda b, vent=None: b.status.value,
+        "DejaRejete": lambda b, vent=None: "Oui" if b.was_rejected else "Non",
+        "MarqueePayeeLe": lambda b, vent=None: b.paid_at.strftime('%d/%m/%Y %H:%M') if b.paid_at else '',
+        "CreePar": lambda b, vent=None: b.created_by.name if b.created_by else '',
+        "DateCreation": lambda b, vent=None: b.created_at.isoformat() if b.created_at else '',
+        "Descriptions": lambda b, vent=None: vent[2],
     }
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=';')
     writer.writerow(selected)
     for b in bonuses:
-        writer.writerow([extractors[col](b) for col in selected])
+        vent = bonus_ventilation(b)
+        writer.writerow([extractors[col](b, vent) for col in selected])
 
     output.seek(0)
     return StreamingResponse(
@@ -574,8 +608,9 @@ async def export_bonuses_xlsx(
 
     all_columns = [
         "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "Montant", "Statut",
-        "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation"
+        "DateDebut", "DateFin", "Montant", "Montant total",
+        "Montant Autres", "Montant Evaluation", "Statut",
+        "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation", "Descriptions"
     ]
     if columns:
         selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
@@ -583,18 +618,22 @@ async def export_bonuses_xlsx(
         selected = all_columns[:]
 
     extractors = {
-        "Matricule": lambda b: b.employee.matricule,
-        "Nom": lambda b: b.employee.name,
-        "Departement": lambda b: b.employee.department,
-        "TypePrime": lambda b: b.bonus_type.value,
-        "DateDebut": lambda b: b.start_date.isoformat(),
-        "DateFin": lambda b: b.end_date.isoformat(),
-        "Montant": lambda b: b.total_amount,
-        "Statut": lambda b: b.status.value,
-        "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
-        "MarqueePayeeLe": lambda b: b.paid_at.strftime('%d/%m/%Y %H:%M') if b.paid_at else '',
-        "CreePar": lambda b: b.created_by.name if b.created_by else '',
-        "DateCreation": lambda b: b.created_at.isoformat() if b.created_at else '',
+        "Matricule": lambda b, vent=None: b.employee.matricule,
+        "Nom": lambda b, vent=None: b.employee.name,
+        "Departement": lambda b, vent=None: b.employee.department,
+        "TypePrime": lambda b, vent=None: b.bonus_type.value,
+        "DateDebut": lambda b, vent=None: b.start_date.isoformat(),
+        "DateFin": lambda b, vent=None: b.end_date.isoformat(),
+        "Montant": lambda b, vent=None: b.total_amount,
+        "Montant total": lambda b, vent=None: float(b.total_amount),
+        "Montant Autres": lambda b, vent=None: vent[0],
+        "Montant Evaluation": lambda b, vent=None: vent[1],
+        "Statut": lambda b, vent=None: b.status.value,
+        "DejaRejete": lambda b, vent=None: "Oui" if b.was_rejected else "Non",
+        "MarqueePayeeLe": lambda b, vent=None: b.paid_at.strftime('%d/%m/%Y %H:%M') if b.paid_at else '',
+        "CreePar": lambda b, vent=None: b.created_by.name if b.created_by else '',
+        "DateCreation": lambda b, vent=None: b.created_at.isoformat() if b.created_at else '',
+        "Descriptions": lambda b, vent=None: vent[2],
     }
 
     wb = Workbook()
@@ -618,11 +657,12 @@ async def export_bonuses_xlsx(
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center')
         for row_idx, b in enumerate(data, 2):
+            vent = bonus_ventilation(b)
             for col_idx, col_name in enumerate(selected, 1):
-                val = extractors[col_name](b)
+                val = extractors[col_name](b, vent)
                 cell = ws.cell(row=row_idx, column=col_idx, value=val)
                 cell.font = number_font
-                if col_name == "Montant" and isinstance(val, (int, float)):
+                if col_name in ("Montant", "Montant total", "Montant Autres", "Montant Evaluation") and isinstance(val, (int, float)):
                     cell.number_format = '#,##0'
                 if row_idx % 2 == 0:
                     cell.fill = alt_fill

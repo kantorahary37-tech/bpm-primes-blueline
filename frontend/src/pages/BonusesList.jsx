@@ -41,8 +41,8 @@ const noteColor = (v) => {
 
 const EXPORT_COLUMNS_LIST = [
   "Matricule", "Nom", "Departement", "TypePrime",
-  "DateDebut", "DateFin", "Montant", "Statut",
-  "DejaRejete", "CreePar", "DateCreation",
+  "DateDebut", "DateFin", "Montant total", "Montant Autres", "Montant Evaluation", "Statut",
+  "DejaRejete", "CreePar", "DateCreation", "Descriptions",
 ]
 
 const MONTHS = [

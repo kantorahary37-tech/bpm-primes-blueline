@@ -5,8 +5,8 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: '📊' },
   { path: '/employees', label: 'Employés', icon: '👥' },
   { path: '/bonuses', label: 'Primes', icon: '💰' },
-  { path: '/settings/primemax', label: 'Plafonds', icon: '⚙️' },
-  { path: '/admin/commission-config', label: 'Barème commission', icon: '📊', roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { path: '/settings/primemax', label: 'Plafonds', icon: '⚙️', hideForAdmin: true },
+  { path: '/admin/config', label: 'Configuration', icon: '⚙️', roles: ['is_admin', 'is_dg', 'is_drh'] },
   { path: '/admin/evaluation-templates', label: 'Évaluation', icon: '📋', roles: ['is_admin'] },
   { path: '/admin/users', label: 'Utilisateurs', icon: '👤', roles: ['is_admin'] },
 ]
@@ -28,7 +28,11 @@ export default function Sidebar({ open, onClose }) {
           </div>
 
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {navItems.filter(item => !item.roles || item.roles.some(r => user?.[r])).map((item) => {
+            {navItems.filter(item => {
+              if (item.roles && !item.roles.some(r => user?.[r])) return false;
+              if (item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh)) return false;
+              return true;
+            }).map((item) => {
               const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
               return (
                 <Link
