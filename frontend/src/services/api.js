@@ -62,7 +62,7 @@ export const updateEmployee = async (id, employeeData) => {
   return data;
 };
 
-export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false, allStatuses = false) => {
+export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false, allStatuses = false, archiveMode = false) => {
   const params = {};
   if (status) params.status = status;
   if (employeeId) params.employee_id = employeeId;
@@ -71,6 +71,7 @@ export const getBonuses = async (status = null, employeeId = null, bonusType = n
   if (endDate) params.end_date = endDate;
   if (showPaid) params.show_paid = true;
   if (allStatuses) params.all_statuses = true;
+  if (archiveMode) params.archive_mode = true;
   const { data } = await api.get('/bonuses/', { params });
   return data;
 };
@@ -217,6 +218,90 @@ export const adminLdapSync = async () => {
 
 export const adminLdapSearch = async (query) => {
   const { data } = await api.get('/admin/ldap-search', { params: { q: query } });
+  return data;
+};
+
+export const getCommissionConfig = async (includeInactive = false) => {
+  const { data } = await api.get('/commission-config', { params: { include_inactive: includeInactive } });
+  return data;
+};
+
+export const createCommissionConfig = async (configData) => {
+  const { data } = await api.post('/commission-config', configData);
+  return data;
+};
+
+export const updateCommissionConfig = async (id, configData) => {
+  const { data } = await api.put(`/commission-config/${id}`, configData);
+  return data;
+};
+
+export const deleteCommissionConfig = async (id) => {
+  const { data } = await api.delete(`/commission-config/${id}`);
+  return data;
+};
+
+// Import CSV 4D : aperçu puis création
+export const previewCommissionImport = async (file, startDate, endDate) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('start_date', startDate);
+  formData.append('end_date', endDate);
+  const { data } = await api.post('/bonuses/commission/preview', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+export const importCommissionBonuses = async (file, startDate, endDate) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('start_date', startDate);
+  formData.append('end_date', endDate);
+  const { data } = await api.post('/bonuses/commission/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+// --- Explorateur SFTP (fichier CSV 4D des ventes) ---
+export const sftpInfo = async () => {
+  const { data } = await api.get('/sftp/info');
+  return data;
+};
+
+export const sftpList = async (path) => {
+  const { data } = await api.post('/sftp/list', { path });
+  return data;
+};
+
+export const sftpDownload = async (path) => {
+  const { data } = await api.post('/sftp/download', { path });
+  return data;
+};
+
+export const getEvaluationTemplates = async (department) => {
+  const { data } = await api.get('/evaluation-templates', { params: { department } });
+  return data;
+};
+
+export const saveEvaluationTemplates = async (payload) => {
+  const { data } = await api.post('/evaluation-templates', payload);
+  return data;
+};
+
+export const getAllEvaluationTemplates = async () => {
+  const { data } = await api.get('/evaluation-templates/all');
+  return data;
+};
+
+export const deleteEvaluationTemplate = async (templateId) => {
+  const { data } = await api.delete(`/evaluation-templates/${templateId}`);
+  return data;
+};
+
+export const deleteDepartmentTemplates = async (department) => {
+  const { data } = await api.delete(`/evaluation-templates/department/${encodeURIComponent(department)}`);
   return data;
 };
 

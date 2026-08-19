@@ -34,4 +34,67 @@ else:
     if init_result.returncode != 0:
         print(f"Error: {init_result.stderr}")
 
+print("Ensuring evaluation_template table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "evaluationtemplate" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "section" VARCHAR(20) NOT NULL,
+            "criteria_name" VARCHAR(255) NOT NULL,
+            "description" VARCHAR(255),
+            "coeff" DECIMAL(5,1) NOT NULL,
+            "sort_order" INT NOT NULL DEFAULT 0,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "department_id" INT NOT NULL REFERENCES "department" ("id") ON DELETE CASCADE
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("evaluation_template table OK")
+except Exception as e:
+    print(f"evaluation_template check skipped: {e}")
+
+print("Ensuring commissionconfig table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "commissionconfig" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "product_name" VARCHAR(255) NOT NULL,
+            "rate" DECIMAL(15,2) NOT NULL,
+            "objectif" INT NOT NULL DEFAULT 0,
+            "group_name" VARCHAR(100) NOT NULL DEFAULT '',
+            "active" BOOLEAN NOT NULL DEFAULT TRUE,
+            "is_gpv" BOOLEAN NOT NULL DEFAULT FALSE,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE ("product_name", "is_gpv")
+        );
+    """)
+    # Tables existantes : ajouter la colonne is_gpv si absente
+    cur.execute("""
+        ALTER TABLE "commissionconfig" ADD COLUMN IF NOT EXISTS "is_gpv" BOOLEAN NOT NULL DEFAULT FALSE;
+    """)
+    # Remplacer l'ancienne contrainte UNIQUE sur product_name seul par (product_name, is_gpv)
+    cur.execute("""
+        ALTER TABLE "commissionconfig" DROP CONSTRAINT IF EXISTS "commissionconfig_product_name_key";
+        ALTER TABLE "commissionconfig" DROP CONSTRAINT IF EXISTS "commissionconfig_product_name_is_gpv_key";
+        ALTER TABLE "commissionconfig" ADD CONSTRAINT "commissionconfig_product_name_is_gpv_key" UNIQUE ("product_name", "is_gpv");
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("commissionconfig table OK (is_gpv ajouté)")
+except Exception as e:
+    print(f"commissionconfig check skipped: {e}")
+
 print("Starting application...")

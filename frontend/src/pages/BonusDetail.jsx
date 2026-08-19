@@ -182,6 +182,7 @@ const BonusDetail = () => {
     const pct = primeMax > 0 ? (totalValue / primeMax) * 100 : 0;
     const totalCoeff = items.reduce((s, i) => s + ((i.coeff ?? parseFloat(i.objective)) || 0), 0);
     const totalNote = items.reduce((s, i) => s + ((i.note ?? i.evaluation) || 0), 0);
+    const avgNote = items.length > 0 ? totalNote / items.length : 0;
     return (
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -210,14 +211,14 @@ const BonusDetail = () => {
                 <tr key={i} className="border-b border-gray-200">
                   <td className="py-2 pr-2 text-gray-900">{item.criteria}</td>
                   <td className="py-2 px-2 text-center text-gray-800">{item.coeff ?? item.objective ?? 0}</td>
-                  <td className="py-2 px-2 text-center font-medium text-gray-900">{item.note ?? item.evaluation ?? 0}</td>
+                  <td className="py-2 px-2 text-center font-medium text-gray-900">{Number(item.note ?? item.evaluation ?? 0).toFixed(2)}</td>
                   <td className="py-2 pl-2 text-right font-medium text-gray-900">{formatAr(item.value)}</td>
                 </tr>
               ))}
               <tr className="font-semibold bg-gray-50">
                 <td className="py-2 pr-2 text-gray-900">Total {label}</td>
                 <td className="py-2 px-2 text-center text-gray-800">{totalCoeff}</td>
-                <td className="py-2 px-2 text-center font-medium text-gray-900">{totalNote}</td>
+                <td className="py-2 px-2 text-center font-bold text-blue-600">{Number(avgNote).toFixed(2)}</td>
                 <td className="py-2 pl-2 text-right text-blue-600">{formatAr(totalValue)}</td>
               </tr>
             </tbody>
@@ -486,10 +487,18 @@ const BonusDetail = () => {
 
         {bonus.bonus_type === 'commission' && (
           <Section title="Détails commission" icon={ChartIcon}>
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
               <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
-                <p className="text-xs text-gray-600">Commission par vente</p>
-                <p className="font-semibold text-gray-900">{formatAr(bonus.taux_commission ?? bonus.details?.rate ?? 0)} Ar</p>
+                <p className="text-xs text-gray-600">Produits</p>
+                <p className="font-semibold text-gray-900">{(bonus.details?.sales || []).length}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Point de vente</p>
+                <p className="font-semibold text-gray-900">
+                  {bonus.details?.is_gpv
+                    ? <span className="badge badge-primary badge-sm border-0">GPV</span>
+                    : <span className="badge badge-ghost badge-sm text-gray-500">Petit PDV</span>}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
                 <p className="text-xs text-emerald-600 font-medium">Total commission</p>
@@ -502,26 +511,32 @@ const BonusDetail = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-300">
-                      <th className="text-left py-2 font-medium text-gray-600 text-xs">Désignation</th>
-                      <th className="text-center py-2 font-medium text-gray-600 text-xs">Nombre</th>
-                      <th className="text-left py-2 font-medium text-gray-600 text-xs">Description</th>
+                      <th className="text-left py-2 font-medium text-gray-600 text-xs">Produit</th>
+                      <th className="text-center py-2 font-medium text-gray-600 text-xs">Ventes</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Taux (Ar)</th>
+                      <th className="text-center py-2 font-medium text-gray-600 text-xs">Objectif</th>
+                      <th className="text-center py-2 font-medium text-gray-600 text-xs">Doublé</th>
                       <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bonus.details.sales.map((sale, i) => {
-                      const montant = (parseFloat(sale.nombre) || 0) * (bonus.details.rate || 0);
+                      const montant = sale.montant != null
+                        ? parseFloat(sale.montant)
+                        : (parseFloat(sale.nombre) || 0) * (bonus.details.rate || 0);
                       return (
                         <tr key={i} className="border-b border-gray-200">
                           <td className="py-1.5 text-gray-900">{sale.designation || '—'}</td>
                           <td className="py-1.5 text-center">{sale.nombre ?? 0}</td>
-                          <td className="py-1.5 text-gray-800 text-xs">{sale.description || '—'}</td>
+                          <td className="py-1.5 text-right">{formatAr(sale.taux ?? bonus.details.rate ?? 0)}</td>
+                          <td className="py-1.5 text-center">{sale.objectif ?? '—'}</td>
+                          <td className="py-1.5 text-center">{sale.doublé ? 'Oui' : 'Non'}</td>
                           <td className="py-1.5 text-right font-medium">{formatAr(montant)}</td>
                         </tr>
                       );
                     })}
                     <tr className="font-semibold bg-gray-50">
-                      <td colSpan={3} className="py-1.5 text-gray-900">Total commission</td>
+                      <td colSpan={5} className="py-1.5 text-gray-900">Total commission</td>
                       <td className="py-1.5 text-right text-emerald-600">{formatAr(bonus.total_amount)} Ar</td>
                     </tr>
                   </tbody>

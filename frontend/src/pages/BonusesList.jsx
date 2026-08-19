@@ -20,10 +20,29 @@ const typeLabels = {
   commission: 'Commission',
 }
 
+// Moyenne pondérée des notes /10 par coefficient pour une section
+const weightedAvg = (items) => {
+  if (!Array.isArray(items) || items.length === 0) return { note: null, totalCoeff: 0 };
+  let weightedSum = 0, totalCoeff = 0;
+  for (const i of items) {
+    if (!i || typeof i !== 'object') continue;
+    const n = parseFloat(i.note ?? i.evaluation);
+    const c = parseFloat(i.coeff ?? i.objective) || 0;
+    if (!Number.isNaN(n) && c > 0) { weightedSum += n * c; totalCoeff += c; }
+  }
+  return { note: totalCoeff > 0 ? weightedSum / totalCoeff : null, totalCoeff };
+};
+
+const noteColor = (v) => {
+  if (v >= 7.5) return 'text-emerald-600';
+  if (v >= 5) return 'text-amber-600';
+  return 'text-red-500';
+};
+
 const EXPORT_COLUMNS_LIST = [
   "Matricule", "Nom", "Departement", "TypePrime",
-  "DateDebut", "DateFin", "Montant", "Statut",
-  "DejaRejete", "CreePar", "DateCreation",
+  "DateDebut", "DateFin", "Montant total", "Montant Autres", "Montant Evaluation", "Statut",
+  "DejaRejete", "CreePar", "DateCreation", "Descriptions",
 ]
 
 const MONTHS = [
@@ -411,6 +430,21 @@ const [filterMonth, setFilterMonth] = useState('');
               {statusLabel(bonus)}
             </span>
             <span className="text-[10px] font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
+            {bonus.bonus_type === 'mensuel' && (() => {
+              const q = weightedAvg(bonus.details?.quantitative);
+              const l = weightedAvg(bonus.details?.qualitative);
+              const totalCoeff = q.totalCoeff + l.totalCoeff;
+              const globalNote = totalCoeff > 0
+                ? ((q.note ?? 0) * q.totalCoeff + (l.note ?? 0) * l.totalCoeff) / totalCoeff
+                : null;
+              if (globalNote == null) return null;
+              return (
+                <span className="text-[9px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600"
+                  title={`Note globale pondérée — Qté : ${q.note != null ? Number(q.note).toFixed(2) : '—'}/10 (${q.totalCoeff} coeff) · Qual : ${l.note != null ? Number(l.note).toFixed(2) : '—'}/10 (${l.totalCoeff} coeff)`}>
+                  Note {Number(globalNote).toFixed(2)}/10
+                </span>
+              );
+            })()}
             <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => navigate(`/bonuses/${bonus.id}`)} className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-blue-600" title="Voir le détail">
                 <EyeIcon className="w-3 h-3" />
