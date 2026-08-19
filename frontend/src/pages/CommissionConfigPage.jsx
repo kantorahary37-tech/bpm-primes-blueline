@@ -5,7 +5,7 @@ import Modal from '../components/Modal';
 import { PlusIcon, CheckIcon, XCircleIcon } from '../components/Icons';
 
 const EMPTY_FORM = { product_name: '', rate: '', objectif: '', group_name: '', active: true, is_gpv: false };
-
+       
 const CommissionConfigPage = () => {
   const { user } = useAuth();
   const [configs, setConfigs] = useState([]);

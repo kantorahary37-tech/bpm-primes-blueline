@@ -4,6 +4,7 @@ import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFi
 import { useAuth } from '../contexts/AuthContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import Modal from '../components/Modal'
+import SftpFilePicker from '../components/SftpFilePicker'
 import * as XLSX from 'xlsx'
 
 const FRENCH_MONTHS = {
@@ -266,6 +267,8 @@ export default function BonusForm() {
   }
   // --- État du flux CSV commission (création) ---
   const [commCsvFile, setCommCsvFile] = useState(null)
+  const [commCsvPath, setCommCsvPath] = useState('')
+  const [showSftp, setShowSftp] = useState(false)
   const [commPreview, setCommPreview] = useState(null)
   const [commLoading, setCommLoading] = useState(false)
   // Tableau des ventes (utilisé uniquement en édition d'une prime commission existante)
@@ -568,6 +571,12 @@ export default function BonusForm() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSftpSelect = (file, info) => {
+    setCommCsvFile(file)
+    setCommCsvPath(info?.path || '')
+    setCommPreview(null)
   }
 
   const handlePreviewCommission = async () => {
@@ -968,6 +977,7 @@ export default function BonusForm() {
     const totalAmount = commPreview?.total_amount ?? 0
 
     return (
+      <>
       <div className="page-container !px-2 max-w-full">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
@@ -981,8 +991,18 @@ export default function BonusForm() {
             <div className="flex flex-col md:flex-row md:items-end gap-3">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-base-content/70 mb-0.5">Fichier (séparateur ;, encodage UTF-8)</label>
-                <input type="file" accept=".csv,text/csv" onChange={(e) => { setCommCsvFile(e.target.files[0] || null); setCommPreview(null) }}
-                  className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+                <button type="button" onClick={() => setShowSftp(true)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300 bg-white hover:border-brand-500 hover:ring-2 hover:ring-brand-500/20 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-left">
+                  <svg className="w-4 h-4 text-brand-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+                  </svg>
+                  {commCsvFile
+                    ? <span className="text-base-content font-medium truncate">{commCsvFile.name}</span>
+                    : <span className="text-base-content/50">Choisir le fichier CSV 4D sur le serveur SFTP…</span>}
+                </button>
+                {commCsvFile && commCsvPath && (
+                  <p className="text-[11px] text-base-content/40 mt-1 truncate">SFTP : {commCsvPath}</p>
+                )}
               </div>
               <button type="button" onClick={handlePreviewCommission} disabled={commLoading}
                 className="btn bg-brand-600 hover:bg-brand-700 text-white border-0 shrink-0">
@@ -1102,6 +1122,8 @@ export default function BonusForm() {
           )}
         </form>
       </div>
+      <SftpFilePicker open={showSftp} onClose={() => setShowSftp(false)} onSelect={handleSftpSelect} />
+      </>
     )
   }
 
@@ -1796,6 +1818,7 @@ export default function BonusForm() {
           <button onClick={doDelete} className="btn btn-sm bg-red-500 hover:bg-red-600 text-white border-0">Supprimer</button>
         </div>
       </Modal>
+
     </>
   )
 }

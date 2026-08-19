@@ -264,6 +264,22 @@ export const importCommissionBonuses = async (file, startDate, endDate) => {
   return data;
 };
 
+// --- Explorateur SFTP (fichier CSV 4D des ventes) ---
+export const sftpInfo = async () => {
+  const { data } = await api.get('/sftp/info');
+  return data;
+};
+
+export const sftpList = async (path) => {
+  const { data } = await api.post('/sftp/list', { path });
+  return data;
+};
+
+export const sftpDownload = async (path) => {
+  const { data } = await api.post('/sftp/download', { path });
+  return data;
+};
+
 export const getEvaluationTemplates = async (department) => {
   const { data } = await api.get('/evaluation-templates', { params: { department } });
   return data;

@@ -14,3 +14,4 @@ passlib
 bcrypt
 openpyxl
 ldap3
+paramiko
