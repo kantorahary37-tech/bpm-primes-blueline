@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
 import PlafondsPage from './PlafondsPage';
 import CommissionConfigPage from './CommissionConfigPage';
-import { SettingsIcon, ChartIcon } from '../components/Icons';
+import { useAuth } from '../contexts/AuthContext';
+import { useDepartments } from '../contexts/DepartmentsContext';
+import { adminLdapSyncDepartments } from '../services/api';
+import { SettingsIcon, ChartIcon, ArchiveIcon } from '../components/Icons';
 
 const TABS = [
   { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon },
@@ -31,11 +35,14 @@ export default function AdminConfigPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Configuration</h1>
-        <p className="text-sm text-gray-400">
-          Gérer les plafonds des primes et le barème des commissions
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Configuration</h1>
+          <p className="text-sm text-gray-400">
+            Gérer les plafonds des primes et le barème des commissions
+          </p>
+        </div>
+        <SyncDepartmentsButton />
       </div>
 
       {/* Tabs */}
@@ -62,5 +69,37 @@ export default function AdminConfigPage() {
         {activeTab === 'bareme' && <CommissionConfigPage />}
       </div>
     </div>
+  );
+}
+
+function SyncDepartmentsButton() {
+  const { user } = useAuth();
+  const { refresh } = useDepartments();
+  const [syncing, setSyncing] = useState(false);
+
+  if (!user?.is_admin) return null;
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await adminLdapSyncDepartments();
+      if (result.success) {
+        refresh();
+        toast.success('Synchronisation LDAP des départements terminée');
+      } else {
+        toast.error('Erreur lors de la synchronisation LDAP');
+      }
+    } catch {
+      toast.error('Erreur de connexion lors de la synchronisation');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <button onClick={handleSync} disabled={syncing} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5">
+      {syncing ? <span className="loading loading-spinner loading-xs"></span> : <ArchiveIcon className="w-4 h-4" />}
+      Sync départements
+    </button>
   );
 }

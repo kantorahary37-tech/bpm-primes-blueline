@@ -7,15 +7,19 @@ export function DepartmentsProvider({ children }) {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () => {
     api.get('/departments/')
       .then(res => setDepartments(res.data))
       .catch(() => setDepartments([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   return (
-    <DepartmentsContext.Provider value={{ departments, loading }}>
+    <DepartmentsContext.Provider value={{ departments, loading, refresh: load }}>
       {children}
     </DepartmentsContext.Provider>
   );

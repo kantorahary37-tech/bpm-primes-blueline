@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { getEmployees, getBonuses, createEmployee, getUsers } from '../services/api';
+import toast from 'react-hot-toast';
+import { getEmployees, getBonuses, createEmployee, getUsers, adminLdapSyncEmployees } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import { Link } from 'react-router-dom';
@@ -70,6 +71,7 @@ const Employees = () => {
   const [exportColumns, setExportColumns] = useState(EXPORT_EMPLOYEE_COLUMNS);
   const [showEmpBonusExportModal, setShowEmpBonusExportModal] = useState(false);
   const [empBonusExportColumns, setEmpBonusExportColumns] = useState(EXPORT_EMP_BONUS_COLUMNS);
+  const [syncing, setSyncing] = useState(false);
 
   const initRef = useRef(false);
 
@@ -97,6 +99,24 @@ const Employees = () => {
     };
     fetchData();
   }, [departmentFilter, user]);
+
+  const handleLdapSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await adminLdapSyncEmployees();
+      if (result.success) {
+        const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
+        setEmployees(emps);
+        toast.success('Synchronisation LDAP des employés terminée');
+      } else {
+        toast.error('Erreur lors de la synchronisation LDAP');
+      }
+    } catch {
+      toast.error('Erreur de connexion lors de la synchronisation');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -142,6 +162,12 @@ const Employees = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Employés</h1>
         <div className="flex items-center gap-2">
+        {user?.is_admin && (
+          <button onClick={handleLdapSync} disabled={syncing} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5">
+            {syncing ? <span className="loading loading-spinner loading-xs"></span> : null}
+            Sync LDAP
+          </button>
+        )}
         <button onClick={() => setShowForm(true)} className="btn bg-blue-600 hover:bg-blue-700 text-white border-0 btn-sm flex items-center gap-1.5">
           <PlusIcon className="w-4 h-4" /> Nouvel employé
         </button>

@@ -216,6 +216,16 @@ export const adminLdapSync = async () => {
   return data;
 };
 
+export const adminLdapSyncDepartments = async () => {
+  const { data } = await api.post('/admin/ldap-sync-departments');
+  return data;
+};
+
+export const adminLdapSyncEmployees = async () => {
+  const { data } = await api.post('/admin/ldap-sync-employees');
+  return data;
+};
+
 export const adminLdapSearch = async (query) => {
   const { data } = await api.get('/admin/ldap-search', { params: { q: query } });
   return data;

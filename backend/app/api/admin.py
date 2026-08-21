@@ -115,11 +115,10 @@ async def admin_create_user(data: CreateUserRequest, _admin: User = Depends(requ
     return user
 
 
-@router.post("/ldap-sync")
-async def admin_ldap_sync(_admin: User = Depends(require_admin)):
+def _run_ldap_sync(scope: str):
     import subprocess
     result = subprocess.run(
-        ["python", "-m", "scripts.sync_ldap"],
+        ["python", "-m", "scripts.sync_ldap", "--scope", scope],
         capture_output=True, text=True, timeout=60,
         cwd="/app"
     )
@@ -128,6 +127,21 @@ async def admin_ldap_sync(_admin: User = Depends(require_admin)):
         "output": result.stdout[-2000:] if result.stdout else "",
         "errors": result.stderr[-1000:] if result.stderr else "",
     }
+
+
+@router.post("/ldap-sync")
+async def admin_ldap_sync(_admin: User = Depends(require_admin)):
+    return _run_ldap_sync("all")
+
+
+@router.post("/ldap-sync-departments")
+async def admin_ldap_sync_departments(_admin: User = Depends(require_admin)):
+    return _run_ldap_sync("departments")
+
+
+@router.post("/ldap-sync-employees")
+async def admin_ldap_sync_employees(_admin: User = Depends(require_admin)):
+    return _run_ldap_sync("employees")
 
 
 @router.get("/ldap-search")
