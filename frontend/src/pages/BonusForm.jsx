@@ -183,7 +183,7 @@ export default function BonusForm() {
     setImportError('')
     try {
       const data = await file.arrayBuffer()
-      const wb = XLSX.read(data, { cellDates: true })
+      const wb = XLSX.read(data)
       const sheet = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
       if (rows.length === 0) { setImportError('Le fichier est vide.'); return }
@@ -193,7 +193,7 @@ export default function BonusForm() {
       const formatDate = (v) => {
         if (v == null || v === '') return ''
         if (v instanceof Date) {
-          const y = v.getFullYear(); const m = String(v.getMonth() + 1).padStart(2, '0'); const d = String(v.getDate()).padStart(2, '0')
+          const y = v.getUTCFullYear(); const m = String(v.getUTCMonth() + 1).padStart(2, '0'); const d = String(v.getUTCDate()).padStart(2, '0')
           return `${y}-${m}-${d}`
         }
         if (typeof v === 'number') {
@@ -204,7 +204,7 @@ export default function BonusForm() {
       }
       const formatTime = (v) => {
         if (v == null || v === '') return ''
-        if (v instanceof Date) return `${String(v.getHours()).padStart(2, '0')}:${String(v.getMinutes()).padStart(2, '0')}`
+        if (v instanceof Date) return `${String(v.getUTCHours()).padStart(2, '0')}:${String(v.getUTCMinutes()).padStart(2, '0')}`
         if (typeof v === 'number') {
           const totalMin = Math.round(v * 1440)
           return `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`
@@ -214,6 +214,7 @@ export default function BonusForm() {
       const dateCol = findCol(['date'])
       const heureCol = findCol(['heure'])
       const respCol = findCol(['responsable', 'employe', 'employé'])
+      const matriculeCol = findCol(['matricule'])
       const motifCol = findCol(['motif'])
       const demCol = findCol(['demandeur'])
       const servCol = findCol(['service'])
@@ -223,9 +224,19 @@ export default function BonusForm() {
         const v = sample[h]; const t = typeof v
         return `${h}(${t}${v instanceof Date ? ' Date' : ''})`
       }).join(' | ')
+      const findEmpByMatricule = (raw) => {
+        if (raw == null || raw === '') return null
+        const s = String(raw).trim()
+        if (!s) return null
+        const n = parseInt(s, 10)
+        return employees.find(e => e.matricule === s)
+          || (Number.isFinite(n) ? employees.find(e => parseInt(e.matricule, 10) === n) : null)
+      }
       const parsed = rows.map((row, idx) => {
         const rawResp = respCol ? String(row[respCol] || '').trim() : ''
-        const emp = rawResp ? employees.find(e => e.name.toLowerCase().includes(rawResp.toLowerCase())) : null
+        const rawMat = matriculeCol ? row[matriculeCol] : ''
+        const emp = findEmpByMatricule(rawMat)
+          || (rawResp ? employees.find(e => e.name.toLowerCase().includes(rawResp.toLowerCase())) : null)
         const dateVal = dateCol ? row[dateCol] : undefined
         const heureVal = heureCol ? row[heureCol] : undefined
         return {
@@ -244,8 +255,9 @@ export default function BonusForm() {
       })
       setInterventions(prev => [...prev, ...parsed])
       setImportedFileName(`${file.name} (${parsed.length} lignes)`)
-      const detected = [dateCol && `date[${dateCol}]`, heureCol && `heure[${heureCol}]`, respCol && `employé[${respCol}]`, motifCol && `motif[${motifCol}]`, demCol && `demandeur[${demCol}]`, servCol && `service[${servCol}]`, ticketCol && `ticket[${ticketCol}]`].filter(Boolean)
-      setImportFeedback(`${parsed.length} intervention(s) importée(s). Colonnes: ${detected.join(', ')}. Debug: ${debugInfo}`)
+      const detected = [dateCol && `date[${dateCol}]`, heureCol && `heure[${heureCol}]`, matriculeCol && `matricule[${matriculeCol}]`, respCol && `employé[${respCol}]`, motifCol && `motif[${motifCol}]`, demCol && `demandeur[${demCol}]`, servCol && `service[${servCol}]`, ticketCol && `ticket[${ticketCol}]`].filter(Boolean)
+      const unmatched = parsed.filter(p => !p.employee_id).length
+      setImportFeedback(`${parsed.length} intervention(s) importée(s). Colonnes: ${detected.join(', ')}. Debug: ${debugInfo}${unmatched ? ` — ⚠ ${unmatched} ligne(s) sans employé reconnu` : ''}`)
     } catch (err) {
       setImportError('Erreur lors de la lecture du fichier : ' + err.message)
     }
