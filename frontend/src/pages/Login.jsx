@@ -108,13 +108,10 @@ export default function Login() {
           </form>
 
           <div className="mt-6 space-y-3 text-center text-sm">
-            <Link to="/forgot-password" className="text-blue-600 hover:text-blue-700 font-medium">
+            <a href="https://bpm.malagasy.com/login/reset_password/" className="text-blue-600 hover:text-blue-700 font-medium">
               Mot de passe oublié ?
-            </Link>
-            <p className="text-gray-400">
-              Pas encore de compte ?{' '}
-              <Link to="/signup" className="text-blue-600 hover:text-blue-700 font-medium">S'inscrire</Link>
-            </p>
+            </a>
+            
           </div>
         </div>
       </div>
