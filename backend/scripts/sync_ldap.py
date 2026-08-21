@@ -159,6 +159,12 @@ def _matricule(rec: dict, email: str) -> str:
     return rec.get('uid') or email.split('@')[0]
 
 
+def _is_director_poste(poste: str | None) -> bool:
+    """True si le poste correspond à un(e) Directeur/Directrice."""
+    p = (poste or '').strip().lower()
+    return 'directeur' in p or 'directrice' in p
+
+
 # ---------------------------------------------------------------------------
 # Main sync
 # ---------------------------------------------------------------------------
@@ -263,12 +269,6 @@ async def sync(scope: str = 'all'):
         for email in sorted(users_to_create):
             ldap_rec = email_index.get(email)
 
-            is_n1 = email in manager_emails or email in VALIDATORS_N1 or bool(DIRECTORS.get(email, {}).get('is_validator_n1'))
-            is_dir = bool(DIRECTORS.get(email, {}).get('is_directeur'))
-            is_drh = bool(DIRECTORS.get(email, {}).get('is_drh'))
-            is_dg = bool(DIRECTORS.get(email, {}).get('is_dg'))
-            is_admin = bool(DIRECTORS.get(email, {}).get('is_admin'))
-
             if ldap_rec:
                 name = _full_name(ldap_rec)
                 poste = ldap_rec.get('title') or ldap_rec.get('employeeType') or ''
@@ -281,6 +281,20 @@ async def sync(scope: str = 'all'):
             else:
                 continue
 
+            is_n1 = email in manager_emails or email in VALIDATORS_N1 or bool(DIRECTORS.get(email, {}).get('is_validator_n1'))
+            is_dir = bool(DIRECTORS.get(email, {}).get('is_directeur'))
+            is_drh = bool(DIRECTORS.get(email, {}).get('is_drh'))
+            is_dg = bool(DIRECTORS.get(email, {}).get('is_dg'))
+            is_admin = bool(DIRECTORS.get(email, {}).get('is_admin'))
+
+            # Un poste de Directeur/Directrice ⇒ rôle Directeur,
+            # et pas validateur N+1 (la validation passe au niveau Directeur)
+            dir_from_poste = _is_director_poste(poste)
+            if dir_from_poste:
+                is_dir = True
+                if email not in VALIDATORS_N1:
+                    is_n1 = False
+
             dept_obj = dept_cache.get(dept_name) if dept_name else None
 
             existing = existing_users.get(email)
@@ -289,9 +303,13 @@ async def sync(scope: str = 'all'):
                 existing.poste = poste
                 existing.dept_str = dept_name
                 existing.dept = dept_obj
-                existing.is_validator_n1 = is_n1 or existing.is_validator_n1
-                if email in DIRECTORS:
+                if dir_from_poste and email not in VALIDATORS_N1:
+                    existing.is_validator_n1 = False
+                else:
+                    existing.is_validator_n1 = is_n1 or existing.is_validator_n1
+                if email in DIRECTORS or dir_from_poste:
                     existing.is_directeur = is_dir
+                if email in DIRECTORS:
                     existing.is_drh = is_drh
                     existing.is_dg = is_dg
                     existing.is_admin = is_admin
