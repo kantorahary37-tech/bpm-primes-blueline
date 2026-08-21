@@ -1,17 +1,35 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, UserIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon } from './Icons'
+import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon } from './Icons'
 
-const navItems = [
+const mainNavItems = [
   { path: '/', label: 'Dashboard', icon: DashboardIcon },
   { path: '/employees', label: 'Employés', icon: EmployeesIcon },
   { path: '/bonuses', label: 'Primes', icon: BonusesIcon },
   { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true },
 ]
 
+const adminNavItems = [
+  { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin'] },
+  { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin'] },
+]
+
+function visibleMainItems(user) {
+  return mainNavItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh)))
+}
+
+function visibleAdminItems(user) {
+  return adminNavItems.filter(item => item.roles.some(r => user?.[r]))
+}
+
+function isActive(pathname, path) {
+  return pathname === path || (path !== '/' && pathname.startsWith(path))
+}
+
 function userRole(user) {
-  if (user?.is_admin) return 'Admin'
   if (user?.is_admin) return 'Admin'
   if (user?.is_dg) return 'DG'
   if (user?.is_drh) return 'DRH'
@@ -26,7 +44,6 @@ function userDept(user) {
 
 function userColor(user) {
   if (user?.is_admin) return 'bg-red-100 text-red-700'
-  if (user?.is_admin) return 'bg-red-100 text-red-700'
   if (user?.is_dg) return 'bg-amber-100 text-amber-700'
   if (user?.is_drh) return 'bg-emerald-100 text-emerald-700'
   if (user?.is_directeur) return 'bg-purple-100 text-purple-700'
@@ -39,11 +56,17 @@ export default function Layout({ children }) {
   const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
   const menuRef = useRef(null)
+  const adminRef = useRef(null)
+
+  const adminItems = visibleAdminItems(user)
+  const adminActive = adminItems.some(item => isActive(pathname, item.path))
 
   useEffect(() => {
     const handleClick = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setUserMenuOpen(false)
+      if (adminRef.current && !adminRef.current.contains(e.target)) setAdminOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -62,8 +85,8 @@ export default function Layout({ children }) {
                 <span className="font-semibold text-gray-900 hidden sm:block">BPM Primes</span>
               </Link>
               <nav className="hidden md:flex items-center gap-1">
-                {[...navItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh))), ...((user?.is_admin || user?.is_dg || user?.is_drh) ? [{ path: '/admin/config', label: 'Configuration', icon: SettingsIcon }] : []), ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
-                  const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
+                {visibleMainItems(user).map((item) => {
+                  const active = isActive(pathname, item.path)
                   const Icon = item.icon
                   return (
                     <Link
@@ -78,6 +101,41 @@ export default function Layout({ children }) {
                     </Link>
                   )
                 })}
+                {adminItems.length > 0 && (
+                  <div className="relative" ref={adminRef}>
+                    <button
+                      onClick={() => setAdminOpen(!adminOpen)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        adminActive ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                      }`}
+                    >
+                      <SettingsIcon className="w-4 h-4" />
+                      Administration
+                      <ChevronDownIcon className={`w-3.5 h-3.5 shrink-0 transition-transform ${adminOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {adminOpen && (
+                      <div className="absolute left-0 top-full mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 animate-scaleIn">
+                        {adminItems.map((item) => {
+                          const active = isActive(pathname, item.path)
+                          const Icon = item.icon
+                          return (
+                            <Link
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setAdminOpen(false)}
+                              className={`flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
+                                active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" />
+                              {item.label}
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </nav>
             </div>
 
@@ -128,7 +186,7 @@ export default function Layout({ children }) {
         <>
           <div className="fixed inset-0 bg-black/20 z-30 md:hidden" onClick={() => setMobileOpen(false)} />
           <div className="fixed top-16 left-0 right-0 z-30 bg-white border-b border-gray-200 shadow-lg md:hidden animate-slideUp">
-            <nav className="p-4 space-y-1">
+            <nav className="p-4 space-y-1 max-h-[calc(100vh-4rem)] overflow-y-auto">
               <div className="flex items-center gap-3 px-3 py-3 border-b border-gray-100 mb-2">
                 <div className={'w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm ' + userColor(user)}>
                   {user?.name?.charAt(0)?.toUpperCase() || '?'}
@@ -139,8 +197,8 @@ export default function Layout({ children }) {
                   <p className="text-[10px] text-gray-400 truncate">{userDept(user)} · {userRole(user)}</p>
                 </div>
               </div>
-              {[...navItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh))), ...((user?.is_admin || user?.is_dg || user?.is_drh) ? [{ path: '/admin/config', label: 'Configuration', icon: SettingsIcon }] : []), ...((user?.is_drh || user?.is_dg || user?.is_admin) ? [{ path: '/archive', label: 'Archive', icon: ArchiveIcon }] : []), ...((user?.is_admin) ? [{ path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon }] : []), ...(user?.is_admin ? [{ path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon }] : [])].map((item) => {
-                const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))
+              {visibleMainItems(user).map((item) => {
+                const active = isActive(pathname, item.path)
                 const Icon = item.icon
                 return (
                   <Link
@@ -156,6 +214,28 @@ export default function Layout({ children }) {
                   </Link>
                 )
               })}
+              {adminItems.length > 0 && (
+                <>
+                  <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Administration</p>
+                  {adminItems.map((item) => {
+                    const active = isActive(pathname, item.path)
+                    const Icon = item.icon
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                          active ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        {item.label}
+                      </Link>
+                    )
+                  })}
+                </>
+              )}
               <hr className="my-2 border-gray-100" />
               <button className="flex items-center gap-3 px-3 py-2.5 w-full text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
                 <LockIcon className="w-5 h-5 text-gray-400" />
