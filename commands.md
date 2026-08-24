@@ -35,3 +35,5 @@ ayant des primes en attente — identique au rappel automatique quotidien de 08h
 ```Shell
 docker compose exec backend python -m scripts.send_reminder
 ```
+
+> Configuration emails (mode test vs production) : voir [README.md](README.md).
