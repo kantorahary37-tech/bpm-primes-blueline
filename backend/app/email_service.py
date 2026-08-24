@@ -10,7 +10,10 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "GlpK@-5F")
 FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "bpm@si.blueline.mg")
 FROM_NAME = os.getenv("SMTP_FROM_NAME", "BPM | Gestion de Prime")
 TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
-TEST_EMAIL = os.getenv("TEST_EMAIL", "nambinintsoa.rakotoarivelo@staff.blueline.mg")
+TEST_EMAIL = os.getenv("TEST_EMAIL", "vonjy.rakotoniaina@staff.blueline.mg")
+
+print(f"SMTP Config: host={SMTP_HOST}, port={SMTP_PORT}, user={SMTP_USER}, test_mode={TEST_MODE}, test_email={TEST_EMAIL}")
+print(f"SMTP From: {FROM_NAME} <{FROM_EMAIL}>")
 
 
 def _resolve_email(to_email: str) -> str:
