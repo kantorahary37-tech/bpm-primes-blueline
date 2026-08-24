@@ -28,3 +28,10 @@ Backup / Restore base de données :
 ./backup.sh restore <file>      # restaurer depuis un fichier de dump
 ./backup.sh list                # lister les sauvegardes disponibles
 ```
+
+Envoi manuel des rappels de validation de primes (email aux acteurs N+1 / Directeur / DG
+ayant des primes en attente — identique au rappel automatique quotidien de 08h30) :
+
+```Shell
+docker compose exec backend python -m scripts.send_reminder
+```
