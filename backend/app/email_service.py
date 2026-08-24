@@ -1,6 +1,7 @@
 import smtplib
 import os
 import asyncio
+from datetime import date
 from email.message import EmailMessage
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.blueline.mg")
@@ -209,4 +210,86 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
         return True
     except Exception as e:
         print(f"SMTP error (bonus notification): {e}")
+        return False
+
+
+async def send_validation_reminder_email(to_email: str, to_name: str, items: list) -> bool:
+    """
+    Rappel quotidien : liste des primes en attente de validation pour un acteur.
+    items : liste de dicts {employee_name, type_label, amount, status_label, url}
+    """
+    return await asyncio.to_thread(_send_validation_reminder_email_sync, to_email, to_name, items)
+
+
+def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: list) -> bool:
+    try:
+        count = len(items)
+        plural = "s" if count > 1 else ""
+        msg = EmailMessage()
+        msg["Subject"] = f"Rappel : {count} prime{plural} en attente de votre validation | BPM"
+        msg["From"] = f"{FROM_NAME} <{FROM_EMAIL}>"
+        msg["To"] = f"{to_name} <{_resolve_email(to_email)}>"
+
+        msg.set_content(
+            f"Bonjour {to_name},\n\n"
+            f"Des processus sont en attente de votre intervention sur la plateforme BPM | Gestion de Prime.\n"
+            f"Vous trouverez ci-dessous la liste des prime{plural} bloquée{plural} à votre étape de validation.\n\n"
+            + "\n".join(f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}" for it in items)
+            + "\n\nMerci de bien vouloir traiter ces dossiers afin que les processus puissent se poursuivre.\n\n"
+            f"---\nBPM | Gestion de Prime"
+        )
+
+        links = "".join(
+            f"<li style=\"margin:8px 0;\">"
+            f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
+            f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
+            f"</li>"
+            for it in items
+        )
+        msg.add_alternative(f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#1e40af,#2563eb);padding:24px 32px;border-radius:16px 16px 0 0;">
+          <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">BPM</div>
+          <div style="font-size:20px;color:#fff;font-weight:700;margin-top:2px;">Gestion de Prime</div>
+        </td></tr>
+        <tr><td style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;">
+          <p style="margin:0 0 16px;font-size:15px;color:#334155;">Bonjour <strong style="color:#0f172a;">{to_name}</strong>,</p>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
+            Des processus sont actuellement <strong style="color:#0f172a;">en attente de votre intervention</strong>.
+            Vous trouverez ci-dessous la liste des prime{plural} bloquée{plural} à votre étape de validation.
+            Merci de bien vouloir les traiter dans les meilleurs délais.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+            <tr><td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:10px;padding:14px 20px;">
+              <span style="font-size:22px;font-weight:700;color:#1d4ed8;">{count}</span>
+              <span style="font-size:13px;color:#334155;"> prime{plural} en attente de votre décision</span>
+            </td></tr>
+          </table>
+          <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#475569;line-height:1.6;">
+            {links}
+          </ul>
+          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">
+            Ceci est un rappel automatique envoyé chaque jour à 08h30 par le système BPM | Gestion de Prime.<br>
+            Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>""", subtype="html")
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+
+        return True
+    except Exception as e:
+        print(f"SMTP error (reminder): {e}")
         return False
