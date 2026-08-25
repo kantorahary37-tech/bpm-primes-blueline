@@ -1,26 +1,28 @@
 import smtplib
-import os
 import asyncio
 from datetime import date
 from email.message import EmailMessage
+from app.config import get_config
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.blueline.mg")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "25"))
-SMTP_USER = os.getenv("SMTP_USER", "zato@staff.blueline.mg")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "GlpK@-5F")
-FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "bpm@si.blueline.mg")
-FROM_NAME = os.getenv("SMTP_FROM_NAME", "BPM | Gestion de Prime")
-TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
-TEST_EMAIL = os.getenv("TEST_EMAIL", "vonjy.rakotoniaina@staff.blueline.mg")
 
-print(f"SMTP Config: host={SMTP_HOST}, port={SMTP_PORT}, user={SMTP_USER}, test_mode={TEST_MODE}, test_email={TEST_EMAIL}")
-print(f"SMTP From: {FROM_NAME} <{FROM_EMAIL}>")
+def _smtp_config():
+    return {
+        "host": get_config("SMTP_HOST"),
+        "port": int(get_config("SMTP_PORT") or "25"),
+        "user": get_config("SMTP_USER"),
+        "password": get_config("SMTP_PASSWORD"),
+        "from_email": get_config("SMTP_FROM_EMAIL"),
+        "from_name": get_config("SMTP_FROM_NAME"),
+        "test_mode": get_config("TEST_MODE").lower() == "true",
+        "test_email": get_config("TEST_EMAIL"),
+    }
 
 
 def _resolve_email(to_email: str) -> str:
-    if TEST_MODE:
-        print(f"[EMAIL TEST] Redirecting {to_email} → {TEST_EMAIL}")
-        return TEST_EMAIL
+    cfg = _smtp_config()
+    if cfg["test_mode"]:
+        print(f"[EMAIL TEST] Redirecting {to_email} -> {cfg['test_email']}")
+        return cfg["test_email"]
     return to_email
 
 
@@ -30,9 +32,10 @@ async def send_reset_email(to_email: str, reset_link: str) -> bool:
 
 def _send_reset_email_sync(to_email: str, reset_link: str) -> bool:
     try:
+        cfg = _smtp_config()
         msg = EmailMessage()
         msg["Subject"] = "Réinitialisation de votre mot de passe - BPM Primes"
-        msg["From"] = f"{FROM_NAME} <{FROM_EMAIL}>"
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
         msg["To"] = _resolve_email(to_email)
         msg.set_content(
             f"Bonjour,\n\n"
@@ -45,9 +48,9 @@ def _send_reset_email_sync(to_email: str, reset_link: str) -> bool:
             f"BPM | Gestion de Prime"
         )
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
             server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.login(cfg["user"], cfg["password"])
             server.send_message(msg)
 
         return True
@@ -67,6 +70,7 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
                                   employee_name: str, changes_summary: str,
                                   bonus_url: str) -> bool:
     try:
+        cfg = _smtp_config()
         is_rejet = "rejetée" in changes_summary.lower() or "rejet" in changes_summary.lower()
         is_validation = "validée" in changes_summary.lower()
 
@@ -111,7 +115,7 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
 
         msg = EmailMessage()
         msg["Subject"] = subject
-        msg["From"] = f"{FROM_NAME} <{FROM_EMAIL}>"
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
         msg["To"] = f"{to_name} <{_resolve_email(to_email)}>"
         msg.set_content(
             f"Bonjour {to_name},\n\n"
@@ -202,9 +206,9 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
             subtype="html",
         )
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
             server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.login(cfg["user"], cfg["password"])
             server.send_message(msg)
 
         return True
@@ -223,11 +227,12 @@ async def send_validation_reminder_email(to_email: str, to_name: str, items: lis
 
 def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: list) -> bool:
     try:
+        cfg = _smtp_config()
         count = len(items)
         plural = "s" if count > 1 else ""
         msg = EmailMessage()
         msg["Subject"] = f"Rappel : {count} prime{plural} en attente de votre validation | BPM"
-        msg["From"] = f"{FROM_NAME} <{FROM_EMAIL}>"
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
         msg["To"] = f"{to_name} <{_resolve_email(to_email)}>"
 
         msg.set_content(
@@ -284,9 +289,9 @@ def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: lis
 </body>
 </html>""", subtype="html")
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
             server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.login(cfg["user"], cfg["password"])
             server.send_message(msg)
 
         return True

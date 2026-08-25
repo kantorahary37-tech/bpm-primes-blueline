@@ -2,7 +2,6 @@
 Rappel quotidien 08h30 : un email par acteur (N+1 / Directeur / DG)
 listant les primes en attente de sa validation.
 """
-import os
 import asyncio
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
@@ -10,8 +9,8 @@ from app.models import User, Bonus, ValidationStatus
 from app.auth import get_current_user
 from app.api.admin import require_admin
 from app.email_service import send_validation_reminder_email
+from app.config import get_config
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 router = APIRouter()
 
 TYPE_LABELS = {
@@ -41,7 +40,7 @@ async def collect_pending_by_actor() -> dict:
                     "type_label": TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
                     "amount": f"{int(bonus.total_amount):,}".replace(",", " ") + " Ar",
                     "status_label": label,
-                    "url": f"{FRONTEND_URL}/bonuses/{bonus.id}",
+                    "url": f"{get_config('FRONTEND_URL')}/bonuses/{bonus.id}",
                 })
     return actors
 
@@ -67,9 +66,9 @@ async def send_now(_admin: User = Depends(require_admin)):
 
 
 def _seconds_until_next_run() -> float:
-    hour = int(os.getenv("REMINDER_HOUR", "8"))
-    minute = int(os.getenv("REMINDER_MINUTE", "30"))
-    tz = timezone(timedelta(hours=float(os.getenv("REMINDER_TZ_OFFSET", "3"))))
+    hour = int(get_config("REMINDER_HOUR") or "8")
+    minute = int(get_config("REMINDER_MINUTE") or "30")
+    tz = timezone(timedelta(hours=float(get_config("REMINDER_TZ_OFFSET") or "3")))
     now = datetime.now(tz)
     target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if target <= now:
@@ -90,7 +89,7 @@ async def _reminder_loop():
 
 
 def start_scheduler():
-    if os.getenv("REMINDER_ENABLED", "true").lower() != "true":
+    if get_config("REMINDER_ENABLED").lower() != "true":
         print("[SCHEDULER] Rappels désactivés")
         return None
     return asyncio.create_task(_reminder_loop())

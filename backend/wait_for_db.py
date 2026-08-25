@@ -99,7 +99,28 @@ try:
     conn.close()
     print("evaluation_template table OK")
 except Exception as e:
-    print(f"evaluation_template check skipped: {e}")
+    print(f"evaluation_template table check skipped: {e}")
+
+print("Ensuring systemconfig table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "systemconfig" (
+            "key" VARCHAR(100) NOT NULL PRIMARY KEY,
+            "value" TEXT NOT NULL DEFAULT '',
+            "category" VARCHAR(50) NOT NULL,
+            "description" VARCHAR(255) NOT NULL DEFAULT ''
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("systemconfig table OK")
+except Exception as e:
+    print(f"systemconfig table check skipped: {e}")
 
 print("Ensuring commissionconfig table exists...")
 try:

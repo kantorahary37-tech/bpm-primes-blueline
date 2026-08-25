@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
 import PlafondsPage from './PlafondsPage';
 import CommissionConfigPage from './CommissionConfigPage';
+import SystemConfigPage from './SystemConfigPage';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import { adminLdapSyncDepartments } from '../services/api';
@@ -11,6 +12,7 @@ import { SettingsIcon, ChartIcon, ArchiveIcon } from '../components/Icons';
 const TABS = [
   { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon },
   { key: 'bareme', label: 'Barème commission', Icon: ChartIcon },
+  { key: 'system', label: 'Paramètres système', Icon: SettingsIcon },
 ];
 
 export default function AdminConfigPage() {
@@ -67,6 +69,7 @@ export default function AdminConfigPage() {
       <div>
         {activeTab === 'plafonds' && <PlafondsPage />}
         {activeTab === 'bareme' && <CommissionConfigPage />}
+        {activeTab === 'system' && <SystemConfigPage />}
       </div>
     </div>
   );

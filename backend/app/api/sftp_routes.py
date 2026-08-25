@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.models import User
+from app.config import get_config
 
 try:
     import paramiko
@@ -19,14 +20,6 @@ except ImportError:  # pragma: no cover
     paramiko = None
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
-
-# Paramètres SFTP (surchargeables via variables d'environnement)
-SFTP_HOST = os.getenv("SFTP_HOST", "192.168.1.104")
-SFTP_PORT = int(os.getenv("SFTP_PORT", "22"))
-SFTP_USERNAME = os.getenv("SFTP_USERNAME", "4dprime")
-SFTP_PASSWORD = os.getenv("SFTP_PASSWORD", "prime12345")
-# Taille maximale d'un fichier téléchargeable (50 Mo par défaut)
-SFTP_MAX_DOWNLOAD = int(os.getenv("SFTP_MAX_DOWNLOAD", str(50 * 1024 * 1024)))
 
 
 def _can_manage_commission(user: User) -> bool:
@@ -37,14 +30,18 @@ def _sftp():
     """Ouvre une connexion SFTP (connexion courte, refermée à chaque requête)."""
     if paramiko is None:
         raise HTTPException(500, "Le module paramiko n'est pas installé sur le serveur.")
+    host = get_config("SFTP_HOST")
+    port = int(get_config("SFTP_PORT") or "22")
+    username = get_config("SFTP_USERNAME")
+    password = get_config("SFTP_PASSWORD")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
         client.connect(
-            hostname=SFTP_HOST,
-            port=SFTP_PORT,
-            username=SFTP_USERNAME,
-            password=SFTP_PASSWORD,
+            hostname=host,
+            port=port,
+            username=username,
+            password=password,
             timeout=10,
             look_for_keys=False,
             allow_agent=False,
@@ -54,7 +51,7 @@ def _sftp():
             client.close()
         except Exception:
             pass
-        raise HTTPException(502, f"Connexion SFTP impossible ({SFTP_USERNAME}@{SFTP_HOST}:{SFTP_PORT}) : {exc}")
+        raise HTTPException(502, f"Connexion SFTP impossible ({username}@{host}:{port}) : {exc}")
     try:
         return client, client.open_sftp()
     except Exception as exc:
@@ -75,7 +72,7 @@ async def sftp_info(user: User = Depends(get_current_user)):
     """Informations de connexion affichées dans le modal (le mot de passe ne sort jamais du backend)."""
     if not _can_manage_commission(user):
         raise HTTPException(403, "Vous n'avez pas le droit de consulter le serveur de ventes.")
-    return {"host": SFTP_HOST, "port": SFTP_PORT, "username": SFTP_USERNAME}
+    return {"host": get_config("SFTP_HOST"), "port": int(get_config("SFTP_PORT") or "22"), "username": get_config("SFTP_USERNAME")}
 
 
 @router.post("/sftp/list")
@@ -120,8 +117,9 @@ async def sftp_download(req: SftpDownloadRequest, user: User = Depends(get_curre
     client, sftp = _sftp()
     try:
         size = int(sftp.stat(req.path).st_size or 0)
-        if size > SFTP_MAX_DOWNLOAD:
-            raise HTTPException(413, f"Fichier trop volumineux ({size} octets, max {SFTP_MAX_DOWNLOAD}).")
+        max_download = int(get_config("SFTP_MAX_DOWNLOAD") or str(50 * 1024 * 1024))
+        if size > max_download:
+            raise HTTPException(413, f"Fichier trop volumineux ({size} octets, max {max_download}).")
         with sftp.open(req.path, "rb") as f:
             data = f.read()
         name = os.path.basename(req.path.rstrip("/")) or "fichier.csv"

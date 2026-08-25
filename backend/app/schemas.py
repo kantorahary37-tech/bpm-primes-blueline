@@ -277,6 +277,22 @@ class CommissionImportResult(BaseModel):
     total_amount: float
     count: int
 
+# --- Configuration Système ---
+class SystemConfigItem(BaseModel):
+    key: str
+    value: str
+    category: str
+    description: str
+
+class SystemConfigResponse(BaseModel):
+    categories: Dict[str, List[SystemConfigItem]]
+
+class SystemConfigUpdate(BaseModel):
+    value: str
+
+class SystemConfigBulkUpdate(BaseModel):
+    settings: Dict[str, str]
+
 # --- Evaluation Template ---
 class EvaluationTemplateItem(BaseModel):
     criteria_name: str

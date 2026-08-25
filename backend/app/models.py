@@ -1,6 +1,17 @@
 from enum import Enum
 from tortoise import fields, models
 
+# Modèle Configuration Système (table "systemconfig")
+class SystemConfig(models.Model):
+    # Clé = nom de la variable d'environnement (ex: SMTP_HOST)
+    key = fields.CharField(max_length=100, pk=True)
+    # Valeur actuelle
+    value = fields.TextField(default='')
+    # Catégorie de regroupement
+    category = fields.CharField(max_length=50)
+    # Description lisible par l'humain
+    description = fields.CharField(max_length=255, default='')
+
 # Enumération des types de primes
 class BonusType(str, Enum):
     MENSUEL = "mensuel"

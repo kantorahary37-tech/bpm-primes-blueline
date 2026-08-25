@@ -315,4 +315,20 @@ export const deleteEmployeeTemplates = async (employeeId) => {
   return data;
 };
 
+// --- Configuration Système ---
+export const getSystemConfig = async () => {
+  const { data } = await api.get('/admin/system-config');
+  return data;
+};
+
+export const updateSystemConfig = async (key, value) => {
+  const { data } = await api.put(`/admin/system-config/${key}`, { value });
+  return data;
+};
+
+export const bulkUpdateSystemConfig = async (settings) => {
+  const { data } = await api.post('/admin/system-config/bulk', { settings });
+  return data;
+};
+
 export default api;

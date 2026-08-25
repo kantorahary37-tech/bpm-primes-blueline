@@ -8,7 +8,7 @@ import re
 # Import de la config de base de données
 from app.db_config import TORTOISE_ORM
 # Import des routes API
-from app.api import endpoints, employees, auth_routes, users, prime_max, departments, notifications, upload, admin, evaluation_templates, commission, sftp_routes
+from app.api import endpoints, employees, auth_routes, users, prime_max, departments, notifications, upload, admin, evaluation_templates, commission, sftp_routes, system_config
 from app import scheduler
 
 # Création de l'instance FastAPI avec titre et version
@@ -28,6 +28,7 @@ app.include_router(evaluation_templates.router, prefix="/api/v1")
 app.include_router(commission.router, prefix="/api/v1")
 app.include_router(sftp_routes.router, prefix="/api/v1")
 app.include_router(scheduler.router, prefix="/api/v1")
+app.include_router(system_config.router, prefix="/api/v1/admin")
 
 import os
 uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
@@ -40,6 +41,9 @@ register_tortoise(app, config=TORTOISE_ORM, add_exception_handlers=False)
 # Démarrage du planificateur de rappels (après init Tortoise)
 @app.on_event("startup")
 async def start_reminder_scheduler():
+    from app.config import load_configs_to_env, seed_config_from_env
+    await seed_config_from_env()
+    await load_configs_to_env()
     from app.scheduler import start_scheduler
     start_scheduler()
 

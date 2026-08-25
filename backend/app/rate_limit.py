@@ -1,11 +1,11 @@
 """
 Rate-limiting simple en mémoire pour /auth/login.
-Max 5 tentatives échouées par IP → blocage 15 minutes.
+Max 10 tentatives échouées par IP → blocage 15 minutes.
 """
 import time
 
-MAX_ATTEMPTS = 5
-BLOCK_DURATION = 15 * 60  # 15 minutes en secondes
+MAX_ATTEMPTS = 10
+BLOCK_DURATION = 5 * 60  # 15 minutes en secondes
 
 # Stockage en mémoire : {ip: {"count": int, "blocked_until": float}}
 _login_attempts = {}
