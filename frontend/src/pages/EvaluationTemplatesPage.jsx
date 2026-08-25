@@ -8,13 +8,15 @@ export default function EvaluationTemplatesPage() {
   const { user: currentUser } = useAuth()
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedDept, setSelectedDept] = useState(null)
+  const [selectedEmp, setSelectedEmp] = useState(null)
   const [editQuantitative, setEditQuantitative] = useState([])
   const [editQualitative, setEditQualitative] = useState([])
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [newQuanti, setNewQuanti] = useState({ criteria_name: '', coeff: 1 })
   const [newQuali, setNewQuali] = useState({ criteria_name: '', coeff: 1 })
+  const [search, setSearch] = useState('')
+  const [collapsedDepts, setCollapsedDepts] = useState({})
 
   const load = useCallback(async () => {
     try {
@@ -29,20 +31,33 @@ export default function EvaluationTemplatesPage() {
 
   useEffect(() => { load() }, [load])
 
-  const selectDept = (dept) => {
-    const t = templates.find(t => t.department === dept)
+  const filteredTemplates = templates.filter(t =>
+    t.employee_name?.toLowerCase().includes(search.toLowerCase()) ||
+    t.matricule?.toLowerCase().includes(search.toLowerCase()) ||
+    t.department?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const groupedByDept = filteredTemplates.reduce((acc, t) => {
+    const dept = t.department || 'Sans departement'
+    if (!acc[dept]) acc[dept] = []
+    acc[dept].push(t)
+    return acc
+  }, {})
+
+  const selectEmployee = (empId) => {
+    const t = templates.find(t => t.employee_id === empId)
     if (!t) return
-    setSelectedDept(dept)
+    setSelectedEmp(empId)
     setEditQuantitative([...t.quantitative])
     setEditQualitative([...t.qualitative])
   }
 
   const handleSave = async () => {
-    if (!selectedDept) return
+    if (!selectedEmp) return
     setSaving(true)
     try {
       await saveEvaluationTemplates({
-        department: selectedDept,
+        employee_id: selectedEmp,
         quantitative: editQuantitative.map((c, i) => ({
           criteria_name: c.criteria_name,
           description: c.description || '',
@@ -56,7 +71,7 @@ export default function EvaluationTemplatesPage() {
           sort_order: i,
         })),
       })
-      toast.success('Modèle sauvegardé !')
+      toast.success('Modele sauvegarde !')
       await load()
     } catch {
       toast.error('Erreur lors de la sauvegarde')
@@ -113,12 +128,14 @@ export default function EvaluationTemplatesPage() {
     return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs.</p></div></div>
   }
 
+  const selectedTemplate = selectedEmp ? templates.find(t => t.employee_id === selectedEmp) : null
+
   return (
     <div className="page-container">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-base-content">Évaluation</h1>
-          <p className="text-sm text-base-content/50 mt-1">Critères d'évaluation mensuelle par département</p>
+          <h1 className="text-xl font-bold text-base-content">Evaluation</h1>
+          <p className="text-sm text-base-content/50 mt-1">Criteres d'evaluation mensuelle par employe ({templates.length})</p>
         </div>
       </div>
 
@@ -128,40 +145,71 @@ export default function EvaluationTemplatesPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
             <div className="card-blueline p-4">
-              <h2 className="text-sm font-semibold mb-3">Départements</h2>
-              <div className="space-y-1">
-                {templates.map(t => (
-                  <button key={t.department} onClick={() => selectDept(t.department)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                      selectedDept === t.department
-                        ? 'bg-brand-50 text-brand-700 font-medium'
-                        : 'text-base-content/60 hover:bg-base-200'
-                    }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="truncate">{t.department}</span>
-                      {t.is_default ? (
-                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">defaut</span>
-                      ) : (
-                        <span className="text-[10px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded">personnalise</span>
-                      )}
-                    </div>
-                  </button>
+              <h2 className="text-sm font-semibold mb-3">Employes</h2>
+              <input
+                type="text"
+                placeholder="Rechercher par nom, matricule, dept..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-base-300 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+              />
+              <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+                {Object.entries(groupedByDept).map(([dept, emps]) => (
+                  <div key={dept}>
+                    <button
+                      onClick={() => setCollapsedDepts(prev => ({ ...prev, [dept]: !prev[dept] }))}
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold text-base-content/50 uppercase tracking-wide hover:text-base-content/70 transition-colors"
+                    >
+                      <span className="truncate">{dept}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-normal normal-case text-base-content/30">{emps.length}</span>
+                        <svg className={`w-3 h-3 transition-transform ${collapsedDepts[dept] ? '' : 'rotate-90'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
+                    {!collapsedDepts[dept] && emps.map(t => (
+                      <button key={t.employee_id} onClick={() => selectEmployee(t.employee_id)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ml-2 ${
+                          selectedEmp === t.employee_id
+                            ? 'bg-brand-50 text-brand-700 font-medium'
+                            : 'text-base-content/60 hover:bg-base-200'
+                        }`}>
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <span className="truncate block">{t.employee_name}</span>
+                            <span className="text-[10px] text-base-content/40 truncate block">{t.matricule}</span>
+                          </div>
+                          {t.is_default ? (
+                            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded shrink-0 ml-2">defaut</span>
+                          ) : (
+                            <span className="text-[10px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded shrink-0 ml-2">personnalise</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 ))}
+                {Object.keys(groupedByDept).length === 0 && (
+                  <p className="text-xs text-base-content/40 text-center py-4">Aucun employe trouve</p>
+                )}
               </div>
             </div>
           </div>
 
           <div className="lg:col-span-2">
-            {selectedDept ? (
+            {selectedEmp && selectedTemplate ? (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-bold text-base-content">{selectedDept}</h2>
+                    <h2 className="text-lg font-bold text-base-content">{selectedTemplate.employee_name}</h2>
                     <p className="text-xs text-base-content/40 mt-0.5">
-                      {editQuantitative.length} critere(s) quantitatif(s) · {editQualitative.length} critere(s) qualitatif(s) · Coeff total : {totalCoeff(editQuantitative) + totalCoeff(editQualitative)}/10
+                      {selectedTemplate.matricule && <span>{selectedTemplate.matricule} · </span>}
+                      {selectedTemplate.department && <span>{selectedTemplate.department} · </span>}
+                      {editQuantitative.length} quanti · {editQualitative.length} quali · Coeff total : {totalCoeff(editQuantitative) + totalCoeff(editQualitative)}/10
                     </p>
                     {(totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10 && (
-                      <p className="text-xs text-red-500 font-medium mt-1">Le total des coefficients doit etre égal a 10</p>
+                      <p className="text-xs text-red-500 font-medium mt-1">Le total des coefficients doit etre egal a 10</p>
                     )}
                   </div>
                   <button onClick={handleSave} disabled={saving || (totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10}
@@ -175,7 +223,7 @@ export default function EvaluationTemplatesPage() {
                   <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-b border-blue-100">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      <h3 className="text-sm font-semibold text-blue-800">Évaluation Quantitative</h3>
+                      <h3 className="text-sm font-semibold text-blue-800">Evaluation Quantitative</h3>
                     </div>
                     <span className="text-xs font-mono text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
                       Total coeff : {totalCoeff(editQuantitative)}
@@ -207,7 +255,7 @@ export default function EvaluationTemplatesPage() {
                     ))}
                   </div>
                   <div className="flex items-center gap-2 px-4 py-3 bg-base-50 border-t border-base-100">
-                    <input type="text" placeholder="Ajouter un critère..." value={newQuanti.criteria_name}
+                    <input type="text" placeholder="Ajouter un critere..." value={newQuanti.criteria_name}
                       onChange={(e) => setNewQuanti({ ...newQuanti, criteria_name: e.target.value })}
                       onKeyDown={(e) => e.key === 'Enter' && addCriteria('quanti')}
                       className="input input-bordered input-sm flex-1 bg-white" />
@@ -225,7 +273,7 @@ export default function EvaluationTemplatesPage() {
                   <div className="flex items-center justify-between px-4 py-3 bg-emerald-50 border-b border-emerald-100">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      <h3 className="text-sm font-semibold text-emerald-800">Évaluation Qualitative</h3>
+                      <h3 className="text-sm font-semibold text-emerald-800">Evaluation Qualitative</h3>
                     </div>
                     <span className="text-xs font-mono text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
                       Total coeff : {totalCoeff(editQualitative)}
@@ -257,7 +305,7 @@ export default function EvaluationTemplatesPage() {
                     ))}
                   </div>
                   <div className="flex items-center gap-2 px-4 py-3 bg-base-50 border-t border-base-100">
-                    <input type="text" placeholder="Ajouter un critère..." value={newQuali.criteria_name}
+                    <input type="text" placeholder="Ajouter un critere..." value={newQuali.criteria_name}
                       onChange={(e) => setNewQuali({ ...newQuali, criteria_name: e.target.value })}
                       onKeyDown={(e) => e.key === 'Enter' && addCriteria('quali')}
                       className="input input-bordered input-sm flex-1 bg-white" />
@@ -272,7 +320,7 @@ export default function EvaluationTemplatesPage() {
               </div>
             ) : (
               <div className="card-blueline p-8 text-center text-base-content/40 text-sm">
-                Sélectionnez un département pour voir et modifier son modèle d'évaluation.
+                Selectionnez un employe pour voir et modifier son modele d'evaluation.
               </div>
             )}
           </div>
@@ -283,7 +331,7 @@ export default function EvaluationTemplatesPage() {
         <Modal onClose={() => setConfirmDelete(null)}>
           <div className="p-6">
             <h3 className="font-semibold mb-3">Confirmer la suppression</h3>
-            <p className="text-sm text-base-content/60 mb-4">Voulez-vous vraiment supprimer ce critère ?</p>
+            <p className="text-sm text-base-content/60 mb-4">Voulez-vous vraiment supprimer ce critere ?</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(null)} className="btn btn-sm btn-ghost">Annuler</button>
               <button onClick={doDelete} className="btn btn-sm bg-red-600 hover:bg-red-700 text-white border-0">Supprimer</button>

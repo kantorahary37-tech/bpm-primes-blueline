@@ -308,6 +308,9 @@ export default function BonusForm() {
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [templateSaved, setTemplateSaved] = useState(false)
   const [templateLoadedDept, setTemplateLoadedDept] = useState(null)
+  const [empSearch, setEmpSearch] = useState('')
+  const [empSearchOpen, setEmpSearchOpen] = useState(false)
+  const empSearchRef = useRef(null)
 
   useEffect(() => {
     getEmployees().then(all => {
@@ -318,6 +321,20 @@ export default function BonusForm() {
       }
     }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!empSearchOpen) return
+    const handleClick = (e) => {
+      if (empSearchRef.current && !empSearchRef.current.contains(e.target)) setEmpSearchOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [empSearchOpen])
+
+  const filteredEmployees = employees.filter(e =>
+    e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
+    e.matricule?.toLowerCase().includes(empSearch.toLowerCase())
+  )
 
   useEffect(() => {
     if (!selectedEmp || !editType) return
@@ -332,18 +349,18 @@ export default function BonusForm() {
   }, [selectedEmp?.id, editType])
 
   useEffect(() => {
-    if (!connectedUser?.department || editType !== 'mensuel' || isEditing || templateLoadedDept === connectedUser.department) return
-    getEvaluationTemplates(connectedUser.department).then(data => {
+    if (!selectedEmp?.id || editType !== 'mensuel' || isEditing || templateLoadedDept === selectedEmp.id) return
+    getEvaluationTemplates(selectedEmp.id).then(data => {
       if (data.quantitative && data.quantitative.length > 0) {
         setQuantitative(data.quantitative.map(c => ({ criteria: c.criteria_name, description: c.description || '', coeff: c.coeff, note: 0, value: 0 })))
       }
       if (data.qualitative && data.qualitative.length > 0) {
         setQualitative(data.qualitative.map(c => ({ criteria: c.criteria_name, description: c.description || '', coeff: c.coeff, note: 0, value: 0 })))
       }
-      setTemplateLoadedDept(connectedUser.department)
+      setTemplateLoadedDept(selectedEmp.id)
       setTemplateSaved(false)
     }).catch(() => {})
-  }, [connectedUser?.department, editType, isEditing])
+  }, [selectedEmp?.id, editType, isEditing])
 
   useEffect(() => {
     if (!isEditing || !id) return;
@@ -468,11 +485,11 @@ export default function BonusForm() {
   }
 
   const handleSaveTemplate = async () => {
-    if (!connectedUser?.department) return
+    if (!selectedEmp?.id) return
     setSavingTemplate(true)
     try {
       await saveEvaluationTemplates({
-        department: connectedUser.department,
+        employee_id: selectedEmp.id,
         quantitative: quantitative.map((c, i) => ({
           criteria_name: c.criteria,
           description: c.description || '',
@@ -488,7 +505,7 @@ export default function BonusForm() {
       })
       setTemplateSaved(true)
     } catch (err) {
-      setError("Erreur lors de la sauvegarde du modèle")
+      setError("Erreur lors de la sauvegarde du modele")
     } finally {
       setSavingTemplate(false)
     }
@@ -806,13 +823,42 @@ export default function BonusForm() {
             </div>
           ) : (
             <div className="space-y-1.5">
-              <div>
+              <div ref={empSearchRef} className="relative">
                 <label className="block text-sm font-medium text-base-content/70 mb-0.5">Employé</label>
-                <select value={selectedEmp?.id || ''} onChange={handleSelectEmployee}
-                  className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
-                  <option value="">Sélectionner...</option>
-                  {employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.matricule})</option>)}
-                </select>
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom ou matricule..."
+                  value={empSearchOpen ? empSearch : (selectedEmp ? `${selectedEmp.name} (${selectedEmp.matricule})` : '')}
+                  onFocus={() => { setEmpSearchOpen(true); setEmpSearch('') }}
+                  onChange={(e) => { setEmpSearch(e.target.value); setEmpSearchOpen(true) }}
+                  className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                />
+                {empSearchOpen && (
+                  <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white rounded-lg border border-base-300 shadow-lg">
+                    {filteredEmployees.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-base-content/40">Aucun employé trouvé</div>
+                    ) : (
+                      filteredEmployees.map(e => (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onClick={() => {
+                            handleSelectEmployee({ target: { value: e.id } })
+                            setEmpSearchOpen(false)
+                            setEmpSearch('')
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-base-100 transition-colors ${
+                            selectedEmp?.id === e.id ? 'bg-brand-50 text-brand-700 font-medium' : 'text-base-content'
+                          }`}
+                        >
+                          <span>{e.name}</span>
+                          <span className="text-xs text-base-content/40 ml-1">({e.matricule})</span>
+                          <span className="text-xs text-base-content/30 ml-1">— {e.department}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-base-content/70 mb-0.5">Département</label>
@@ -1615,7 +1661,7 @@ export default function BonusForm() {
         <div className="card-blueline p-3 mb-0">
           <div className="flex items-center justify-between">
             <p className="text-gray-600 text-xs font-medium">
-              Modèle d'évaluation - {connectedUser?.department || 'Departement'}
+              Modele d'evaluation - {selectedEmp?.name || 'Employe'}
             </p>
             {templateSaved ? (
               <span className="text-xs text-green-600 font-medium">Modèle sauvegardé !</span>

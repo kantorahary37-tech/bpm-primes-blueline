@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from app.models import User, Department, EvaluationTemplate
+from app.models import User, Employee, EvaluationTemplate
 from app.auth import get_current_user
 from app.schemas import (
     EvaluationTemplateSaveRequest,
@@ -24,13 +24,32 @@ DEFAULT_QUALI = [
 ]
 
 
-@router.get("/evaluation-templates", response_model=EvaluationTemplateResponse)
-async def get_evaluation_templates(department: str, user: User = Depends(get_current_user)):
-    dept = await Department.filter(name=department).first()
-    if not dept:
-        raise HTTPException(404, "Departement introuvable")
+def _build_response(emp, quanti_items, quali_items):
+    return EvaluationTemplateResponse(
+        employee_id=emp.id,
+        employee_name=emp.name,
+        matricule=emp.matricule,
+        department=emp.department,
+        quantitative=quanti_items,
+        qualitative=quali_items,
+    )
 
-    rows = await EvaluationTemplate.filter(department_id=dept.id).order_by("sort_order")
+
+def _default_quanti():
+    return [EvaluationTemplateItem(**d) for d in DEFAULT_QUANTI]
+
+
+def _default_quali():
+    return [EvaluationTemplateItem(**d) for d in DEFAULT_QUALI]
+
+
+@router.get("/evaluation-templates", response_model=EvaluationTemplateResponse)
+async def get_evaluation_templates(employee_id: int, user: User = Depends(get_current_user)):
+    emp = await Employee.filter(id=employee_id).first()
+    if not emp:
+        raise HTTPException(404, "Employe introuvable")
+
+    rows = await EvaluationTemplate.filter(employee_id=emp.id).order_by("sort_order")
 
     quanti = [
         EvaluationTemplateItem(
@@ -51,16 +70,7 @@ async def get_evaluation_templates(department: str, user: User = Depends(get_cur
         for r in rows if r.section == "qualitative"
     ]
 
-    if not quanti:
-        quanti = [EvaluationTemplateItem(**d) for d in DEFAULT_QUANTI]
-    if not quali:
-        quali = [EvaluationTemplateItem(**d) for d in DEFAULT_QUALI]
-
-    return EvaluationTemplateResponse(
-        department=department,
-        quantitative=quanti,
-        qualitative=quali,
-    )
+    return _build_response(emp, quanti or _default_quanti(), quali or _default_quali())
 
 
 @router.post("/evaluation-templates", response_model=EvaluationTemplateResponse)
@@ -69,22 +79,18 @@ async def save_evaluation_templates(
     user: User = Depends(get_current_user),
 ):
     if not (user.is_admin or user.is_dg or user.is_drh or user.is_validator_n1 or user.is_directeur):
-        raise HTTPException(403, "Vous n'avez pas le droit de modifier les modèles d'évaluation")
+        raise HTTPException(403, "Vous n'avez pas le droit de modifier les modeles d'evaluation")
 
-    dept = await Department.filter(name=data.department).first()
-    if not dept:
-        raise HTTPException(404, "Département introuvable")
+    emp = await Employee.filter(id=data.employee_id).first()
+    if not emp:
+        raise HTTPException(404, "Employe introuvable")
 
-    if not (user.is_admin or user.is_dg or user.is_drh):
-        if user.department and user.department != data.department:
-            raise HTTPException(403, "Vous ne pouvez modifier que les modèles de votre département")
-
-    await EvaluationTemplate.filter(department_id=dept.id).delete()
+    await EvaluationTemplate.filter(employee_id=emp.id).delete()
 
     to_create = []
     for i, item in enumerate(data.quantitative):
         to_create.append(EvaluationTemplate(
-            department_id=dept.id,
+            employee_id=emp.id,
             section="quantitative",
             criteria_name=item.criteria_name,
             description=item.description or "",
@@ -93,7 +99,7 @@ async def save_evaluation_templates(
         ))
     for i, item in enumerate(data.qualitative):
         to_create.append(EvaluationTemplate(
-            department_id=dept.id,
+            employee_id=emp.id,
             section="qualitative",
             criteria_name=item.criteria_name,
             description=item.description or "",
@@ -104,11 +110,7 @@ async def save_evaluation_templates(
     if to_create:
         await EvaluationTemplate.bulk_create(to_create)
 
-    return EvaluationTemplateResponse(
-        department=data.department,
-        quantitative=data.quantitative,
-        qualitative=data.qualitative,
-    )
+    return _build_response(emp, data.quantitative, data.qualitative)
 
 
 @router.get("/evaluation-templates/all")
@@ -116,11 +118,11 @@ async def get_all_templates(user: User = Depends(get_current_user)):
     if not user.is_admin:
         raise HTTPException(403, "Acces reserve aux administrateurs")
 
-    departments = await Department.all()
+    employees = await Employee.filter(is_active=True).order_by("name")
     result = []
 
-    for dept in departments:
-        rows = await EvaluationTemplate.filter(department_id=dept.id).order_by("sort_order")
+    for emp in employees:
+        rows = await EvaluationTemplate.filter(employee_id=emp.id).order_by("sort_order")
         quanti = [
             {"criteria_name": r.criteria_name, "description": r.description or "", "coeff": float(r.coeff), "sort_order": r.sort_order, "id": r.id}
             for r in rows if r.section == "quantitative"
@@ -130,7 +132,10 @@ async def get_all_templates(user: User = Depends(get_current_user)):
             for r in rows if r.section == "qualitative"
         ]
         result.append({
-            "department": dept.name,
+            "employee_id": emp.id,
+            "employee_name": emp.name,
+            "matricule": emp.matricule,
+            "department": emp.department or "",
             "quantitative": quanti if quanti else [DEFAULT_QUANTI[i] | {"id": None} for i in range(len(DEFAULT_QUANTI))],
             "qualitative": quali if quali else [DEFAULT_QUALI[i] | {"id": None} for i in range(len(DEFAULT_QUALI))],
             "is_default": not rows,
@@ -152,14 +157,14 @@ async def delete_template(template_id: int, user: User = Depends(get_current_use
     return {"message": "Critere supprime"}
 
 
-@router.delete("/evaluation-templates/department/{department}")
-async def delete_all_department_templates(department: str, user: User = Depends(get_current_user)):
+@router.delete("/evaluation-templates/employee/{employee_id}")
+async def delete_all_employee_templates(employee_id: int, user: User = Depends(get_current_user)):
     if not user.is_admin:
         raise HTTPException(403, "Acces reserve aux administrateurs")
 
-    dept = await Department.filter(name=department).first()
-    if not dept:
-        raise HTTPException(404, "Departement introuvable")
+    emp = await Employee.filter(id=employee_id).first()
+    if not emp:
+        raise HTTPException(404, "Employe introuvable")
 
-    count = await EvaluationTemplate.filter(department_id=dept.id).delete()
+    count = await EvaluationTemplate.filter(employee_id=emp.id).delete()
     return {"message": f"{count} critere(s) supprime(s)"}

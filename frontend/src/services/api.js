@@ -290,8 +290,8 @@ export const sftpDownload = async (path) => {
   return data;
 };
 
-export const getEvaluationTemplates = async (department) => {
-  const { data } = await api.get('/evaluation-templates', { params: { department } });
+export const getEvaluationTemplates = async (employeeId) => {
+  const { data } = await api.get('/evaluation-templates', { params: { employee_id: employeeId } });
   return data;
 };
 
@@ -310,8 +310,8 @@ export const deleteEvaluationTemplate = async (templateId) => {
   return data;
 };
 
-export const deleteDepartmentTemplates = async (department) => {
-  const { data } = await api.delete(`/evaluation-templates/department/${encodeURIComponent(department)}`);
+export const deleteEmployeeTemplates = async (employeeId) => {
+  const { data } = await api.delete(`/evaluation-templates/employee/${employeeId}`);
   return data;
 };
 

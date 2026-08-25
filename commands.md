@@ -36,4 +36,10 @@ ayant des primes en attente — identique au rappel automatique quotidien de 08h
 docker compose exec backend python -m scripts.send_reminder
 ```
 
+Suppression de toutes les primes (et validations, logs, notifications) :
+
+```Shell
+docker compose exec backend python -m scripts.delete_all_bonuses
+```
+
 > Configuration emails (mode test vs production) : voir [README.md](README.md).

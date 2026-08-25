@@ -285,11 +285,14 @@ class EvaluationTemplateItem(BaseModel):
     sort_order: int = 0
 
 class EvaluationTemplateSaveRequest(BaseModel):
-    department: str
+    employee_id: int
     quantitative: List[EvaluationTemplateItem]
     qualitative: List[EvaluationTemplateItem]
 
 class EvaluationTemplateResponse(BaseModel):
-    department: str
+    employee_id: int
+    employee_name: Optional[str] = None
+    matricule: Optional[str] = None
+    department: Optional[str] = None
     quantitative: List[EvaluationTemplateItem]
     qualitative: List[EvaluationTemplateItem]

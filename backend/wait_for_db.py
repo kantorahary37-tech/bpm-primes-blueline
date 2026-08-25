@@ -50,8 +50,49 @@ try:
             "sort_order" INT NOT NULL DEFAULT 0,
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            "department_id" INT NOT NULL REFERENCES "department" ("id") ON DELETE CASCADE
+            "employee_id" INT NOT NULL REFERENCES "employee" ("id") ON DELETE CASCADE
         );
+    """)
+    # Migration: handle old column names (department_id or user_id) -> employee_id
+    cur.execute("""
+        DO $$
+        BEGIN
+            -- Case 1: old department_id column exists
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'evaluationtemplate' AND column_name = 'department_id'
+            ) THEN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'evaluationtemplate' AND column_name = 'employee_id'
+                ) THEN
+                    ALTER TABLE "evaluationtemplate" ADD COLUMN "employee_id" INT REFERENCES "employee" ("id") ON DELETE CASCADE;
+                END IF;
+                ALTER TABLE "evaluationtemplate" DROP CONSTRAINT IF EXISTS "evaluationtemplate_department_id_836fb523_fk_department_id";
+                ALTER TABLE "evaluationtemplate" DROP COLUMN IF EXISTS "department_id";
+            END IF;
+            -- Case 2: previous user_id column exists (needs employee_id instead)
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'evaluationtemplate' AND column_name = 'user_id'
+            ) THEN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'evaluationtemplate' AND column_name = 'employee_id'
+                ) THEN
+                    ALTER TABLE "evaluationtemplate" ADD COLUMN "employee_id" INT REFERENCES "employee" ("id") ON DELETE CASCADE;
+                END IF;
+                ALTER TABLE "evaluationtemplate" DROP CONSTRAINT IF EXISTS "evaluationtemplate_user_id_80c6dfc6_fk_user_id";
+                ALTER TABLE "evaluationtemplate" DROP COLUMN IF EXISTS "user_id";
+            END IF;
+            -- Case 3: table exists but has no FK column at all
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'evaluationtemplate' AND column_name = 'employee_id'
+            ) THEN
+                ALTER TABLE "evaluationtemplate" ADD COLUMN "employee_id" INT NOT NULL REFERENCES "employee" ("id") ON DELETE CASCADE;
+            END IF;
+        END $$;
     """)
     conn.commit()
     cur.close()

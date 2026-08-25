@@ -38,7 +38,7 @@ from ldap3.core.exceptions import LDAPException
 
 from app.db_config import TORTOISE_ORM
 from tortoise import Tortoise, run_async
-from app.models import User, Employee, Department, PrimeMax, EvaluationTemplate
+from app.models import User, Employee, Department, PrimeMax
 from app.auth import get_password_hash
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -482,10 +482,7 @@ async def sync(scope: str = 'all'):
         inconnu = await Department.get_or_none(name='Inconnu')
         if inconnu:
             emp_refs = await Employee.filter(dept_id=inconnu.id).count()
-            other_refs = (
-                await PrimeMax.filter(dept_id=inconnu.id).count()
-                + await EvaluationTemplate.filter(department_id=inconnu.id).count()
-            )
+            other_refs = await PrimeMax.filter(dept_id=inconnu.id).count()
             if await User.filter(dept_id=inconnu.id).exists():
                 await User.filter(dept_id=inconnu.id).update(dept_id=None, dept_str=None)
             if emp_refs == 0 and other_refs == 0:

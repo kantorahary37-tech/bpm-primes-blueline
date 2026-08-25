@@ -215,7 +215,7 @@ class AuditLog(models.Model):
 # Modèle Template d'évaluation (table "evaluationtemplate")
 class EvaluationTemplate(models.Model):
     id = fields.IntField(pk=True)
-    department = fields.ForeignKeyField('models.Department', related_name='evaluation_templates')
+    employee = fields.ForeignKeyField('models.Employee', related_name='evaluation_templates')
     section = fields.CharField(max_length=20)  # "quantitative" ou "qualitative"
     criteria_name = fields.CharField(max_length=255)
     description = fields.CharField(max_length=255, null=True, default='')
