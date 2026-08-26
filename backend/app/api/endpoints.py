@@ -424,8 +424,6 @@ async def list_bonuses(
 
     if show_paid:
         query = query.filter(paid_at__isnull=False)
-    elif archive_mode:
-        pass
     else:
         query = query.filter(paid_at__isnull=True)
     if employee_id: query = query.filter(employee_id=employee_id)
