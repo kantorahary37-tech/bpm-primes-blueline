@@ -41,6 +41,7 @@ export function SystemConfigProvider({ children }) {
     if (user.is_drh || user.is_dg || user.is_directeur) {
       return config.SHOW_AMOUNTS_DG_DRH !== 'false';
     }
+    if (user.is_validator_n1) return true;
     return false;
   };
 

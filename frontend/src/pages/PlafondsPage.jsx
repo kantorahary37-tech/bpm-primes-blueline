@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPrimeMax, createPrimeMax, updatePrimeMax, deletePrimeMax, getEmployees, updateEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { MoonIcon, CalendarIcon, CheckIcon, XCircleIcon, LockIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 
@@ -18,6 +19,9 @@ const ASTR_DEPARTMENTS = ['Direction BBS', 'Direction des Operations',
 
 const PlafondsPage = () => {
   const { user } = useAuth();
+  const { canSeeAmounts } = useSystemConfig();
+  const seeAmounts = canSeeAmounts(user);
+  const showPlafond = seeAmounts && !user?.is_validator_n1;
   const [plafonds, setPlafonds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [astrEmployees, setAstrEmployees] = useState([]);
@@ -226,7 +230,7 @@ const PlafondsPage = () => {
                               <span onClick={() => { if (canEditDept) openCellEdit(dept, type.value); }}
                                 className={`${canEditDept ? 'cursor-pointer hover:bg-violet-50 px-1.5 py-0.5 rounded' : ''} inline-block transition-colors`}>
                                 {plafond ? (
-                                  <span className="font-medium text-sm">{parseFloat(plafond.amount).toLocaleString('fr-FR')}</span>
+                                  <span className="font-medium text-sm">{showPlafond ? parseFloat(plafond.amount).toLocaleString('fr-FR') : '••••••'}</span>
                                 ) : (
                                   <span className="text-gray-200 italic text-sm">—</span>
                                 )}

@@ -22,7 +22,7 @@ const typeColor = (t) => {
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
-function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPages }) {
+function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPages, seeAmounts }) {
   const monthGroups = (() => {
     const groups = {};
     items.forEach(b => {
@@ -169,6 +169,7 @@ const ArchivePage = () => {
           page={pageUnpaid}
           setPage={setPageUnpaid}
           totalPages={totalUnpaidPages}
+          seeAmounts={seeAmounts}
         />
 
         {!isDG && (
@@ -180,6 +181,7 @@ const ArchivePage = () => {
             page={pagePaid}
             setPage={setPagePaid}
             totalPages={totalPaidPages}
+            seeAmounts={seeAmounts}
           />
         )}
       </div>

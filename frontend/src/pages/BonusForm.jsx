@@ -61,6 +61,7 @@ export default function BonusForm() {
   const { canSeeAmounts } = useSystemConfig()
   const seeAmounts = canSeeAmounts(connectedUser)
   const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} Ar` : '••••••'
+  const showPrimeMax = seeAmounts && !connectedUser?.is_validator_n1
   const { type, id } = useParams()
   const navigate = useNavigate()
   const isEditing = !!id
@@ -972,11 +973,16 @@ export default function BonusForm() {
                   className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
             </div>
-          ) : (
+          ) : editType !== 'commission' && (
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime maximum (Ar)</label>
-              <input type="number" value={params.maxPrime} readOnly
-                className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60 cursor-not-allowed" />
+              {showPrimeMax ? (
+                <input type="number" value={params.maxPrime} readOnly
+                  className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60 cursor-not-allowed" />
+              ) : (
+                <input type="text" value="••••••" readOnly
+                  className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60 cursor-not-allowed" />
+              )}
               <p className="text-[11px] text-base-content/40 mt-0.5">Modifiable dans la page Plafonds</p>
             </div>
           )}
@@ -1492,12 +1498,12 @@ export default function BonusForm() {
                         className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.1" value={item.coeff}
+                      <input type="number" min="0" max="10" step="0.5" value={item.coeff}
                         onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'coeff', e.target.value, 'quanti')}
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.1"
+                      <input type="number" min="0" max="10" step="0.5"
                         value={item.note}
                           onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'note', e.target.value, 'quanti')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
@@ -1590,12 +1596,12 @@ export default function BonusForm() {
                         className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.1" value={item.coeff}
+                      <input type="number" min="0" max="10" step="0.5" value={item.coeff}
                         onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'coeff', e.target.value, 'quali')}
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.1"
+                      <input type="number" min="0" max="10" step="0.5"
                         value={item.note}
                           onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'note', e.target.value, 'quali')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
@@ -1708,7 +1714,7 @@ export default function BonusForm() {
 
             <div className="border-t border-gray-300 pt-3 mt-3">
               <div className="flex items-center justify-between text-[11px] text-gray-600">
-                <span>Total évaluation (quanti + quali) <span className="text-gray-400">/ {maskAr(params.maxPrime)}</span></span>
+                <span>Total évaluation (quanti + quali) <span className="text-gray-400">/ {showPrimeMax ? `${parseFloat(params.maxPrime || 0).toLocaleString('fr-FR')} Ar` : '••••••'}</span></span>
                 <span>{maskAr(totalValue, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">

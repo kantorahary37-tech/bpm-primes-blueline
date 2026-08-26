@@ -322,7 +322,7 @@ const BonusDetail = () => {
               <p className="text-xs text-blue-600 font-medium mb-1">Montant total</p>
               <p className="text-2xl font-bold text-blue-700">{formatAr(bonus.total_amount)} Ar</p>
             </div>
-            {bonus.bonus_type === 'mensuel' && bonus.details?.prime_max && (
+            {bonus.bonus_type === 'mensuel' && bonus.details?.prime_max && !user?.is_validator_n1 && (
               <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-300">
                 <p className="text-xs text-gray-700 font-medium mb-1">Prime maximum</p>
                 <p className="text-2xl font-bold text-gray-900">{formatAr(bonus.details.prime_max)} Ar</p>
@@ -359,7 +359,7 @@ const BonusDetail = () => {
               />
               <div className="border-t border-gray-300 pt-3 mt-3">
                 <div className="flex items-center justify-between text-[11px] text-gray-600">
-                  <span>Total évaluation <span className="text-gray-400">/ {formatAr(bonus.details?.prime_max || bonus.total_amount)} Ar</span></span>
+                  <span>Total évaluation {user?.is_validator_n1 ? null : <span className="text-gray-400">/ {formatAr(bonus.details?.prime_max || bonus.total_amount)} Ar</span>}</span>
                   <span>{formatAr(bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0))} Ar</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
