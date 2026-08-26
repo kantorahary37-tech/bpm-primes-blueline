@@ -53,6 +53,10 @@ CONFIG_DEFINITIONS = {
     "SFTP_USERNAME": {"category": "sftp", "description": "Utilisateur SFTP", "default": "4dprime"},
     "SFTP_PASSWORD": {"category": "sftp", "description": "Mot de passe SFTP", "default": ""},
     "SFTP_MAX_DOWNLOAD": {"category": "sftp", "description": "Taille max de téléchargement (octets)", "default": "52428800"},
+
+    # ── Interface ──
+    "SHOW_AMOUNTS": {"category": "interface", "description": "Afficher les montants aux utilisateurs (DRH/DG/Admin)", "default": "true"},
+    "SHOW_AMOUNTS_DG_DRH": {"category": "interface", "description": "Afficher les montants aux DG/DRH/Directeur (désactiver pour masquer même pour DG/DRH)", "default": "true"},
 }
 
 CATEGORY_LABELS = {
@@ -62,6 +66,7 @@ CATEGORY_LABELS = {
     "reminders": "Rappels quotidiens",
     "ldap": "LDAP",
     "sftp": "SFTP (serveur 4D)",
+    "interface": "Interface",
 }
 
 

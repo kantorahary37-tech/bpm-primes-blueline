@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { getEmployees, getBonuses, createEmployee, getUsers, adminLdapSyncEmployees } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import { Link } from 'react-router-dom';
 import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon } from '../components/Icons';
@@ -52,6 +53,8 @@ const EXPORT_EMP_BONUS_COLUMNS = ["Matricule", "Nom", "Departement", "TypePrime"
 
 const Employees = () => {
   const { user } = useAuth();
+  const { canSeeAmounts } = useSystemConfig();
+  const seeAmounts = canSeeAmounts(user);
   const { departments } = useDepartments();
   const deptNames = departments.map(d => d.name);
   const [employees, setEmployees] = useState([]);
@@ -384,7 +387,7 @@ const Employees = () => {
                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                               {statusLabel(bonus)}
                             </span>
-                            <span className="text-xs font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
+                            <span className="text-xs font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} Ar` : '••••••'}</span>
                           </Link>
                         )),
                         <div key={`${ym}-sep`} className="border-b border-gray-50 mx-3 last:border-0" />

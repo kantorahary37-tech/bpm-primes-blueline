@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getSystemConfig, bulkUpdateSystemConfig } from '../services/api';
-import { SettingsIcon, CheckIcon, MailIcon, BuildingIcon, FolderIcon, KeyIcon, BellIcon, DatabaseIcon, EyeIcon, EyeOffIcon } from '../components/Icons';
+import { SettingsIcon, CheckIcon, MailIcon, BuildingIcon, FolderIcon, KeyIcon, BellIcon, DatabaseIcon, EyeIcon, EyeOffIcon, ServerIcon } from '../components/Icons';
 
 const CATEGORY_META = {
+  interface: { label: 'Interface', Icon: ServerIcon, desc: 'Paramètres d\'affichage de l\'application' },
   email: { label: 'Email (SMTP)', Icon: MailIcon, desc: 'Configuration du serveur de messagerie' },
   ldap: { label: 'LDAP', Icon: BuildingIcon, desc: 'Authentification et synchronisation LDAP' },
   sftp: { label: 'SFTP (serveur 4D)', Icon: FolderIcon, desc: 'Connexion au serveur de fichiers 4D' },

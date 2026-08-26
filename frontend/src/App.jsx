@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { DepartmentsProvider } from './contexts/DepartmentsContext'
+import { SystemConfigProvider } from './contexts/SystemConfigContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import BonusesList from './pages/BonusesList'
@@ -68,9 +69,11 @@ function App() {
     <BrowserRouter>
       <Toaster position="top-right" toastOptions={{ duration: 3000, style: { fontSize: '14px', borderRadius: '10px', padding: '12px 16px' } }} />
       <AuthProvider>
-        <DepartmentsProvider>
-          <AppContent />
-        </DepartmentsProvider>
+        <SystemConfigProvider>
+          <DepartmentsProvider>
+            <AppContent />
+          </DepartmentsProvider>
+        </SystemConfigProvider>
       </AuthProvider>
     </BrowserRouter>
   )

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getBonus, getBonusValidations, getAuditLogs, validateBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSystemConfig } from '../contexts/SystemConfigContext';
 import toast from 'react-hot-toast';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
@@ -34,6 +35,8 @@ const EXPORT_COLUMNS = {
 const BonusDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const { canSeeAmounts } = useSystemConfig();
+  const seeAmounts = canSeeAmounts(user);
   const navigate = useNavigate();
   const [bonus, setBonus] = useState(null);
   const [validations, setValidations] = useState([]);
@@ -145,7 +148,7 @@ const BonusDetail = () => {
     day: '2-digit', month: 'long', year: 'numeric',
   });
 
-  const formatAr = (n) => (n ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+  const formatAr = (n) => seeAmounts ? (n ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••';
 
   const InfoRow = ({ label, value, big }) => (
     <div>

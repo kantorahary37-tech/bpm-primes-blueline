@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { getBonuses } from '../services/api';
 import { ArrowLeftIcon, ChevronLeftIcon, DownloadIcon } from '../components/Icons';
 
@@ -70,7 +71,7 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
                         <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
                           <span className="font-medium">{b.employee?.name || 'N/A'}</span>
                         </span>
-                        <span className="text-[10px] font-semibold text-blue-600 shrink-0">{b.total_amount.toLocaleString('fr-FR')} Ar</span>
+                        <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${b.total_amount.toLocaleString('fr-FR')} Ar` : '••••••'}</span>
                       </Link>
                     ))}
                   </div>
@@ -100,6 +101,8 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
 
 const ArchivePage = () => {
   const { user } = useAuth();
+  const { canSeeAmounts } = useSystemConfig();
+  const seeAmounts = canSeeAmounts(user);
   const [validatedPaid, setValidatedPaid] = useState([]);
   const [validatedUnpaid, setValidatedUnpaid] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
 import PlafondsPage from './PlafondsPage';
@@ -9,17 +9,19 @@ import { useDepartments } from '../contexts/DepartmentsContext';
 import { adminLdapSyncDepartments } from '../services/api';
 import { SettingsIcon, ChartIcon, ArchiveIcon } from '../components/Icons';
 
-const TABS = [
+const TABS_ALL = [
   { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon },
   { key: 'bareme', label: 'Barème commission', Icon: ChartIcon },
-  { key: 'system', label: 'Paramètres système', Icon: SettingsIcon },
+  { key: 'system', label: 'Paramètres système', Icon: SettingsIcon, adminOnly: true },
 ];
 
 export default function AdminConfigPage() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'plafonds';
+  const TABS = TABS_ALL.filter(t => !t.adminOnly || user?.is_admin);
+  const initialTab = searchParams.get('tab') || TABS[0]?.key || 'plafonds';
   const [activeTab, setActiveTab] = useState(
-    TABS.some(t => t.key === initialTab) ? initialTab : 'plafonds'
+    TABS.some(t => t.key === initialTab) ? initialTab : TABS[0]?.key || 'plafonds'
   );
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function AdminConfigPage() {
       <div>
         {activeTab === 'plafonds' && <PlafondsPage />}
         {activeTab === 'bareme' && <CommissionConfigPage />}
-        {activeTab === 'system' && <SystemConfigPage />}
+        {activeTab === 'system' && user?.is_admin && <SystemConfigPage />}
       </div>
     </div>
   );

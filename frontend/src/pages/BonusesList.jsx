@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { getBonuses, validateBonus, batchValidateBonuses, markBonusesPaid } from '../services/api';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSystemConfig } from '../contexts/SystemConfigContext';
 import toast from 'react-hot-toast';
 import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon, FilterIcon, ChevronLeftIcon } from '../components/Icons';
 import Modal from '../components/Modal';
@@ -54,6 +55,8 @@ const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
 const BonusesList = () => {
   const { user } = useAuth();
+  const { canSeeAmounts } = useSystemConfig();
+  const seeAmounts = canSeeAmounts(user);
   const navigate = useNavigate();
   const location = useLocation();
   const [bonuses, setBonuses] = useState([]);
@@ -352,7 +355,7 @@ const [filterMonth, setFilterMonth] = useState('');
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{dept}</span>
         <span className="text-[9px] font-medium text-gray-300 bg-gray-100 px-1.5 py-0.5 rounded-full">{deptBonuses.length}</span>
         <span className="text-[10px] font-semibold text-blue-500 ml-1">
-          {deptBonuses.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar
+          {seeAmounts ? `${deptBonuses.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
         </span>
         <div className="flex gap-1 ml-auto">
           {deptBonuses.some(b => canSelect(b)) && (
@@ -429,7 +432,7 @@ const [filterMonth, setFilterMonth] = useState('');
             <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
               {statusLabel(bonus)}
             </span>
-            <span className="text-[10px] font-semibold text-blue-600 shrink-0">{bonus.total_amount} Ar</span>
+            <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} Ar` : '••••••'}</span>
             {bonus.bonus_type === 'mensuel' && (() => {
               const q = weightedAvg(bonus.details?.quantitative);
               const l = weightedAvg(bonus.details?.qualitative);
@@ -623,7 +626,7 @@ const [filterMonth, setFilterMonth] = useState('');
           <span className="text-sm font-semibold text-blue-700">{depFilter}</span>
           <span className="text-xs text-blue-500">{filteredBonuses.length} prime(s)</span>
           <span className="text-sm font-bold text-blue-700 ml-auto">
-            Total : {filteredBonuses.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar
+            Total : {seeAmounts ? `${filteredBonuses.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
           </span>
         </div>
       )}
@@ -645,7 +648,7 @@ const [filterMonth, setFilterMonth] = useState('');
             <h2 className="font-semibold text-sm">{dept}</h2>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
             <span className="text-sm font-bold text-blue-600 ml-1">
-              {items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar
+              {seeAmounts ? `${items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
             </span>
             <div className="flex gap-1 ml-auto">
               {items.some(b => canSelect(b)) && (

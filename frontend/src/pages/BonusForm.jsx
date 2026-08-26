@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import Modal from '../components/Modal'
 import SftpFilePicker from '../components/SftpFilePicker'
@@ -57,6 +58,9 @@ const BONUS_TYPE_DEPARTMENTS = {
 
 export default function BonusForm() {
   const { user: connectedUser } = useAuth()
+  const { canSeeAmounts } = useSystemConfig()
+  const seeAmounts = canSeeAmounts(connectedUser)
+  const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} Ar` : '••••••'
   const { type, id } = useParams()
   const navigate = useNavigate()
   const isEditing = !!id
@@ -982,7 +986,7 @@ export default function BonusForm() {
   )
 
   if (editType === 'commission') {
-    const fmtAr = (n) => (parseFloat(n) || 0).toLocaleString('fr-FR')
+    const fmtAr = (n) => seeAmounts ? (parseFloat(n) || 0).toLocaleString('fr-FR') : '••••••'
 
     // ----- Mode édition : consultation des détails, enregistrement tel quel -----
     if (isEditing) {
@@ -1271,7 +1275,7 @@ export default function BonusForm() {
                         {(parseFloat(d.nombre) || 0) > weeks && <span className="text-red-500 text-xs block">max {weeks}</span>}
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
-                        {((parseFloat(d.nombre) || 0) * getRate(d.employee_id)).toLocaleString('fr-FR')}
+                        {seeAmounts ? ((parseFloat(d.nombre) || 0) * getRate(d.employee_id)).toLocaleString('fr-FR') : '••••••'}
                       </td>
                       <td className="py-1 px-2 text-center">
                         <button type="button" onClick={() => removeDispoRow(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
@@ -1282,7 +1286,7 @@ export default function BonusForm() {
                 <tfoot>
                   <tr className="font-semibold border-t-2 border-gray-400">
                     <td colSpan="2" className="py-2 px-2 text-right">Total Disponibilité</td>
-                    <td className="py-2 px-2 text-right text-brand-600">{totalDispo.toLocaleString('fr-FR')} Ar</td>
+                    <td className="py-2 px-2 text-right text-brand-600">{maskAr(totalDispo)}</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -1294,7 +1298,7 @@ export default function BonusForm() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h2 className="font-semibold text-base-content text-sm">Interventions</h2>
-                <p className="text-xs text-base-content/50">Taux : {Number(astreinteConfig.interventionRate).toLocaleString('fr-FR')} Ar / intervention</p>
+                <p className="text-xs text-base-content/50">Taux : {seeAmounts ? `${Number(astreinteConfig.interventionRate).toLocaleString('fr-FR')} Ar` : '••••••'} / intervention</p>
               </div>
               <div className="flex gap-2 items-center">
                 {importedFileName && <span className="text-xs text-base-content/70 flex items-center gap-1 bg-base-200 px-2 py-1 rounded"><span className="truncate max-32">{importedFileName}</span><button type="button" onClick={clearImported} className="text-red-500 hover:text-red-700 text-sm leading-none">✕</button></span>}
@@ -1364,7 +1368,7 @@ export default function BonusForm() {
                           className="w-24 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="N° ticket" />
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
-                        {iv.employee_id ? Number(astreinteConfig.interventionRate).toLocaleString('fr-FR') : '—'}
+                        {iv.employee_id ? (seeAmounts ? Number(astreinteConfig.interventionRate).toLocaleString('fr-FR') : '••••••') : '—'}
                       </td>
                       <td className="py-1 px-2 text-center">
                         <button type="button" onClick={() => removeIntervRow(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
@@ -1375,7 +1379,7 @@ export default function BonusForm() {
                 <tfoot>
                   <tr className="font-semibold border-t-2 border-brand-200">
                     <td colSpan="8" className="py-2 px-2 text-right">Total Interventions</td>
-                    <td className="py-2 px-2 text-right text-brand-600">{totalInterv.toLocaleString('fr-FR')} Ar</td>
+                    <td className="py-2 px-2 text-right text-brand-600">{maskAr(totalInterv)}</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -1405,12 +1409,12 @@ export default function BonusForm() {
                     return (
                     <tr key={id} className="border-b border-gray-200">
                       <td className="py-2 px-2 font-medium">{e.name}</td>
-                      <td className="py-2 px-2 text-right">{e.dispo.toLocaleString('fr-FR')} Ar</td>
+                      <td className="py-2 px-2 text-right">{maskAr(e.dispo)}</td>
                       <td className="py-2 px-2 text-center text-xs">{isCustom ? <span className="text-blue-600 font-medium">{rate.toLocaleString('fr-FR')}</span> : <span className="text-gray-400">{rate.toLocaleString('fr-FR')}</span>}</td>
-                      <td className="py-2 px-2 text-right">{e.interv.toLocaleString('fr-FR')} Ar</td>
-                      <td className="py-2 px-2 text-right">{e.exceptionnelle.toLocaleString('fr-FR')} Ar</td>
-                      <td className="py-2 px-2 text-right">{e.ponctuelle.toLocaleString('fr-FR')} Ar</td>
-                      <td className="py-2 px-2 text-right font-semibold">{(e.dispo + e.interv + e.exceptionnelle + e.ponctuelle).toLocaleString('fr-FR')} Ar</td>
+                      <td className="py-2 px-2 text-right">{maskAr(e.interv)}</td>
+                      <td className="py-2 px-2 text-right">{maskAr(e.exceptionnelle)}</td>
+                      <td className="py-2 px-2 text-right">{maskAr(e.ponctuelle)}</td>
+                      <td className="py-2 px-2 text-right font-semibold">{seeAmounts ? `${(e.dispo + e.interv + e.exceptionnelle + e.ponctuelle).toLocaleString('fr-FR')} Ar` : '••••••'}</td>
                     </tr>
                     )
                   })}
@@ -1419,7 +1423,7 @@ export default function BonusForm() {
             </div>
             <div className="flex justify-between text-lg font-bold border-t-2 border-gray-400 pt-3 mt-3">
               <span>Total Général</span>
-              <span className="text-brand-600">{totalGeneral.toLocaleString('fr-FR')} Ar</span>
+              <span className="text-brand-600">{maskAr(totalGeneral)}</span>
             </div>
           </div>
 
@@ -1464,7 +1468,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Quantitative</h2>
-            <span className="text-xs text-gray-600">{totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+            <span className="text-xs text-gray-600">{maskAr(totalQuantiValue, { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1498,7 +1502,7 @@ export default function BonusForm() {
                           onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'note', e.target.value, 'quanti')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
-                    <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                    <td className="py-2 px-2 text-right font-medium">{seeAmounts ? item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
                     <td className="py-2 px-2 text-center">
                       <button type="button" onClick={() => removeEvalItem(quantitative, setQuantitative, i)}
                         className="text-red-400 hover:text-red-600 text-lg leading-none">&minus;</button>
@@ -1508,7 +1512,7 @@ export default function BonusForm() {
                 <tr className="font-semibold border-t-2 border-gray-400">
                   <td colSpan="3" className="py-2 px-2 text-right">Total Quantitatif</td>
                   <td className="py-2 px-2 text-center font-medium">{totalQuantiCoeff.toFixed(1)}</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{seeAmounts ? totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
                   <td></td>
                 </tr>
               </tbody>
@@ -1562,7 +1566,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Qualitative</h2>
-            <span className="text-xs text-gray-600">{totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+            <span className="text-xs text-gray-600">{maskAr(totalQualiValue, { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1596,7 +1600,7 @@ export default function BonusForm() {
                           onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'note', e.target.value, 'quali')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
-                    <td className="py-2 px-2 text-right font-medium">{item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                    <td className="py-2 px-2 text-right font-medium">{seeAmounts ? item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
                     <td className="py-2 px-2 text-center">
                       <button type="button" onClick={() => removeEvalItem(qualitative, setQualitative, i)}
                         className="text-red-400 hover:text-red-600 text-lg leading-none">&minus;</button>
@@ -1606,7 +1610,7 @@ export default function BonusForm() {
                 <tr className="font-semibold border-t-2 border-gray-400">
                   <td colSpan="3" className="py-2 px-2 text-right">Total Qualitatif</td>
                   <td className="py-2 px-2 text-center font-medium">{totalQualiCoeff.toFixed(1)}</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{seeAmounts ? totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
                   <td></td>
                 </tr>
               </tbody>
@@ -1683,7 +1687,7 @@ export default function BonusForm() {
               <div className="flex-1">
                 <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Quantitatif</span>
-                  <span>{totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+                  <span>{maskAr(totalQuantiValue, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
@@ -1693,7 +1697,7 @@ export default function BonusForm() {
               <div className="flex-1">
                 <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Qualitatif</span>
-                  <span>{totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+                  <span>{maskAr(totalQualiValue, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-violet-500"
@@ -1704,8 +1708,8 @@ export default function BonusForm() {
 
             <div className="border-t border-gray-300 pt-3 mt-3">
               <div className="flex items-center justify-between text-[11px] text-gray-600">
-                <span>Total évaluation (quanti + quali) <span className="text-gray-400">/ {params.maxPrime.toLocaleString('fr-FR')} Ar</span></span>
-                <span>{totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+                <span>Total évaluation (quanti + quali) <span className="text-gray-400">/ {maskAr(params.maxPrime)}</span></span>
+                <span>{maskAr(totalValue, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                 <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
@@ -1819,7 +1823,7 @@ export default function BonusForm() {
             <div className="border-t border-amber-200 pt-3 mt-3">
               <div className="flex items-center justify-between text-[11px] text-gray-600">
                 <span>Autres primes</span>
-                <span>{othersTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</span>
+                <span>{maskAr(othersTotal, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                 <div className="h-full rounded-full transition-all duration-300 bg-amber-500" style={{ width: '100%' }} />
@@ -1832,7 +1836,7 @@ export default function BonusForm() {
           <div className="card-blueline p-4 mt-3 border-l-4 border-l-blue-500 bg-blue-50/40">
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-gray-900">Total général</p>
-              <p className="text-2xl font-bold text-brand-600">{(totalValue + othersTotal).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar</p>
+              <p className="text-2xl font-bold text-brand-600">{seeAmounts ? `${(totalValue + othersTotal).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar` : '••••••'}</p>
             </div>
           </div>
         )}

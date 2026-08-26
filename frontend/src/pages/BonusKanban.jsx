@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getBonuses } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { ArrowLeftIcon } from '../components/Icons';
 
 const STATUS_COLUMNS = ['Initialisé', 'En attente Directeur', 'En attente DG', 'Prime validée'];
@@ -37,6 +38,8 @@ const columnColor = {
 const BonusKanban = () => {
   const { type } = useParams();
   const { user } = useAuth();
+  const { canSeeAmounts } = useSystemConfig();
+  const seeAmounts = canSeeAmounts(user);
   const [bonuses, setBonuses] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -108,7 +111,7 @@ const BonusKanban = () => {
                         <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(b.status)} ${b.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                           {statusLabel(b)}
                         </span>
-                        <span className={`text-[10px] font-semibold shrink-0 ${isMyColumn ? 'text-blue-600' : 'text-gray-400'}`}>{b.total_amount} Ar</span>
+                        <span className={`text-[10px] font-semibold shrink-0 ${isMyColumn ? 'text-blue-600' : 'text-gray-400'}`}>{seeAmounts ? `${b.total_amount} Ar` : '••••••'}</span>
                       </div>
                     );
 
