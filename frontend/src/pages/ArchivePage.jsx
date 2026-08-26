@@ -23,22 +23,33 @@ const typeColor = (t) => {
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
 function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPages, seeAmounts }) {
-  const monthGroups = (() => {
+  const deptGroups = (() => {
     const groups = {};
     items.forEach(b => {
-      const ym = b.start_date ? b.start_date.slice(0, 7) : 'inconnu';
-      if (!groups[ym]) groups[ym] = [];
-      groups[ym].push(b);
+      const dept = b.employee?.department || 'Sans département';
+      if (!groups[dept]) groups[dept] = [];
+      groups[dept].push(b);
     });
-    return Object.keys(groups).sort().reverse().map(ym => {
-      const [y, m] = ym.split('-');
-      const monthName = new Date(parseInt(y), parseInt(m) - 1)
-        .toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-      return { ym, monthName, items: groups[ym] };
+    return Object.keys(groups).sort().map(dept => {
+      const deptItems = groups[dept];
+      const monthMap = {};
+      deptItems.forEach(b => {
+        const ym = b.start_date ? b.start_date.slice(0, 7) : 'inconnu';
+        if (!monthMap[ym]) monthMap[ym] = [];
+        monthMap[ym].push(b);
+      });
+      const months = Object.keys(monthMap).sort().reverse().map(ym => {
+        const [y, m] = ym.split('-');
+        const monthName = new Date(parseInt(y), parseInt(m) - 1)
+          .toLocaleDateString('fr-FF', { month: 'long', year: 'numeric' });
+        return { ym, monthName, items: monthMap[ym] };
+      });
+      return { dept, months };
     });
   })();
 
-  const visibleGroups = monthGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const PAGE_SIZE_DEPT = 5;
+  const visibleDepts = deptGroups.slice((page - 1) * PAGE_SIZE_DEPT, page * PAGE_SIZE_DEPT);
 
   return (
     <div>
@@ -49,32 +60,43 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
 
       {items.length === 0 ? (
         <div className="text-center py-10 rounded-xl border border-gray-200 bg-white">
-          <p className="text-gray-400 text-sm">Aucune prime dans cette categorie</p>
+          <p className="text-gray-400 text-sm">Aucune prime dans cette catégorie</p>
         </div>
       ) : (
         <>
-          <div className="space-y-3">
-            {visibleGroups.map(({ ym, monthName, items: groupItems }) => (
-              <div key={ym}>
-                <div className="flex items-center gap-2 px-3 py-2 rounded-t-xl bg-gray-100 text-gray-900">
-                  <h3 className="font-semibold text-sm">{monthName}</h3>
-                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-gray-300 text-gray-700">{groupItems.length}</span>
+          <div className="space-y-4">
+            {visibleDepts.map(({ dept, months }) => (
+              <div key={dept} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border-b border-gray-200">
+                  <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  <h3 className="font-semibold text-sm text-blue-800">{dept}</h3>
+                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-blue-200 text-blue-700">{items.filter(b => (b.employee?.department || 'Sans département') === dept).length}</span>
                 </div>
-                <div className="p-2 bg-white rounded-b-xl border border-t-0 border-gray-200">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
-                    {groupItems.map(b => (
-                      <Link key={b.id} to={`/bonuses/${b.id}`}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-emerald-300 hover:shadow-sm transition-all group">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${typeColor(b.bonus_type)}`}>
-                          {typeLetter(b.bonus_type)}
+                <div className="p-2 space-y-2">
+                  {months.map(({ ym, monthName, items: groupItems }) => (
+                    <div key={ym}>
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t-lg bg-gray-50 text-gray-700">
+                        <h4 className="font-medium text-xs">{monthName}</h4>
+                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">{groupItems.length}</span>
+                      </div>
+                      <div className="p-1.5 bg-white rounded-b-lg border border-t-0 border-gray-100">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1">
+                          {groupItems.map(b => (
+                            <Link key={b.id} to={`/bonuses/${b.id}`}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-emerald-300 hover:shadow-sm transition-all group">
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${typeColor(b.bonus_type)}`}>
+                                {typeLetter(b.bonus_type)}
+                              </div>
+                              <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
+                                <span className="font-medium">{b.employee?.name || 'N/A'}</span>
+                              </span>
+                              <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${b.total_amount.toLocaleString('fr-FR')} Ar` : '••••••'}</span>
+                            </Link>
+                          ))}
                         </div>
-                        <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-                          <span className="font-medium">{b.employee?.name || 'N/A'}</span>
-                        </span>
-                        <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${b.total_amount.toLocaleString('fr-FR')} Ar` : '••••••'}</span>
-                      </Link>
-                    ))}
-                  </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -84,7 +106,7 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
             <div className="flex items-center justify-center gap-3 mt-4">
               <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
                 className="btn btn-sm btn-ghost text-gray-500 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed">
-                <ChevronLeftIcon className="w-4 h-4" /> Precedent
+                <ChevronLeftIcon className="w-4 h-4" /> Précédent
               </button>
               <span className="text-xs text-gray-400 font-medium">Page {page} / {totalPages}</span>
               <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
@@ -129,8 +151,10 @@ const ArchivePage = () => {
   useEffect(() => { setPageUnpaid(1); }, [validatedUnpaid.length]);
   useEffect(() => { setPagePaid(1); }, [validatedPaid.length]);
 
-  const totalUnpaidPages = Math.max(1, Math.ceil(validatedUnpaid.length / PAGE_SIZE));
-  const totalPaidPages = Math.max(1, Math.ceil(validatedPaid.length / PAGE_SIZE));
+  const deptCountUnpaid = new Set(validatedUnpaid.map(b => b.employee?.department || 'Sans département')).size;
+  const deptCountPaid = new Set(validatedPaid.map(b => b.employee?.department || 'Sans département')).size;
+  const totalUnpaidPages = Math.max(1, Math.ceil(deptCountUnpaid / 5));
+  const totalPaidPages = Math.max(1, Math.ceil(deptCountPaid / 5));
 
   if (loading) {
     return <div className="flex justify-center items-center h-64"><span className="loading loading-spinner loading-lg" /></div>;
