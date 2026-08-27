@@ -82,7 +82,11 @@ export default function EvaluationTemplatesPage() {
 
   const handleDeleteCriteria = (section, id) => {
     if (!id) {
-      if (section === 'quanti') setEditQuantitative(prev => prev.filter((_, i) => i !== [...prev].findIndex(c => !c.id)))
+      if (section === 'quanti') {
+        setEditQuantitative(prev => prev.filter((_, i) => i !== [...prev].findIndex(c => !c.id)))
+      } else {
+        setEditQualitative(prev => prev.filter((_, i) => i !== [...prev].findIndex(c => !c.id)))
+      }
       return
     }
     setConfirmDelete({ section, id })
