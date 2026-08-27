@@ -116,7 +116,7 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
         msg = EmailMessage()
         msg["Subject"] = subject
         msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
-        msg["To"] = f"{to_name} <{_resolve_email(to_email)}>"
+        msg["To"] = _resolve_email(to_email)
         msg.set_content(
             f"Bonjour {to_name},\n\n"
             f"{sender_name} {action_text} {employee_name}.\n\n"
@@ -233,7 +233,7 @@ def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: lis
         msg = EmailMessage()
         msg["Subject"] = f"Rappel : {count} prime{plural} en attente de votre validation | BPM"
         msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
-        msg["To"] = f"{to_name} <{_resolve_email(to_email)}>"
+        msg["To"] = _resolve_email(to_email)
 
         msg.set_content(
             f"Bonjour {to_name},\n\n"
