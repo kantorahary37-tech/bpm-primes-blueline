@@ -76,7 +76,7 @@ export default function Layout({ children }) {
     <div className="min-h-screen bg-gray-50">
       {/* Top navbar */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Left: logo + desktop nav */}
             <div className="flex items-center gap-8">
@@ -251,7 +251,7 @@ export default function Layout({ children }) {
       )}
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="px-4 sm:px-6 py-6">
         {children}
       </main>
     </div>

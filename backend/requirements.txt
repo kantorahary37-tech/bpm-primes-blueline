@@ -15,3 +15,4 @@ bcrypt
 openpyxl
 ldap3
 paramiko
+faker

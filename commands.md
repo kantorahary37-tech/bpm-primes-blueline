@@ -9,6 +9,15 @@ docker compose exec backend python -m scripts.seed_bonuses
 docker compose exec backend python -m scripts.seed_commission_config
 ```
 
+Génération de primes factices (test des filtres / tri / recherche) avec données
+réalistes via Faker — 5 primes par département couvrant mensuel / astreinte /
+commission et tous les statuts :
+
+```Shell
+docker compose exec backend python -m scripts.seed_fake_bonuses          # ajoute 5 primes/dépt
+docker compose exec backend python -m scripts.seed_fake_bonuses --clean  # supprime tout puis re-seed
+```
+
 Lancement de Docker en dev mode :
 
 ```Shell

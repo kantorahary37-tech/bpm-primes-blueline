@@ -62,7 +62,7 @@ export const updateEmployee = async (id, employeeData) => {
   return data;
 };
 
-export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false, allStatuses = false, archiveMode = false) => {
+export const getBonuses = async (status = null, employeeId = null, bonusType = null, startDate = null, endDate = null, showPaid = false, allStatuses = false, archiveMode = false, options = {}) => {
   const params = {};
   if (status) params.status = status;
   if (employeeId) params.employee_id = employeeId;
@@ -72,6 +72,11 @@ export const getBonuses = async (status = null, employeeId = null, bonusType = n
   if (showPaid) params.show_paid = true;
   if (allStatuses) params.all_statuses = true;
   if (archiveMode) params.archive_mode = true;
+  if (options.search) params.search = options.search;
+  if (options.department) params.department = options.department;
+  if (options.wasRejected !== undefined) params.was_rejected = options.wasRejected;
+  if (options.sortBy) params.sort_by = options.sortBy;
+  if (options.sortDir) params.sort_dir = options.sortDir;
   const { data } = await api.get('/bonuses/', { params });
   return data;
 };

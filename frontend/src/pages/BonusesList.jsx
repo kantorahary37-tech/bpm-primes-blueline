@@ -1,44 +1,15 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { getBonuses, validateBonus, batchValidateBonuses, markBonusesPaid } from '../services/api';
+import { getBonuses, getUsers, validateBonus, batchValidateBonuses, markBonusesPaid } from '../services/api';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
+import { useDepartments } from '../contexts/DepartmentsContext';
 import toast from 'react-hot-toast';
-import { EyeIcon, CheckIcon, EditIcon, DownloadIcon, CalendarIcon, MoonIcon, ChartIcon, FilterIcon, ChevronLeftIcon } from '../components/Icons';
+import { DownloadIcon, FilterIcon, ChevronLeftIcon } from '../components/Icons';
 import Modal from '../components/Modal';
+import BonusTable from '../components/BonusTable';
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
-
-const typeIcons = {
-  mensuel: CalendarIcon,
-  astreinte: MoonIcon,
-  commission: ChartIcon,
-}
-
-const typeLabels = {
-  mensuel: 'Mensuelle',
-  astreinte: 'Astreinte',
-  commission: 'Commission',
-}
-
-// Moyenne pondérée des notes /10 par coefficient pour une section
-const weightedAvg = (items) => {
-  if (!Array.isArray(items) || items.length === 0) return { note: null, totalCoeff: 0 };
-  let weightedSum = 0, totalCoeff = 0;
-  for (const i of items) {
-    if (!i || typeof i !== 'object') continue;
-    const n = parseFloat(i.note ?? i.evaluation);
-    const c = parseFloat(i.coeff ?? i.objective) || 0;
-    if (!Number.isNaN(n) && c > 0) { weightedSum += n * c; totalCoeff += c; }
-  }
-  return { note: totalCoeff > 0 ? weightedSum / totalCoeff : null, totalCoeff };
-};
-
-const noteColor = (v) => {
-  if (v >= 7.5) return 'text-emerald-600';
-  if (v >= 5) return 'text-amber-600';
-  return 'text-red-500';
-};
 
 const EXPORT_COLUMNS_LIST = [
   "Matricule", "Nom", "Departement", "TypePrime",
@@ -80,6 +51,17 @@ const [filterMonth, setFilterMonth] = useState('');
   const [paying, setPaying] = useState(false);
   const [datePage, setDatePage] = useState(1);
   const [sectionExpand, setSectionExpand] = useState({});
+  const [initiatorMap, setInitiatorMap] = useState(new Map());
+  const [sortBy, setSortBy] = useState('start_date');
+  const [sortDir, setSortDir] = useState('desc');
+
+  const { departments: allDepartments } = useDepartments();
+
+  useEffect(() => {
+    getUsers()
+      .then((users) => setInitiatorMap(new Map((Array.isArray(users) ? users : []).map((u) => [u.id, u.name]))))
+      .catch(() => setInitiatorMap(new Map()));
+  }, []);
 
   useEffect(() => {
     if (!new URLSearchParams(window.location.search).get('status')) {
@@ -90,24 +72,82 @@ const [filterMonth, setFilterMonth] = useState('');
     }
   }, [user?.is_admin, user?.is_dg, user?.is_directeur]);
 
-  const fetchBonuses = async () => {
+  // Paramètres de filtrage/tri/recherche envoyés au backend
+  const queryParams = useMemo(() => {
+    let startDate = null;
+    let endDate = null;
+    if (filterYear) {
+      if (filterMonth) {
+        startDate = `${filterYear}-${filterMonth}-01`;
+        const lastDay = new Date(parseInt(filterYear), parseInt(filterMonth), 0).getDate();
+        endDate = `${filterYear}-${filterMonth}-${String(lastDay).padStart(2, '0')}`;
+      } else {
+        startDate = `${filterYear}-01-01`;
+        endDate = `${filterYear}-12-31`;
+      }
+    }
+    return {
+      status: statusFilter === 'Prime rejetée' ? null : statusFilter,
+      wasRejected: statusFilter === 'Prime rejetée' ? true : undefined,
+      bonusType: typeFilter,
+      department: depFilter,
+      search: searchQuery,
+      startDate,
+      endDate,
+      sortBy,
+      sortDir,
+    };
+  }, [statusFilter, typeFilter, depFilter, searchQuery, filterMonth, filterYear, sortBy, sortDir]);
+
+  const fetchBonuses = useCallback(async (params) => {
     try {
-      const data = await getBonuses();
+      const data = await getBonuses(
+        params.status,
+        null,
+        params.bonusType,
+        params.startDate,
+        params.endDate,
+        false,
+        false,
+        false,
+        {
+          search: params.search,
+          department: params.department,
+          wasRejected: params.wasRejected,
+          sortBy: params.sortBy,
+          sortDir: params.sortDir,
+        }
+      );
       setBonuses(data);
       setLoading(false);
     } catch (error) {
       console.error('Erreur:', error);
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchBonuses();
+    fetchBonuses(queryParams);
+  }, [queryParams, fetchBonuses]);
+
+  // Mise à jour du tri côté backend (refetch automatique via queryParams)
+  const handleTableSort = useCallback((key) => {
+    setSortBy((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDir('asc');
+      return key;
+    });
+  }, []);
+
+  useEffect(() => {
     if (location.state?.success) {
       toast.success(location.state.success);
       window.history.replaceState({}, '');
     }
-  }, []);
+  }, [location.state]);
 
   useEffect(() => { setDatePage(1); }, [typeFilter, statusFilter, searchQuery, depFilter, filterMonth, filterYear]);
 
@@ -132,7 +172,7 @@ const [filterMonth, setFilterMonth] = useState('');
       await validateBonus(confirmBonus.bonusId, { action: 'VALIDER' }, confirmBonus.step);
       toast.success('Prime validée avec succès !');
       setConfirmBonus(null);
-      fetchBonuses();
+      fetchBonuses(queryParams);
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de la validation");
       setConfirmBonus(null);
@@ -148,7 +188,7 @@ const [filterMonth, setFilterMonth] = useState('');
       toast.success(`${res.total_success} prime(s) validée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
       clearSelection();
       setConfirmBonus(null);
-      fetchBonuses();
+      fetchBonuses(queryParams);
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de la validation par lot");
       setConfirmBonus(null);
@@ -164,7 +204,7 @@ const [filterMonth, setFilterMonth] = useState('');
       toast.success(`${res.total_success} prime(s) rejetée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
       clearSelection();
       setBatchReject(null);
-      fetchBonuses();
+      fetchBonuses(queryParams);
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors du rejet par lot");
       setBatchReject(null);
@@ -177,12 +217,6 @@ const [filterMonth, setFilterMonth] = useState('');
     if (user.is_directeur && bonus.status === 'En attente Directeur') return 'DIRECTEUR';
     if (user.is_dg && bonus.status === 'En attente DG') return 'DG';
     return null;
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
   const statusLabel = (bonus) => {
@@ -228,51 +262,47 @@ const [filterMonth, setFilterMonth] = useState('');
     return order.map((key) => map.get(key)).filter(Boolean);
   }, [user]);
 
-  const filteredBonuses = useMemo(() => {
-    return bonuses.filter((b) => {
-      if (typeFilter && b.bonus_type !== typeFilter) return false;
-      if (statusFilter === 'Prime rejetée') { if (!b.was_rejected) return false; }
-      else if (statusFilter && b.status !== statusFilter) return false;
-      if (depFilter && b.employee?.department !== depFilter) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const name = b.employee?.name?.toLowerCase() || '';
-        const mat = b.employee?.matricule?.toLowerCase() || '';
-        if (!name.includes(q) && !mat.includes(q)) return false;
-      }
-      if (filterYear) {
-        if (filterMonth) {
-          const ym = `${filterYear}-${filterMonth}`
-          const s = b.start_date ? b.start_date.substring(0, 7) : '';
-          const e = b.end_date ? b.end_date.substring(0, 7) : '';
-          if (s !== ym && e !== ym) return false;
-        } else {
-          const y = filterYear;
-          const s = b.start_date ? b.start_date.substring(0, 4) : '';
-          const e = b.end_date ? b.end_date.substring(0, 4) : '';
-          if (s !== y && e !== y) return false;
-        }
-      }
-      return true;
-    });
-  }, [bonuses, typeFilter, statusFilter, depFilter, searchQuery, filterMonth, filterYear]);
+  // Les filtres/tri/recherche sont appliqués côté backend : on affiche directement la liste renvoyée
+  const filteredBonuses = bonuses;
+
+  // Options de statut uniques par valeur, dérivées des primes réellement renvoyées
+  const statusOptions = useMemo(() => {
+    const set = new Set();
+    for (const b of bonuses) {
+      if (b.was_rejected) set.add('Prime rejetée');
+      else if (b.status) set.add(b.status);
+    }
+    return [...set];
+  }, [bonuses]);
+
+  const statusOptionLabel = (s) => {
+    const map = {
+      'Prime validée': 'Validée',
+      'Prime rejetée': 'Rejetée',
+      'En attente Directeur': 'En attente Directeur',
+      'En attente DG': 'En attente DG',
+    };
+    return map[s] || s;
+  };
 
   const departments = useMemo(() => {
-    const deps = new Set(bonuses.map(b => b.employee?.department).filter(Boolean));
-    return [...deps].sort();
-  }, [bonuses]);
+    const names = (Array.isArray(allDepartments) ? allDepartments : []).map((d) => d.name).filter(Boolean);
+    const fromData = [...new Set(bonuses.map((b) => b.employee?.department).filter(Boolean))];
+    const merged = new Set([...names, ...fromData]);
+    return [...merged].sort();
+  }, [allDepartments, bonuses]);
 
   const grouped = useMemo(() => {
     const result = {};
     for (const s of sections) {
-      result[s.key] = filteredBonuses.filter(s.filter);
+      result[s.key] = bonuses.filter(s.filter);
     }
     return result;
-  }, [filteredBonuses, sections]);
+  }, [bonuses, sections]);
 
   const monthGroups = useMemo(() => {
     const groups = {}
-    filteredBonuses.forEach(b => {
+    bonuses.forEach(b => {
       const ym = b.start_date ? b.start_date.slice(0, 7) : 'inconnu'
       if (!groups[ym]) groups[ym] = []
       groups[ym].push(b)
@@ -282,17 +312,17 @@ const [filterMonth, setFilterMonth] = useState('');
       const monthName = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
       return { ym, monthName, bonuses: groups[ym] }
     })
-  }, [filteredBonuses]);
+  }, [bonuses]);
 
   const deptGroups = useMemo(() => {
     const groups = {};
-    filteredBonuses.forEach(b => {
+    bonuses.forEach(b => {
       const d = b.employee?.department || 'N/A';
       if (!groups[d]) groups[d] = [];
       groups[d].push(b);
     });
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([dept, items]) => ({ dept, items }));
-  }, [filteredBonuses]);
+  }, [bonuses]);
 
   const canSelect = (bonus) => {
     const step = getValidStep(bonus);
@@ -336,140 +366,6 @@ const [filterMonth, setFilterMonth] = useState('');
 
   const validatedCount = useMemo(() => bonuses.filter(b => b.status === 'Prime validée').length, [bonuses]);
 
-  const groupByDept = (items) => {
-    const groups = {};
-    items.forEach(b => {
-      const d = b.employee?.department || 'N/A';
-      if (!groups[d]) groups[d] = [];
-      groups[d].push(b);
-    });
-    return groups;
-  };
-
-  const renderCards = (items, getStep) => {
-    if (items.length === 0) return null;
-    const groups = depFilter ? { [depFilter]: items } : groupByDept(items);
-    const sorted = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-    return sorted.flatMap(([dept, deptBonuses]) => [
-      <div key={`${dept}-hdr`} className="col-span-full flex items-center gap-2 px-1 pt-1 pb-0.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{dept}</span>
-        <span className="text-[9px] font-medium text-gray-300 bg-gray-100 px-1.5 py-0.5 rounded-full">{deptBonuses.length}</span>
-        <span className="text-[10px] font-semibold text-blue-500 ml-1">
-          {seeAmounts ? `${deptBonuses.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
-        </span>
-        <div className="flex gap-1 ml-auto">
-          {deptBonuses.some(b => canSelect(b)) && (
-            <button onClick={(e) => {
-              e.stopPropagation();
-              const selectable = deptBonuses.filter(b => canSelect(b));
-              const allSelected = selectable.every(b => selectedBonuses.has(b.id));
-              setSelectedBonuses(prev => {
-                const next = new Set(prev);
-                if (allSelected) {
-                  selectable.forEach(b => next.delete(b.id));
-                } else {
-                  selectable.forEach(b => next.add(b.id));
-                }
-                return next;
-              });
-            }}
-              className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
-              {deptBonuses.filter(b => canSelect(b)).every(b => selectedBonuses.has(b.id)) ? 'Désél.' : 'Sél. tout'}
-            </button>
-          )}
-          {user?.is_drh && deptBonuses.some(b => b.status === 'Prime validée') && (
-            <button onClick={(e) => {
-              e.stopPropagation();
-              const ids = deptBonuses.filter(b => b.status === 'Prime validée').map(b => b.id);
-              setPayConfirm({ type: 'batch', ids, count: ids.length });
-            }}
-              className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
-              Paiement {dept}
-            </button>
-          )}
-          {(() => {
-            const steps = [...new Set(deptBonuses.map(b => getStep(b)).filter(Boolean))];
-            if (steps.length === 1) {
-              return (
-                <button onClick={(e) => {
-                  e.stopPropagation();
-                  const ids = deptBonuses.filter(b => getStep(b) === steps[0]).map(b => b.id);
-                  setSelectedBonuses(new Set(ids));
-                  setConfirmBonus({ batch: true });
-                }}
-                  className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
-                  Valider {dept}
-                </button>
-              );
-            }
-            return null;
-          })()}
-        </div>
-      </div>,
-      ...deptBonuses.map(bonus => {
-        const step = getStep(bonus);
-        const selected = selectedBonuses.has(bonus.id);
-        return (
-          <div key={bonus.id} onClick={() => navigate(`/bonuses/${bonus.id}`)}
-            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border cursor-pointer transition-all group ${
-              selected ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-300' : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'
-            }`}>
-            <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center">
-              <input type="checkbox" checked={selected}
-                disabled={!canSelect(bonus)}
-                onChange={() => toggleSelect(bonus.id)}
-                title={!canSelect(bonus) ? "Seules les primes validées peuvent être sélectionnées" : ""}
-                className={`checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600 ${!canSelect(bonus) ? 'opacity-40 cursor-not-allowed' : ''}`} />
-            </div>
-            <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
-              {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
-            </div>
-            <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-              <span className="font-medium" title={bonus.employee?.name || 'N/A'}>
-                {bonus.employee?.matricule || 'N/A'}{bonus.employee?.name && bonus.employee.name.split(' ')[0].length <= 12 ? ` ${bonus.employee.name.split(' ')[0]}` : ''}
-              </span>
-            </span>
-            <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-              {statusLabel(bonus)}
-            </span>
-            <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} Ar` : '••••••'}</span>
-            {bonus.bonus_type === 'mensuel' && (() => {
-              const q = weightedAvg(bonus.details?.quantitative);
-              const l = weightedAvg(bonus.details?.qualitative);
-              const totalCoeff = q.totalCoeff + l.totalCoeff;
-              const globalNote = totalCoeff > 0
-                ? ((q.note ?? 0) * q.totalCoeff + (l.note ?? 0) * l.totalCoeff) / totalCoeff
-                : null;
-              if (globalNote == null) return null;
-              return (
-                <span className="text-[9px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600"
-                  title={`Note globale pondérée — Qté : ${q.note != null ? Number(q.note).toFixed(2) : '—'}/10 (${q.totalCoeff} coeff) · Qual : ${l.note != null ? Number(l.note).toFixed(2) : '—'}/10 (${l.totalCoeff} coeff)`}>
-                  Note {Number(globalNote).toFixed(2)}/10
-                </span>
-              );
-            })()}
-            <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => navigate(`/bonuses/${bonus.id}`)} className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-blue-600" title="Voir le détail">
-                <EyeIcon className="w-3 h-3" />
-              </button>
-              {step && !bonus.was_rejected && (
-                <button className="p-1 rounded hover:bg-emerald-50 text-gray-300 hover:text-emerald-600"
-                  onClick={() => handleValidate(bonus.id, step)} title="Valider">
-                  <CheckIcon className="w-3 h-3" />
-                </button>
-              )}
-              {step && bonus.was_rejected && (
-                <button onClick={() => navigate(`/bonuses/edit/${bonus.id}`)} className="p-1 rounded hover:bg-amber-50 text-gray-300 hover:text-amber-600" title="Modifier">
-                  <EditIcon className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      }),
-    ]);
-  };
-
   const getCommonStep = useCallback(() => {
     const ids = [...selectedBonuses];
     if (ids.length === 0) return null;
@@ -490,7 +386,7 @@ const [filterMonth, setFilterMonth] = useState('');
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
           <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
@@ -555,23 +451,14 @@ const [filterMonth, setFilterMonth] = useState('');
           <option value="astreinte">Astreinte</option>
           <option value="commission">Commission</option>
         </select>
-        {/* Filtre statut : visible uniquement pour DG et DRH (les autres n'ont qu'un seul statut possible) */}
+        {/* Filtre statut : options uniques par valeur, dérivées des primes renvoyées */}
         {(user?.is_admin || user?.is_dg || user?.is_drh) && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
-            {user?.is_admin && <option value="">Tous statuts</option>}
-            {user?.is_admin && <option value="Initialisé">Initialisé</option>}
-            {user?.is_admin && <option value="En attente Directeur">En attente Directeur</option>}
-            {user?.is_admin && <option value="En attente DG">En attente DG</option>}
-            {user?.is_admin && <option value="Prime validée">Validée</option>}
-            {user?.is_admin && <option value="Prime rejetée">Rejetée</option>}
-            {user?.is_drh && <option value="">Tous statuts</option>}
-            {user?.is_drh && <option value="Prime validée">Validée</option>}
-            {user?.is_drh && <option value="Prime rejetée">Rejetée</option>}
-            {user?.is_dg && <option value="">Tous statuts</option>}
-            {user?.is_dg && <option value="En attente DG">En attente DG</option>}
-            {user?.is_dg && <option value="Prime validée">Validée</option>}
-            {user?.is_dg && <option value="Prime rejetée">Rejetée</option>}
+            <option value="">Tous statuts</option>
+            {statusOptions.map((s) => (
+              <option key={s} value={s}>{statusOptionLabel(s)}</option>
+            ))}
           </select>
         )}
         <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -697,9 +584,25 @@ const [filterMonth, setFilterMonth] = useState('');
             </div>
           </div>
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-2">
-              {renderCards(items, getValidStep)}
-            </div>
+            <BonusTable
+              bonuses={items}
+              getValidStep={getValidStep}
+              canSelect={canSelect}
+              selectedBonuses={selectedBonuses}
+              onToggleSelect={toggleSelect}
+              onSelectAll={() => selectSection(items)}
+              onClearSelection={() => deselectSection(items)}
+              seeAmounts={seeAmounts}
+              initiatorMap={initiatorMap}
+              onView={(id) => navigate(`/bonuses/${id}`)}
+              onValidate={handleValidate}
+              onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
+              badgeClass={getBadgeClass}
+              statusLabel={statusLabel}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleTableSort}
+            />
           </div>
         </div>
       )) : viewMode === 'status' ? sections.map((section) => {
@@ -720,14 +623,14 @@ const [filterMonth, setFilterMonth] = useState('');
                     e.stopPropagation();
                     selectSection(items);
                   }}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors">
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors ${section.highlight ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}>
                     Tout sélectionner
                   </button>
                   <button onClick={(e) => {
                     e.stopPropagation();
                     deselectSection(items);
                   }}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors">
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors ${section.highlight ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}>
                     Désélectionner
                   </button>
                 </div>
@@ -755,9 +658,25 @@ const [filterMonth, setFilterMonth] = useState('');
               </div>
             ) : (
               <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-2">
-                  {renderCards(visible, getValidStep)}
-                </div>
+                <BonusTable
+                  bonuses={visible}
+                  getValidStep={getValidStep}
+                  canSelect={canSelect}
+                  selectedBonuses={selectedBonuses}
+                  onToggleSelect={toggleSelect}
+                  onSelectAll={() => selectSection(visible)}
+                  onClearSelection={() => deselectSection(visible)}
+                  seeAmounts={seeAmounts}
+                  initiatorMap={initiatorMap}
+                  onView={(id) => navigate(`/bonuses/${id}`)}
+                  onValidate={handleValidate}
+                  onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
+                  badgeClass={getBadgeClass}
+                  statusLabel={statusLabel}
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onSort={handleTableSort}
+                />
                 {remaining > 0 && (
                   <button onClick={() => setSectionExpand(prev => ({ ...prev, [section.key]: !showAll }))}
                     className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">
@@ -790,9 +709,25 @@ const [filterMonth, setFilterMonth] = useState('');
             <span className="ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
           </div>
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-2">
-              {renderCards(items, getValidStep)}
-            </div>
+            <BonusTable
+              bonuses={items}
+              getValidStep={getValidStep}
+              canSelect={canSelect}
+              selectedBonuses={selectedBonuses}
+              onToggleSelect={toggleSelect}
+              onSelectAll={() => selectSection(items)}
+              onClearSelection={() => deselectSection(items)}
+              seeAmounts={seeAmounts}
+              initiatorMap={initiatorMap}
+              onView={(id) => navigate(`/bonuses/${id}`)}
+              onValidate={handleValidate}
+              onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
+              badgeClass={getBadgeClass}
+              statusLabel={statusLabel}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleTableSort}
+            />
           </div>
         </div>
       );
@@ -960,7 +895,7 @@ const [filterMonth, setFilterMonth] = useState('');
               <button onClick={() => {
                 setPaying(true)
                 markBonusesPaid({ month: payConfirm.month, year: payConfirm.year })
-                  .then(r => { toast.success(r.message); fetchBonuses(); setPayConfirm(null) })
+                  .then(r => { toast.success(r.message); fetchBonuses(queryParams); setPayConfirm(null) })
                   .catch(e => toast.error(e.response?.data?.detail || 'Erreur'))
                   .finally(() => setPaying(false))
               }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>
@@ -976,7 +911,7 @@ const [filterMonth, setFilterMonth] = useState('');
               <button onClick={() => {
                 setPaying(true)
                 markBonusesPaid({ bonus_ids: payConfirm.ids })
-                  .then(r => { toast.success(r.message); clearSelection(); fetchBonuses(); setPayConfirm(null) })
+                  .then(r => { toast.success(r.message); clearSelection(); fetchBonuses(queryParams); setPayConfirm(null) })
                   .catch(e => toast.error(e.response?.data?.detail || 'Erreur'))
                   .finally(() => setPaying(false))
               }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>

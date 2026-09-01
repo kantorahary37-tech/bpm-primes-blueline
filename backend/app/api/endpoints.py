@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from enum import Enum
+from tortoise.expressions import Q
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus
 from app.auth import get_current_user
 from app.email_service import send_bonus_notification_email
@@ -64,6 +65,45 @@ def bonus_ventilation(b):
     return montant_autres, montant_eval, descriptions
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _weighted_avg(items):
+    if not isinstance(items, list) or len(items) == 0:
+        return None
+    weighted_sum = 0.0
+    total_coeff = 0.0
+    for i in items:
+        if not isinstance(i, dict):
+            continue
+        n = i.get('note', i.get('evaluation'))
+        c = i.get('coeff', i.get('objective'))
+        try:
+            n = float(n)
+        except (TypeError, ValueError):
+            continue
+        try:
+            c = float(c) if c else 0.0
+        except (TypeError, ValueError):
+            c = 0.0
+        if c > 0:
+            weighted_sum += n * c
+            total_coeff += c
+    return (weighted_sum / total_coeff) if total_coeff > 0 else None
+
+
+def compute_global_note(b):
+    """Moyenne pondérée globale /10 pour les primes mensuelles, sinon None."""
+    if b.bonus_type != BonusType.MENSUEL:
+        return None
+    details = b.details or {}
+    q = _weighted_avg(details.get('quantitative'))
+    l = _weighted_avg(details.get('qualitative'))
+    q_coeff = sum(float(i.get('coeff', i.get('objective')) or 0) for i in (details.get('quantitative') or []) if isinstance(i, dict))
+    l_coeff = sum(float(i.get('coeff', i.get('objective')) or 0) for i in (details.get('qualitative') or []) if isinstance(i, dict))
+    total = q_coeff + l_coeff
+    if total <= 0:
+        return None
+    return ((q or 0) * q_coeff + (l or 0) * l_coeff) / total
 
 # Route POST pour créer une prime
 @router.post("/bonuses/", response_model=BonusResponse)
@@ -385,6 +425,10 @@ async def list_bonuses(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     was_rejected: Optional[bool] = None,
+    department: Optional[str] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = "start_date",
+    sort_dir: Optional[str] = "desc",
     show_paid: Optional[bool] = False,
     all_statuses: Optional[bool] = False,
     archive_mode: Optional[bool] = False,
@@ -431,7 +475,52 @@ async def list_bonuses(
     if start_date: query = query.filter(start_date__gte=start_date)
     if end_date: query = query.filter(end_date__lte=end_date)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
-    return await query
+    if department:
+        if not (user.is_admin or user.is_dg or user.is_drh) and department != user.department:
+            raise HTTPException(status_code=403, detail="Vous ne pouvez consulter que les primes de votre département")
+        query = query.filter(employee__dept_str=department)
+    if search:
+        query = query.filter(
+            Q(employee__name__icontains=search) | Q(employee__matricule__icontains=search)
+        )
+
+    dir_sign = "" if (sort_dir or "desc").lower() == "asc" else "-"
+
+    # Colonnes triables directement sur la base de données
+    db_sortable = {
+        "matricule": "employee__matricule",
+        "name": "employee__name",
+        "department": "employee__dept_str",
+        "amount": "total_amount",
+        "start_date": "start_date",
+        "end_date": "end_date",
+        "status": "status",
+        "bonus_type": "bonus_type",
+    }
+
+    if sort_by in db_sortable:
+        bonuses = await query.order_by(f"{dir_sign}{db_sortable[sort_by]}")
+    else:
+        bonuses = await query.order_by("-start_date")
+
+    # Tri « calculé » (initiateur N+1 / créateur / moyenne note) : se fait côté serveur sur le jeu renvoyé
+    if sort_by in ("initiator", "creator", "note"):
+        manager_ids = list({b.employee.manager_id for b in bonuses if b.employee}) if sort_by == "initiator" else []
+        managers = {u.id: u.name for u in await User.filter(id__in=manager_ids)} if manager_ids else {}
+
+        creator_ids = list({b.created_by_id for b in bonuses}) if sort_by == "creator" else []
+        creators = {u.id: u.name for u in await User.filter(id__in=creator_ids)} if creator_ids else {}
+
+        def key_for(b):
+            if sort_by == "initiator":
+                return managers.get(b.employee.manager_id) or ""
+            if sort_by == "creator":
+                return creators.get(b.created_by_id) or ""
+            return compute_global_note(b) or 0.0
+
+        bonuses = sorted(bonuses, key=key_for, reverse=(sort_dir or "desc").lower() != "asc")
+
+    return bonuses
 
 
 @router.get("/bonuses/export")
