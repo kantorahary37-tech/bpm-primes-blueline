@@ -144,18 +144,20 @@ const BonusTable = ({
   }, [bonuses]);
 
   const columns = useMemo(() => {
-    const baseColumns = [
+    const columns = [
       { key: 'select', label: '', sortable: false, align: 'center' },
       { key: 'matricule', label: 'Matricule', sortable: true, sortValue: (b) => b.employee?.matricule ?? '' },
       { key: 'name', label: 'Nom et Prénom', sortable: true, sortValue: (b) => b.employee?.name ?? '' },
-      { key: 'creator', label: 'Créateur', sortable: true, sortValue: (b) => initiatorMap.get(b.created_by_id) ?? '' },
-      { key: 'amount', label: 'Montant', sortable: true, align: 'right', sortValue: (b) => parseFloat(b.total_amount) ?? 0 },
       { key: 'note', label: 'Moyenne note', sortable: true, align: 'center', sortValue: (b) => { const n = formatNote(b); return n === '—' ? null : parseFloat(n); } },
-      { key: 'department', label: 'Département', sortable: true, sortValue: (b) => b.employee?.department ?? '' },
       { key: 'bonus_type', label: 'Type de prime', sortable: true, align: 'center', sortValue: (b) => b.bonus_type ?? '' },
+      ...typeCols,
+      { key: 'amount', label: 'Montant', sortable: true, align: 'right', sortValue: (b) => parseFloat(b.total_amount) ?? 0 },
+      { key: 'creator', label: 'Créateur', sortable: true, sortValue: (b) => initiatorMap.get(b.created_by_id) ?? '' },
+      { key: 'department', label: 'Département', sortable: true, sortValue: (b) => b.employee?.department ?? '' },
+      { key: 'actions', label: 'Actions', sortable: false, align: 'center' },
     ];
 
-    return [...baseColumns, ...typeCols, { key: 'actions', label: 'Actions', sortable: false, align: 'center' }];
+    return columns;
   }, [typeCols, initiatorMap]);
 
   const handleSort = (key) => {
@@ -247,14 +249,9 @@ const BonusTable = ({
                     {statusLabel(bonus)}
                   </span>
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-gray-600" title={creator}>{creator || '—'}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-blue-600 tabular-nums">
-                  {formatAr(bonus.total_amount, seeAmounts)}
-                </td>
                 <td className={`px-4 py-3 whitespace-nowrap text-center font-medium tabular-nums ${noteColor(note)}`}>
                   {note === '—' ? <span className="text-gray-300">—</span> : `${note}/10`}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-gray-600">{bonus.employee?.department || 'N/A'}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-center">
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${typeBadgeClass(bonus.bonus_type)}`}>
                     {TYPE_LABELS[bonus.bonus_type] || bonus.bonus_type || '—'}
@@ -274,6 +271,11 @@ const BonusTable = ({
                     </td>
                   );
                 })}
+                <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-blue-600 tabular-nums">
+                  {formatAr(bonus.total_amount, seeAmounts)}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-gray-600" title={creator}>{creator || '—'}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-gray-600">{bonus.employee?.department || 'N/A'}</td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => onView(bonus.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Voir le détail">

@@ -509,10 +509,10 @@ const [filterMonth, setFilterMonth] = useState('');
       {depFilter && filteredBonuses.length > 0 && (
         <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center gap-3">
           <span className="text-sm font-semibold text-blue-700">{depFilter}</span>
-          <span className="text-xs text-blue-500">{filteredBonuses.length} prime(s)</span>
-          <span className="text-sm font-bold text-blue-700 ml-auto">
+          <span className="text-sm font-bold text-blue-700">
             Total : {seeAmounts ? `${filteredBonuses.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
           </span>
+          <span className="text-xs text-blue-500">{filteredBonuses.length} prime(s)</span>
         </div>
       )}
       {filteredBonuses.length === 0 ? (
@@ -645,7 +645,10 @@ const [filterMonth, setFilterMonth] = useState('');
                   </button>
                 </div>
               )}
-              <span className={`ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full ${section.highlight ? 'bg-white text-blue-700' : 'bg-gray-300 text-gray-700'}`}>
+              <span className={`text-sm font-bold ${section.highlight ? 'text-white' : 'text-blue-600'}`}>
+                {seeAmounts ? `${items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+              </span>
+              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${section.highlight ? 'bg-white text-blue-700' : 'bg-gray-300 text-gray-700'}`}>
                 {items.length}
               </span>
             </div>
@@ -704,7 +707,10 @@ const [filterMonth, setFilterMonth] = useState('');
                 setPayConfirm({ type: 'month', month: m, year: y, monthName, count: validatedCount })
               }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Traiter ({validatedCount})</button>
             )}
-            <span className="ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
+            <span className="text-sm font-bold text-blue-600">
+              {seeAmounts ? `${items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+            </span>
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
           </div>
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
             <BonusTable
