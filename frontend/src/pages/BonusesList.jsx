@@ -560,7 +560,7 @@ const [filterMonth, setFilterMonth] = useState('');
                   setPayConfirm({ type: 'batch', ids, count: ids.length });
                 }}
                   className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm">
-                  Paiement {dept} ({items.filter(b => b.status === 'Prime validée').length})
+                  Traiter {dept} ({items.filter(b => b.status === 'Prime validée').length})
                 </button>
               )}
               {(() => {
@@ -641,7 +641,7 @@ const [filterMonth, setFilterMonth] = useState('');
                     setPayConfirm({ type: 'batch', ids: allIds, count: allIds.length });
                   }}
                     className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm">
-                    Marquer tout payé
+                    Tout traiter
                   </button>
                 </div>
               )}
@@ -702,7 +702,7 @@ const [filterMonth, setFilterMonth] = useState('');
               <button onClick={() => {
                 const [y, m] = ym.split('-')
                 setPayConfirm({ type: 'month', month: m, year: y, monthName, count: validatedCount })
-              }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Marquer payé ({validatedCount})</button>
+              }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Traiter ({validatedCount})</button>
             )}
             <span className="ml-auto text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
           </div>
@@ -758,7 +758,7 @@ const [filterMonth, setFilterMonth] = useState('');
             {user?.is_drh && (
               <button onClick={() => setPayConfirm({ type: 'batch', ids: [...selectedBonuses], count: selectedBonuses.size })}
                 className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">
-                {depFilter ? `Paiement ${depFilter}` : 'Payer'} ({selectedBonuses.size})
+                {depFilter ? `Traiter ${depFilter}` : 'Traiter'} ({selectedBonuses.size})
               </button>
             )}
             {(() => {
@@ -877,7 +877,7 @@ const [filterMonth, setFilterMonth] = useState('');
         </div>
       </Modal>
 
-      <Modal open={!!payConfirm} onClose={() => { if (!paying) setPayConfirm(null); }} title="Confirmer le paiement" size="sm">
+      <Modal open={!!payConfirm} onClose={() => { if (!paying) setPayConfirm(null); }} title="Confirmer le traitement" size="sm">
         {paying ? (
           <div className="flex items-center justify-center gap-3 py-6">
             <span className="loading loading-spinner loading-sm text-emerald-600" />
@@ -886,7 +886,7 @@ const [filterMonth, setFilterMonth] = useState('');
         ) : payConfirm?.type === 'month' ? (
           <>
             <p className="text-sm text-gray-600 mb-6">
-              Marquer toutes les primes validées de <strong>{payConfirm.monthName}</strong> comme payées ?
+              Marquer toutes les primes validées de <strong>{payConfirm.monthName}</strong> comme traitées ?
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setPayConfirm(null)} className="btn btn-sm btn-ghost">Annuler</button>
@@ -896,13 +896,13 @@ const [filterMonth, setFilterMonth] = useState('');
                   .then(r => { toast.success(r.message); fetchBonuses(queryParams); setPayConfirm(null) })
                   .catch(e => toast.error(e.response?.data?.detail || 'Erreur'))
                   .finally(() => setPaying(false))
-              }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>
+              }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, traiter</button>
             </div>
           </>
         ) : (
           <>
             <p className="text-sm text-gray-600 mb-6">
-              Marquer les <strong>{payConfirm?.count}</strong> prime(s) sélectionnée(s) comme payées ?
+              Marquer les <strong>{payConfirm?.count}</strong> prime(s) sélectionnée(s) comme traitées ?
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setPayConfirm(null)} className="btn btn-sm btn-ghost">Annuler</button>
@@ -912,7 +912,7 @@ const [filterMonth, setFilterMonth] = useState('');
                   .then(r => { toast.success(r.message); clearSelection(); fetchBonuses(queryParams); setPayConfirm(null) })
                   .catch(e => toast.error(e.response?.data?.detail || 'Erreur'))
                   .finally(() => setPaying(false))
-              }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, marquer payé</button>
+              }} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Oui, traiter</button>
             </div>
           </>
         )}

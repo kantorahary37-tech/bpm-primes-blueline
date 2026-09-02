@@ -1077,11 +1077,11 @@ async def validate_bonus(
     return {"message": "OK", "status": bonus.status}
 
 
-# Route POST pour marquer des primes comme payées
+# Route POST pour marquer des primes comme traitées
 @router.post("/bonuses/mark-paid")
 async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_current_user)):
     if not user.is_drh and not user.is_dg:
-        raise HTTPException(403, "Seul le DRH peut marquer les primes comme payées")
+        raise HTTPException(403, "Seul le DRH peut marquer les primes comme traitées")
 
     query = Bonus.filter(status=ValidationStatus.VALIDE, paid_at__isnull=True)
 
@@ -1097,7 +1097,7 @@ async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_curre
 
     bonuses = await query
     if not bonuses:
-        raise HTTPException(404, "Aucune prime validée trouvée à marquer comme payée")
+        raise HTTPException(404, "Aucune prime validée trouvée à marquer comme traitée")
 
     now = datetime.utcnow()
     for bonus in bonuses:
@@ -1107,10 +1107,10 @@ async def mark_bonuses_paid(req: MarkPaidRequest, user: User = Depends(get_curre
             bonus_id=bonus.id,
             user_id=user.id,
             action="PAIEMENT",
-            description=f"Paiement effectué par {user.name}",
+            description=f"Traitement effectué par {user.name}",
         )
 
-    return {"message": f"{len(bonuses)} prime(s) marquée(s) comme payée(s)", "count": len(bonuses)}
+    return {"message": f"{len(bonuses)} prime(s) marquée(s) comme traitée(s)", "count": len(bonuses)}
 
 @router.get("/bonuses/{bonus_id}/audit-logs", response_model=List[AuditLogResponse])
 async def get_audit_logs(bonus_id: int, user: User = Depends(get_current_user)):

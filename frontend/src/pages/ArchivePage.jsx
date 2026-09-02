@@ -186,7 +186,7 @@ const ArchivePage = () => {
 
       <div className={isDG ? '' : 'space-y-8'}>
         <BonusSection
-          label="en attente de paiement"
+          label="en attente de traitement"
           badge="Validees"
           badgeColor="bg-green-100 text-green-700"
           items={validatedUnpaid}
@@ -198,8 +198,8 @@ const ArchivePage = () => {
 
         {!isDG && (
           <BonusSection
-            label="payees"
-            badge="Payees"
+            label="traitées"
+            badge="Traitées"
             badgeColor="bg-emerald-100 text-emerald-700"
             items={validatedPaid}
             page={pagePaid}

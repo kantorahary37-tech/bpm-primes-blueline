@@ -19,11 +19,11 @@ TYPE_LABELS = {
 }
 
 # Statut bloquant → (libellé de l'étape, filtre sur le rôle responsable)
-# Uniquement les étapes Directeur, DG et DRH (paiement)
+# Uniquement les étapes Directeur, DG et DRH (traitement)
 STEPS = {
     ValidationStatus.EN_ATTENTE_DIRECTEUR: ("Validation Directeur", {"is_directeur": True}, True),
     ValidationStatus.EN_ATTENTE_DG: ("Validation DG", {"is_dg": True}, False),
-    ValidationStatus.VALIDE: ("Paiement DRH", {"is_drh": True}, False),
+    ValidationStatus.VALIDE: ("Traitement DRH", {"is_drh": True}, False),
 }
 
 

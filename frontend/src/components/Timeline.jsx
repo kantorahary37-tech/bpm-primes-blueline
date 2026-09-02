@@ -6,7 +6,7 @@ const iconMap = {
   REJETER: { icon: XCircleIcon, bg: 'bg-red-100 text-red-600', label: 'Rejet' },
   AUTOMATIC: { icon: CheckIcon, bg: 'bg-slate-100 text-slate-400', label: 'Clôture' },
   MODIFICATION: { icon: EditIcon, bg: 'bg-amber-100 text-amber-600', label: 'Modification' },
-  PAIEMENT: { icon: CheckIcon, bg: 'bg-emerald-100 text-emerald-600', label: 'Paiement' },
+  PAIEMENT: { icon: CheckIcon, bg: 'bg-emerald-100 text-emerald-600', label: 'Traitement' },
 }
 
 const fieldLabels = {
