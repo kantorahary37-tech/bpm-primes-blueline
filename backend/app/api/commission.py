@@ -89,6 +89,26 @@ def parse_ventes(value):
     return int(round(v))
 
 
+def parse_product_qty(value):
+    """
+    Quantité vendue depuis une cellule produit du CSV 4D.
+    Les cellules produits ont le format '<montant>(<quantité>)[(x2)]'
+    (ex : '220000(11)(x2)' → 11). Si aucun '(n)' n'est présent, on
+    revient sur un simple entier comme 'parse_ventes'.
+    """
+    if value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return int(max(0, round(float(value))))
+    s = str(value).strip().replace('\u00a0', '')
+    if s == '':
+        return 0
+    m = re.search(r'\((\d+)\)', s)
+    if m:
+        return int(m.group(1))
+    return parse_ventes(s)
+
+
 async def load_active_configs():
     """
     Charge le barème actif : nom normalisé → {is_gpv: config}.
@@ -126,8 +146,15 @@ async def parse_csv_4d(content: bytes):
 
 async def compute_commission_rows(content: bytes, by_name: dict):
     """
-    Lit le CSV, fait correspondre les colonnes aux produits du barème et les
-    matricules aux employés, puis calcule la commission par employé/produit.
+    Lit le CSV 4D et calcule le total de commission par employé.
+
+    Nouveau modèle (2026) :
+    - Le montant est lu **directement** dans la colonne « total montant » du fichier.
+    - Les colonnes produits (4G, Airfiber, ...) situées AVANT « total montant » sont
+      conservées comme informations (nombre de ventes) mais ne servent plus au calcul.
+    - Les colonnes situées APRÈS « total montant » (dates/journées) sont ignorées.
+    - Plus aucun calcul par barème (PDV, Taux, Objectif).
+
     Retourne : employees (dict matricule → {employee, lines, total}),
                ignored_employees, ignored_columns, matched_products.
     """
@@ -136,10 +163,9 @@ async def compute_commission_rows(content: bytes, by_name: dict):
     # Indices des colonnes spéciales
     nom_idx = None
     matricule_idx = None
-    pdv_idx = None
-    product_idxs = {}
+    total_idx = None
+    product_idxs = []
     ignored_columns = []
-    matched_products = []
 
     for i, col in enumerate(header):
         norm = normalize_product_name(col)
@@ -149,23 +175,22 @@ async def compute_commission_rows(content: bytes, by_name: dict):
         if norm in ('matricule', 'matricule employe', 'matricule employé', 'mat'):
             matricule_idx = i
             continue
-        if norm in ('point de vente', 'point de vent', 'pdv', 'gpv', 'type de point de vente',
-                    'type pdv', 'categorie point de vente', 'categorie pdv', 'point de vente (gpv)'):
-            pdv_idx = i
+        if norm in ('total montant', 'total', 'montant total', 'montant'):
+            total_idx = i
             continue
         if norm == '':
             continue
-        if norm in by_name:
-            if norm not in product_idxs:
-                product_idxs[norm] = []
-            product_idxs[norm].append(i)
-            if norm not in matched_products:
-                matched_products.append(norm)
+        # Colonnes produits AVANT « total montant » : conservées comme informations
+        if total_idx is None:
+            product_idxs.append(i)
         else:
+            # Colonnes après « total montant » (dates/journées) : ignorées
             ignored_columns.append(col)
 
     if matricule_idx is None:
         raise HTTPException(400, "Colonne 'Matricule' introuvable dans le fichier CSV.")
+    if total_idx is None:
+        raise HTTPException(400, "Colonne 'total montant' introuvable dans le fichier CSV.")
 
     # Tous les employés en base, indexés par matricule exact ET par matricule normalisé
     # (tolère les zéros initiaux : la base stocke 01814, le CSV 4D fournit 1814).
@@ -177,7 +202,7 @@ async def compute_commission_rows(content: bytes, by_name: dict):
             employees_db.setdefault(norm, e)
 
     # Agréger par employé (gère les matricules en double dans le CSV)
-    employees = {}  # matricule → {employee, is_gpv, lines: {product_key: CommissionLine}, total}
+    employees = {}  # matricule → {employee, lines: {product_key: line}, total}
     ignored_employees = []
 
     for row in data_rows:
@@ -193,56 +218,42 @@ async def compute_commission_rows(content: bytes, by_name: dict):
             continue
         # Utilise le matricule officiel de la base pour l'agrégation et l'affichage
         matricule = emp.matricule
-        is_gpv = parse_pdv(row[pdv_idx]) if pdv_idx is not None and pdv_idx < len(row) else False
 
         if matricule not in employees:
             employees[matricule] = {
                 'employee': emp,
-                'is_gpv': is_gpv,
                 'lines': {},
                 'total': 0.0,
             }
         entry = employees[matricule]
-        entry['is_gpv'] = entry['is_gpv'] or is_gpv
 
-        for norm, idxs in product_idxs.items():
-            # Barème selon le type de point de vente : GPV → objectif élevé, sinon objectif standard
-            configs = by_name.get(norm, {})
-            config = configs.get(is_gpv)
-            if config is None:
-                # Barème exact absent (ex : GPV non configuré) → repli silencieux sur l'autre barème,
-                # signalé dans l'aperçu pour éviter un calcul avec le mauvais objectif.
-                entry['barème_fallback'] = True
-                config = configs.get(not is_gpv)
-            if config is None:
+        # Montant total lu directement dans la colonne « total montant »
+        raw_total = row[total_idx] if total_idx < len(row) else None
+        total = parse_ventes(raw_total)
+        if total > 0:
+            entry['total'] = float(total)
+
+        # Colonnes produits (avant le total) : conservées à titre informatif
+        for idx in product_idxs:
+            column_name = normalize_product_name(header[idx]) if idx < len(header) else ''
+            if not column_name:
                 continue
-            ventes = 0
-            for idx in idxs:
-                raw = row[idx] if idx < len(row) else None
-                ventes += parse_ventes(raw)
+            raw = row[idx] if idx < len(row) else None
+            ventes = parse_product_qty(raw)
             if ventes <= 0:
                 continue
-            if norm not in entry['lines']:
-                entry['lines'][norm] = {
-                    'designation': config.product_name,
+            if column_name not in entry['lines']:
+                entry['lines'][column_name] = {
+                    'designation': header[idx],
                     'nombre': 0,
-                    'taux': float(config.rate),
-                    'objectif': int(config.objectif),
+                    'taux': None,
+                    'objectif': None,
                     'doublé': False,
                     'montant': 0.0,
                 }
-            line = entry['lines'][norm]
-            line['nombre'] += ventes
-            taux = float(config.rate)
-            objectif = int(config.objectif)
-            if objectif > 0 and line['nombre'] >= objectif:
-                line['montant'] = (line['nombre'] * taux) * 2
-                line['doublé'] = True
-            else:
-                line['montant'] = line['nombre'] * taux
-            entry['total'] = sum(l['montant'] for l in entry['lines'].values())
+            entry['lines'][column_name]['nombre'] += ventes
 
-    return employees, ignored_employees, ignored_columns, matched_products
+    return employees, ignored_employees, ignored_columns, [h for i, h in enumerate(header) if i in product_idxs]
 
 
 async def build_preview(employees, ignored_employees, ignored_columns, matched_products, start_date, end_date):
@@ -259,26 +270,26 @@ async def build_preview(employees, ignored_employees, ignored_columns, matched_p
             CommissionLine(
                 designation=l['designation'],
                 nombre=l['nombre'],
-                taux=l['taux'],
-                objectif=l['objectif'],
+                taux=0.0,
+                objectif=0,
                 doublé=l['doublé'],
                 montant=round(l['montant'], 2),
             )
-            for l in sorted(entry['lines'].values(), key=lambda x: -x['montant'])
+            for l in sorted(entry['lines'].values(), key=lambda x: -x['nombre'])
         ]
         preview_employees.append(CommissionEmployeePreview(
             employee_id=emp.id,
             matricule=emp.matricule,
             name=emp.name,
             department=emp.dept_str or '',
-            is_gpv=bool(entry.get('is_gpv')),
-            barème_fallback=bool(entry.get('barème_fallback')),
+            is_gpv=False,
+            barème_fallback=False,
             total=total,
             lines=lines,
         ))
         total_amount += total
 
-    preview_employees.sort(key=lambda e: -e.total)
+    preview_employees.sort(key=lambda e: e.matricule)
 
     return CommissionPreviewResponse(
         period={'start_date': start_date.isoformat(), 'end_date': end_date.isoformat()},
@@ -320,12 +331,12 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
             {
                 'designation': l['designation'],
                 'nombre': l['nombre'],
-                'taux': l['taux'],
-                'objectif': l['objectif'],
+                'taux': 0,
+                'objectif': 0,
                 'doublé': l['doublé'],
                 'montant': round(l['montant'], 2),
             }
-            for l in sorted(entry['lines'].values(), key=lambda x: -x['montant'])
+            for l in sorted(entry['lines'].values(), key=lambda x: -x['nombre'])
         ]
 
         bonus = await Bonus.create(
@@ -342,7 +353,6 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
                 'total': total,
                 'source': 'csv_import',
                 'imported': True,
-                'is_gpv': bool(entry.get('is_gpv')),
             },
         )
         created.append({
@@ -350,7 +360,6 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
             'employee_id': emp.id,
             'matricule': emp.matricule,
             'name': emp.name,
-            'is_gpv': bool(entry.get('is_gpv')),
             'total': total,
         })
 
@@ -447,12 +456,8 @@ async def delete_commission_config(config_id: int, user: User = Depends(get_curr
 # ---------------------------------------------------------------------------
 
 async def _load_csv_and_compute(file: UploadFile):
-    by_name = await load_active_configs()
-    if not by_name:
-        raise HTTPException(400, "Aucun produit actif dans le barème des commissions. "
-                                 "Veuillez d'abord configurer le barème (page Barème commission).")
     content = await file.read()
-    return await compute_commission_rows(content, by_name)
+    return await compute_commission_rows(content, {})
 
 
 @router.post("/bonuses/commission/preview", response_model=CommissionPreviewResponse)

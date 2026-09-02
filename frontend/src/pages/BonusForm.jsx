@@ -1019,10 +1019,6 @@ export default function BonusForm() {
                     <tr className="border-b border-gray-300">
                       <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
                       <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
-                      <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Taux (Ar)</th>
-                      <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Objectif</th>
-                      <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Doublé</th>
-                      <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1030,16 +1026,12 @@ export default function BonusForm() {
                       <tr key={i} className="border-b border-gray-200">
                         <td className="py-1.5 px-2 text-gray-900">{sale.designation || '—'}</td>
                         <td className="py-1.5 px-2 text-center">{sale.nombre ?? 0}</td>
-                        <td className="py-1.5 px-2 text-right">{fmtAr(sale.taux)}</td>
-                        <td className="py-1.5 px-2 text-center">{sale.objectif ?? '—'}</td>
-                        <td className="py-1.5 px-2 text-center">{sale.doublé ? 'Oui' : 'Non'}</td>
-                        <td className="py-1.5 px-2 text-right font-medium">{fmtAr(sale.montant)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold border-t-2 border-brand-200">
-                      <td colSpan={5} className="py-2 px-2 text-right">Total commission</td>
+                      <td colSpan={1} className="py-2 px-2 text-right">Total commission</td>
                       <td className="py-2 px-2 text-right text-brand-600">{fmtAr(editTotal)} Ar</td>
                     </tr>
                   </tfoot>
@@ -1095,7 +1087,7 @@ export default function BonusForm() {
               </button>
             </div>
             <p className="text-[11px] text-base-content/40 mt-2">
-              Colonnes attendues : Nom ; Matricule ; Point de vente ; &lt;produits&gt;. La colonne « Point de vente » (Grand/Petit) sélectionne le bon objectif du barème. Les noms de produits doivent correspondre au barème (page Barème commission). Employés ou produits non trouvés : ignorés.
+              Colonnes attendues : Nom ; Matricule ; &lt;produits&gt; ; total montant. Le montant de chaque prime est lu directement dans la colonne « total montant ». Les colonnes produits (avant le total) sont conservées à titre informatif (nombre de ventes). Les colonnes situées après « total montant » sont ignorées. Employés non trouvés : ignorés.
             </p>
           </div>
 
@@ -1124,13 +1116,8 @@ export default function BonusForm() {
                       <tr className="border-b border-gray-300">
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Matricule</th>
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Employé</th>
-                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">PDV</th>
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
                         <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
-                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Taux (Ar)</th>
-                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Objectif</th>
-                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Doublé</th>
-                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1145,26 +1132,14 @@ export default function BonusForm() {
                                     {emp.name}
                                     <span className="block text-[11px] text-gray-400">{emp.department}</span>
                                   </td>
-                                  <td className="py-1.5 px-2 text-center align-top" rowSpan={emp.lines.length}>
-                                    {emp.is_gpv
-                                      ? <span className="badge badge-primary badge-sm border-0">GPV</span>
-                                      : <span className="badge badge-ghost badge-sm text-gray-500">Petit</span>}
-                                    {emp.barème_fallback && (
-                                      <span className="block mt-1 text-[10px] text-amber-600 font-medium">⚠ barème exact absent</span>
-                                    )}
-                                  </td>
                                 </>
                               )}
                               <td className="py-1.5 px-2 text-gray-800">{line.designation}</td>
                               <td className="py-1.5 px-2 text-center">{line.nombre}</td>
-                              <td className="py-1.5 px-2 text-right">{fmtAr(line.taux)}</td>
-                              <td className="py-1.5 px-2 text-center">{line.objectif}</td>
-                              <td className="py-1.5 px-2 text-center">{line.doublé ? <span className="badge badge-success badge-sm">Oui</span> : '—'}</td>
-                              <td className="py-1.5 px-2 text-right font-medium">{fmtAr(line.montant)}</td>
                             </tr>
                           ))}
                           <tr className="bg-gray-50 border-b border-gray-200">
-                            <td colSpan={8} className="py-1.5 px-2 text-right text-gray-700 font-medium">Total {emp.name}</td>
+                            <td colSpan={3} className="py-1.5 px-2 text-right text-gray-700 font-medium">Total {emp.name}</td>
                             <td className="py-1.5 px-2 text-right text-brand-600 font-semibold">{fmtAr(emp.total)}</td>
                           </tr>
                         </Fragment>
@@ -1172,7 +1147,7 @@ export default function BonusForm() {
                     </tbody>
                     <tfoot>
                       <tr className="font-semibold border-t-2 border-brand-200">
-                        <td colSpan={8} className="py-2 px-2 text-right">Total général</td>
+                        <td colSpan={3} className="py-2 px-2 text-right">Total général</td>
                         <td className="py-2 px-2 text-right text-brand-600">{fmtAr(totalAmount)} Ar</td>
                       </tr>
                     </tfoot>

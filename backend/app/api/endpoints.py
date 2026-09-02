@@ -876,7 +876,7 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
         "TypePrime": lambda b: b.bonus_type.value,
         "DateDebut": lambda b: b.start_date.isoformat(),
         "DateFin": lambda b: b.end_date.isoformat(),
-        "Montant": lambda b: str(int(b.total_amount)),
+        "MontantTotal": lambda b: str(int(b.total_amount)),
         "Statut": lambda b: b.status.value,
         "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
         "CreePar": lambda b: b.created_by.name if b.created_by else '',
