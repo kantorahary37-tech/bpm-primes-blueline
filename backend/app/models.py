@@ -29,6 +29,22 @@ class ValidationStatus(str, Enum):
     VALIDE = "Prime validée"
     REJETE = "Prime rejetée"
 
+# Modèle Devise / Profil (table "currency") — liste dynamique gérée par Admin/DG/DRH
+class Currency(models.Model):
+    # Code devise (ex: Ar, EUR, USD)
+    code = fields.CharField(max_length=10, pk=True)
+    # Symbole d'affichage (ex: Ar, €, $)
+    symbol = fields.CharField(max_length=10, default='')
+    # Libellé lisible (ex: Ariary, Euro)
+    label = fields.CharField(max_length=50, default='')
+    # Devise système (Ar/EUR) : ne peut pas être supprimée
+    is_system = fields.BooleanField(default=False)
+    # Visible dans les listes
+    active = fields.BooleanField(default=True)
+
+    def __str__(self):
+        return self.code
+
 # Modèle Département (table "department")
 class Department(models.Model):
     id = fields.IntField(pk=True)
@@ -88,9 +104,11 @@ class Employee(models.Model):
     dept = fields.ForeignKeyField('models.Department', related_name='employees', source_field='department_id')
     # Relation vers le manager (User) : un manager a plusieurs employés
     manager = fields.ForeignKeyField('models.User', related_name='employees')
-    # Taux astreinte personnalisé (Ar/semaine), null = taux par défaut
+    # Devise / profil de l'employé (Ar par défaut, EUR pour les employés étrangers, etc.)
+    currency = fields.CharField(max_length=10, default='Ar', index=True)
+    # Taux astreinte personnalisé (unité = devise de l'employé/semaine), null = taux par défaut
     astreinte_rate = fields.IntField(null=True, default=None)
-    # Taux prime mensuelle personnalisé (Ar/mois), null = taux par défaut (plafond département)
+    # Taux prime mensuelle personnalisé (unité = devise de l'employé/mois), null = taux par défaut (plafond département)
     mensuel_rate = fields.IntField(null=True, default=None)
     # Si l'employé est actif (visible dans les listes)
     is_active = fields.BooleanField(default=True)
@@ -206,7 +224,9 @@ class PrimeMax(models.Model):
     @property
     def department(self):
         return self.dept_str
-    # Montant maximum de la prime
+    # Devise du plafond (Ar par défaut, EUR pour les employés étrangers)
+    currency = fields.CharField(max_length=10, default='Ar', index=True)
+    # Montant maximum de la prime (dans la devise du plafond)
     amount = fields.DecimalField(max_digits=15, decimal_places=2)
     # Utilisateur ayant défini le montant (optionnel)
     set_by = fields.ForeignKeyField('models.User', null=True)

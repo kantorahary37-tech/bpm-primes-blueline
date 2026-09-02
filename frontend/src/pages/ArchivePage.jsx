@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
+import { useCurrencies } from '../contexts/CurrenciesContext';
 import { getBonuses } from '../services/api';
 import { ArrowLeftIcon, ChevronLeftIcon, DownloadIcon } from '../components/Icons';
 
@@ -22,7 +23,7 @@ const typeColor = (t) => {
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
-function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPages, seeAmounts }) {
+function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPages, seeAmounts, symbolFor }) {
   const deptGroups = (() => {
     const groups = {};
     items.forEach(b => {
@@ -90,7 +91,7 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
                               <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
                                 <span className="font-medium">{b.employee?.name || 'N/A'}</span>
                               </span>
-                              <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${b.total_amount.toLocaleString('fr-FR')} Ar` : '••••••'}</span>
+                              <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${b.total_amount.toLocaleString('fr-FR')} ${symbolFor(b.employee?.currency)}` : '••••••'}</span>
                             </Link>
                           ))}
                         </div>
@@ -124,6 +125,7 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
 const ArchivePage = () => {
   const { user } = useAuth();
   const { canSeeAmounts } = useSystemConfig();
+  const { symbolFor } = useCurrencies();
   const seeAmounts = canSeeAmounts(user);
   const [validatedPaid, setValidatedPaid] = useState([]);
   const [validatedUnpaid, setValidatedUnpaid] = useState([]);
@@ -194,6 +196,7 @@ const ArchivePage = () => {
           setPage={setPageUnpaid}
           totalPages={totalUnpaidPages}
           seeAmounts={seeAmounts}
+          symbolFor={symbolFor}
         />
 
         {!isDG && (
@@ -206,6 +209,7 @@ const ArchivePage = () => {
             setPage={setPagePaid}
             totalPages={totalPaidPages}
             seeAmounts={seeAmounts}
+            symbolFor={symbolFor}
           />
         )}
       </div>

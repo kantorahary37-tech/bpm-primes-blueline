@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getPrimeMax, createPrimeMax, updatePrimeMax, deletePrimeMax, getEmployees, updateEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
+import { useCurrencies } from '../contexts/CurrenciesContext';
 import { MoonIcon, CalendarIcon, CheckIcon, XCircleIcon, LockIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 
@@ -22,8 +23,10 @@ const PlafondsPage = () => {
   const { canSeeAmounts } = useSystemConfig();
   const seeAmounts = canSeeAmounts(user);
   const showPlafond = seeAmounts && !user?.is_validator_n1;
+  const { currencies, symbolFor } = useCurrencies();
   const [plafonds, setPlafonds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currencyFilter, setCurrencyFilter] = useState('Ar');
   const [astrEmployees, setAstrEmployees] = useState([]);
   const [showRateModal, setShowRateModal] = useState(false);
   const [rateModalDept, setRateModalDept] = useState('');
@@ -97,12 +100,12 @@ const PlafondsPage = () => {
   const handleCellSave = async (department, type) => {
     const amount = parseFloat(editValue);
     if (isNaN(amount) || amount <= 0) { setEditingCell(null); return; }
-    const existing = plafonds.find(p => p.department === department && p.bonus_type === type);
+    const existing = plafonds.find(p => p.department === department && p.bonus_type === type && p.currency === currencyFilter);
     try {
       if (existing) {
-        await updatePrimeMax(existing.id, { department, bonus_type: type, amount });
+        await updatePrimeMax(existing.id, { department, bonus_type: type, currency: currencyFilter, amount });
       } else {
-        await createPrimeMax({ department, bonus_type: type, amount });
+        await createPrimeMax({ department, bonus_type: type, currency: currencyFilter, amount });
       }
       fetchPlafonds();
     } catch (err) {
@@ -112,7 +115,7 @@ const PlafondsPage = () => {
   };
 
   const openCellEdit = (department, type) => {
-    const plafond = plafonds.find(p => p.department === department && p.bonus_type === type);
+    const plafond = plafonds.find(p => p.department === department && p.bonus_type === type && p.currency === currencyFilter);
     setEditingCell({ department, type });
     setEditValue(plafond ? parseFloat(plafond.amount).toString() : '');
   };
@@ -193,6 +196,16 @@ const PlafondsPage = () => {
           <div className="px-4 py-2 flex items-center gap-2 border-b bg-gray-50 text-gray-700 border-gray-200">
             <span className="font-semibold text-sm">Tous les plafonds</span>
             <span className="text-xs font-normal opacity-60">— {departments.length} départements</span>
+            <div className="ml-auto flex items-center gap-1">
+              <span className="text-xs text-gray-400">Devise :</span>
+              {currencies.map(c => (
+                <button key={c.code}
+                  onClick={() => setCurrencyFilter(c.code)}
+                  className={`text-xs font-medium px-2 py-1 rounded-md transition-colors ${currencyFilter === c.code ? 'bg-violet-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-violet-50'}`}>
+                  {c.symbol || c.code}
+                </button>
+              ))}
+            </div>
           </div>
           <table className="table table-sm table-zebra w-full">
             <thead>
@@ -210,7 +223,7 @@ const PlafondsPage = () => {
                   <tr key={dept} className={!canEditDept ? 'opacity-50' : 'hover'}>
                     <td className="font-medium text-gray-900">{dept}</td>
                     {ALL_TYPES.map(type => {
-                      const plafond = plafonds.find(p => p.department === dept && p.bonus_type === type.value);
+                      const plafond = plafonds.find(p => p.department === dept && p.bonus_type === type.value && p.currency === currencyFilter);
                       const isEditing = editingCell?.department === dept && editingCell?.type === type.value;
                       const key = `${dept}-${type.value}`;
                       return (
@@ -230,7 +243,7 @@ const PlafondsPage = () => {
                               <span onClick={() => { if (canEditDept) openCellEdit(dept, type.value); }}
                                 className={`${canEditDept ? 'cursor-pointer hover:bg-violet-50 px-1.5 py-0.5 rounded' : ''} inline-block transition-colors`}>
                                 {plafond ? (
-                                  <span className="font-medium text-sm">{showPlafond ? parseFloat(plafond.amount).toLocaleString('fr-FR') : '••••••'}</span>
+                                  <span className="font-medium text-sm">{showPlafond ? `${parseFloat(plafond.amount).toLocaleString('fr-FR')} ${symbolFor(plafond.currency)}` : '••••••'}</span>
                                 ) : (
                                   <span className="text-gray-200 italic text-sm">—</span>
                                 )}
@@ -277,7 +290,7 @@ const PlafondsPage = () => {
                       <td className="text-sm text-gray-500">
                         {specials.length === 0
                           ? <span className="text-gray-400 italic">Aucun</span>
-                          : specials.map(e => `${e.name} (${e.astreinte_rate.toLocaleString('fr-FR')} Ar)`).join(', ')
+                          : specials.map(e => `${e.name} (${e.astreinte_rate.toLocaleString('fr-FR')} ${symbolFor(e.currency)})`).join(', ')
                         }
                       </td>
                       <td>
@@ -319,7 +332,7 @@ const PlafondsPage = () => {
                       <td className="text-sm text-gray-500">
                         {specials.length === 0
                           ? <span className="text-gray-400 italic">Aucun</span>
-                          : specials.map(e => `${e.name} (${e.mensuel_rate.toLocaleString('fr-FR')} Ar)`).join(', ')
+                          : specials.map(e => `${e.name} (${e.mensuel_rate.toLocaleString('fr-FR')} ${symbolFor(e.currency)})`).join(', ')
                         }
                       </td>
                       <td>
@@ -377,7 +390,7 @@ const PlafondsPage = () => {
                   {val === '' && emp.astreinte_rate != null &&
                     <span className="text-xs text-red-400 w-16 text-right">effacé</span>}
                   {hasVal &&
-                    <span className="text-xs text-violet-600 w-16 text-right">{parseInt(val).toLocaleString('fr-FR')} Ar</span>}
+                    <span className="text-xs text-violet-600 w-16 text-right">{parseInt(val).toLocaleString('fr-FR')} {symbolFor(emp.currency)}</span>}
                 </div>
               );
             })}
@@ -431,7 +444,7 @@ const PlafondsPage = () => {
                   {val === '' && emp.mensuel_rate != null &&
                     <span className="text-xs text-red-400 w-16 text-right">effacé</span>}
                   {hasVal &&
-                    <span className="text-xs text-amber-600 w-16 text-right">{parseInt(val).toLocaleString('fr-FR')} Ar</span>}
+                    <span className="text-xs text-amber-600 w-16 text-right">{parseInt(val).toLocaleString('fr-FR')} {symbolFor(emp.currency)}</span>}
                 </div>
               );
             })}

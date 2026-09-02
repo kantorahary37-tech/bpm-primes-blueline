@@ -121,10 +121,11 @@ export const batchValidateBonuses = async (bonusIds, action, step, motif_rejet =
   return data;
 };
 
-export const getPrimeMax = async (department = null, bonusType = null) => {
+export const getPrimeMax = async (department = null, bonusType = null, currency = null) => {
   const params = {};
   if (department) params.department = department;
   if (bonusType) params.bonus_type = bonusType;
+  if (currency) params.currency = currency;
   const { data } = await api.get('/primemax/', { params });
   return data;
 };
@@ -333,6 +334,27 @@ export const updateSystemConfig = async (key, value) => {
 
 export const bulkUpdateSystemConfig = async (settings) => {
   const { data } = await api.post('/admin/system-config/bulk', { settings });
+  return data;
+};
+
+// --- Devises / Profils ---
+export const getCurrencies = async (activeOnly = true) => {
+  const { data } = await api.get('/currencies/', { params: { active_only: activeOnly } });
+  return data;
+};
+
+export const createCurrency = async (currencyData) => {
+  const { data } = await api.post('/currencies/', currencyData);
+  return data;
+};
+
+export const updateCurrency = async (code, currencyData) => {
+  const { data } = await api.put(`/currencies/${code}`, currencyData);
+  return data;
+};
+
+export const deleteCurrency = async (code) => {
+  const { data } = await api.delete(`/currencies/${code}`);
   return data;
 };
 

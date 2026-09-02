@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
+import { useCurrencies } from '../contexts/CurrenciesContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import Modal from '../components/Modal'
 import SftpFilePicker from '../components/SftpFilePicker'
@@ -59,8 +60,8 @@ const BONUS_TYPE_DEPARTMENTS = {
 export default function BonusForm() {
   const { user: connectedUser } = useAuth()
   const { canSeeAmounts } = useSystemConfig()
+  const { symbolFor } = useCurrencies()
   const seeAmounts = canSeeAmounts(connectedUser)
-  const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} Ar` : '••••••'
   const showPrimeMax = seeAmounts && !connectedUser?.is_validator_n1
   const { type, id } = useParams()
   const navigate = useNavigate()
@@ -98,6 +99,9 @@ export default function BonusForm() {
 
   const [employees, setEmployees] = useState([])
   const [selectedEmp, setSelectedEmp] = useState(null)
+  const formCurrency = symbolFor(selectedEmp?.currency)
+  const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} Ar` : '••••••'
+  const maskForm = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} ${formCurrency}` : '••••••'
 
   const [employee, setEmployee] = useState({
     department: '', service: '', name: '', function: '', matricule: '',
@@ -343,10 +347,11 @@ export default function BonusForm() {
 
   useEffect(() => {
     if (!selectedEmp || !editType) return
+    const empCurrency = selectedEmp.currency || 'Ar'
     getPrimeMax(selectedEmp.department, editType).then(data => {
-      const deptMax = Array.isArray(data) && data.length > 0 && data[0].amount != null
-        ? parseFloat(data[0].amount)
-        : 150000
+      const list = Array.isArray(data) ? data : []
+      const match = list.find(p => p.currency === empCurrency) || list.find(p => !p.currency || p.currency === 'Ar')
+      const deptMax = match && match.amount != null ? parseFloat(match.amount) : 150000
       const emp = employees.find(e => e.id === selectedEmp.id)
       const empMax = editType === 'mensuel' ? (emp?.mensuel_rate ?? null) : null
       setParams(p => ({ ...p, maxPrime: empMax ?? deptMax }))
@@ -975,7 +980,7 @@ export default function BonusForm() {
             </div>
           ) : editType !== 'commission' && (
             <div>
-              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime maximum (Ar)</label>
+              <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime maximum ({formCurrency})</label>
               {showPrimeMax ? (
                 <input type="number" value={params.maxPrime} readOnly
                   className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60 cursor-not-allowed" />
@@ -1474,7 +1479,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Quantitative</h2>
-            <span className="text-xs text-gray-600">{maskAr(totalQuantiValue, { minimumFractionDigits: 2 })}</span>
+            <span className="text-xs text-gray-600">{maskForm(totalQuantiValue, { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1484,7 +1489,7 @@ export default function BonusForm() {
                   <th className="text-left py-2 px-2 font-medium text-gray-700">Description/Obs</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-700">Coefficient</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-700">Note /10</th>
-                  <th className="text-right py-2 px-2 font-medium text-gray-700">Montant (Ar)</th>
+                  <th className="text-right py-2 px-2 font-medium text-gray-700">Montant ({formCurrency})</th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
@@ -1508,7 +1513,7 @@ export default function BonusForm() {
                           onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'note', e.target.value, 'quanti')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
-                    <td className="py-2 px-2 text-right font-medium">{seeAmounts ? item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
+                    <td className="py-2 px-2 text-right font-medium">{seeAmounts ? `${item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${formCurrency}` : '••••••'}</td>
                     <td className="py-2 px-2 text-center">
                       <button type="button" onClick={() => removeEvalItem(quantitative, setQuantitative, i)}
                         className="text-red-400 hover:text-red-600 text-lg leading-none">&minus;</button>
@@ -1518,7 +1523,7 @@ export default function BonusForm() {
                 <tr className="font-semibold border-t-2 border-gray-400">
                   <td colSpan="3" className="py-2 px-2 text-right">Total Quantitatif</td>
                   <td className="py-2 px-2 text-center font-medium">{totalQuantiCoeff.toFixed(1)}</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{seeAmounts ? totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{seeAmounts ? `${totalQuantiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${formCurrency}` : '••••••'}</td>
                   <td></td>
                 </tr>
               </tbody>
@@ -1572,7 +1577,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base-content text-sm">Évaluation Qualitative</h2>
-            <span className="text-xs text-gray-600">{maskAr(totalQualiValue, { minimumFractionDigits: 2 })}</span>
+            <span className="text-xs text-gray-600">{maskForm(totalQualiValue, { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1582,7 +1587,7 @@ export default function BonusForm() {
                   <th className="text-left py-2 px-2 font-medium text-gray-700">Description/Obs</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-700">Coefficient</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-700">Note /10</th>
-                  <th className="text-right py-2 px-2 font-medium text-gray-700">Montant (Ar)</th>
+                  <th className="text-right py-2 px-2 font-medium text-gray-700">Montant ({formCurrency})</th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
@@ -1606,7 +1611,7 @@ export default function BonusForm() {
                           onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'note', e.target.value, 'quali')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
-                    <td className="py-2 px-2 text-right font-medium">{seeAmounts ? item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
+                    <td className="py-2 px-2 text-right font-medium">{seeAmounts ? `${item.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${formCurrency}` : '••••••'}</td>
                     <td className="py-2 px-2 text-center">
                       <button type="button" onClick={() => removeEvalItem(qualitative, setQualitative, i)}
                         className="text-red-400 hover:text-red-600 text-lg leading-none">&minus;</button>
@@ -1616,7 +1621,7 @@ export default function BonusForm() {
                 <tr className="font-semibold border-t-2 border-gray-400">
                   <td colSpan="3" className="py-2 px-2 text-right">Total Qualitatif</td>
                   <td className="py-2 px-2 text-center font-medium">{totalQualiCoeff.toFixed(1)}</td>
-                  <td className="py-2 px-2 text-right text-brand-600">{seeAmounts ? totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••'}</td>
+                  <td className="py-2 px-2 text-right text-brand-600">{seeAmounts ? `${totalQualiValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${formCurrency}` : '••••••'}</td>
                   <td></td>
                 </tr>
               </tbody>
@@ -1693,7 +1698,7 @@ export default function BonusForm() {
               <div className="flex-1">
                 <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Quantitatif</span>
-                  <span>{maskAr(totalQuantiValue, { minimumFractionDigits: 2 })}</span>
+                  <span>{maskForm(totalQuantiValue, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
@@ -1703,7 +1708,7 @@ export default function BonusForm() {
               <div className="flex-1">
                 <div className="flex justify-between text-[11px] text-gray-600">
                   <span>Qualitatif</span>
-                  <span>{maskAr(totalQualiValue, { minimumFractionDigits: 2 })}</span>
+                  <span>{maskForm(totalQualiValue, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full transition-all duration-300 bg-violet-500"
@@ -1714,8 +1719,8 @@ export default function BonusForm() {
 
             <div className="border-t border-gray-300 pt-3 mt-3">
               <div className="flex items-center justify-between text-[11px] text-gray-600">
-                <span>Total évaluation (quanti + quali) <span className="text-gray-400">/ {showPrimeMax ? `${parseFloat(params.maxPrime || 0).toLocaleString('fr-FR')} Ar` : '••••••'}</span></span>
-                <span>{maskAr(totalValue, { minimumFractionDigits: 2 })}</span>
+                <span>Total évaluation (quanti + quali) <span className="text-gray-400">/ {showPrimeMax ? `${parseFloat(params.maxPrime || 0).toLocaleString('fr-FR')} ${formCurrency}` : '••••••'}</span></span>
+                <span>{maskForm(totalValue, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                 <div className="h-full rounded-full transition-all duration-300 bg-blue-500"
@@ -1804,7 +1809,7 @@ export default function BonusForm() {
                   )}
                 </div>
                 <div className="lg:col-span-1">
-                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant (Ar)</label>
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant ({formCurrency})</label>
                   <input type="number" min="0" value={o.montant} onChange={(e) => updateOther(o.key, 'montant', e.target.value)}
                     className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
                 </div>
@@ -1829,7 +1834,7 @@ export default function BonusForm() {
             <div className="border-t border-amber-200 pt-3 mt-3">
               <div className="flex items-center justify-between text-[11px] text-gray-600">
                 <span>Autres primes</span>
-                <span>{maskAr(othersTotal, { minimumFractionDigits: 2 })}</span>
+                <span>{maskForm(othersTotal, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                 <div className="h-full rounded-full transition-all duration-300 bg-amber-500" style={{ width: '100%' }} />
@@ -1842,7 +1847,7 @@ export default function BonusForm() {
           <div className="card-blueline p-4 mt-3 border-l-4 border-l-blue-500 bg-blue-50/40">
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-gray-900">Total général</p>
-              <p className="text-2xl font-bold text-brand-600">{seeAmounts ? `${(totalValue + othersTotal).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} Ar` : '••••••'}</p>
+              <p className="text-2xl font-bold text-brand-600">{seeAmounts ? `${(totalValue + othersTotal).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${formCurrency}` : '••••••'}</p>
             </div>
           </div>
         )}

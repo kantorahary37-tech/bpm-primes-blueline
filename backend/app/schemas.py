@@ -72,6 +72,7 @@ class EmployeeBase(BaseModel):
     name: str
     department: str
     manager_id: int
+    currency: str = 'Ar'
     astreinte_rate: Optional[int] = None
     mensuel_rate: Optional[int] = None
 
@@ -82,6 +83,7 @@ class EmployeeCreate(EmployeeBase): pass
 
 # Schéma de mise à jour d'employé (champs optionnels)
 class EmployeeUpdate(BaseModel):
+    currency: Optional[str] = None
     astreinte_rate: Optional[int] = None
     mensuel_rate: Optional[int] = None
     is_active: Optional[bool] = None
@@ -174,6 +176,7 @@ class ValidationResponse(BaseModel):
 class PrimeMaxBase(BaseModel):
     department: str
     bonus_type: BonusType
+    currency: str = 'Ar'
     amount: float
 
     _dept = field_validator('department', mode='before')(dept_to_str)
@@ -185,6 +188,26 @@ class PrimeMaxCreate(PrimeMaxBase): pass
 class PrimeMaxResponse(PrimeMaxBase):
     id: int
     updated_at: datetime
+    class Config: from_attributes = True
+
+# --- Devises / Profils ---
+class CurrencyCreate(BaseModel):
+    code: str
+    symbol: str = ''
+    label: str = ''
+    active: bool = True
+
+class CurrencyUpdate(BaseModel):
+    symbol: Optional[str] = None
+    label: Optional[str] = None
+    active: Optional[bool] = None
+
+class CurrencyResponse(BaseModel):
+    code: str
+    symbol: str = ''
+    label: str = ''
+    is_system: bool = False
+    active: bool = True
     class Config: from_attributes = True
 
 class AuditLogResponse(BaseModel):

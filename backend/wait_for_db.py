@@ -159,4 +159,64 @@ try:
 except Exception as e:
     print(f"commissionconfig check skipped: {e}")
 
+print("Ensuring employee currency column exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "currency" VARCHAR(10) NOT NULL DEFAULT 'Ar';
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("employee currency column OK")
+except Exception as e:
+    print(f"employee currency column check skipped: {e}")
+
+print("Ensuring primemax currency column exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        ALTER TABLE "primemax" ADD COLUMN IF NOT EXISTS "currency" VARCHAR(10) NOT NULL DEFAULT 'Ar';
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("primemax currency column OK")
+except Exception as e:
+    print(f"primemax currency column check skipped: {e}")
+
+print("Ensuring currency table exists and seeded...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "currency" (
+            "code" VARCHAR(10) NOT NULL PRIMARY KEY,
+            "symbol" VARCHAR(10) NOT NULL DEFAULT '',
+            "label" VARCHAR(50) NOT NULL DEFAULT '',
+            "is_system" BOOLEAN NOT NULL DEFAULT FALSE,
+            "active" BOOLEAN NOT NULL DEFAULT TRUE
+        );
+    """)
+    cur.execute("""
+        INSERT INTO "currency" ("code", "symbol", "label", "is_system", "active") VALUES
+        ('Ar', 'Ar', 'Ariary', TRUE, TRUE),
+        ('EUR', '€', 'Euro', TRUE, TRUE)
+        ON CONFLICT ("code") DO NOTHING;
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("currency table OK (Ar/EUR seeded)")
+except Exception as e:
+    print(f"currency table check skipped: {e}")
+
 print("Starting application...")

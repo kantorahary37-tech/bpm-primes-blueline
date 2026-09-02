@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from enum import Enum
 from tortoise.expressions import Q
-from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus
+from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
 from app.email_service import send_bonus_notification_email
 from app.schemas import *
@@ -105,15 +105,29 @@ def compute_global_note(b):
         return None
     return ((q or 0) * q_coeff + (l or 0) * l_coeff) / total
 
+
+def emp_currency_code(emp):
+    """Code de devise d'un employé (compat CharEnumField -> CharField)."""
+    return emp.currency.value if hasattr(emp.currency, 'value') else (emp.currency or 'Ar')
+
+
+async def currency_symbol(code):
+    """Symbole d'affichage d'une devise (retourne le code si non défini)."""
+    cur = await Currency.get_or_none(code=code)
+    return cur.symbol if cur and cur.symbol else code
+
 # Route POST pour créer une prime
 @router.post("/bonuses/", response_model=BonusResponse)
 async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user)):
     employee = await Employee.get(id=bonus.employee_id)
 
     if bonus.bonus_type != BonusType.ASTREINTE:
+        emp_currency = emp_currency_code(employee)
+        emp_symbol = await currency_symbol(emp_currency)
         primemax = await PrimeMax.filter(
             dept_str=employee.dept_str,
-            bonus_type=bonus.bonus_type
+            bonus_type=bonus.bonus_type,
+            currency=emp_currency,
         ).first()
         # Le plafond ne s'applique qu'à l'évaluation (quanti + quali), pas aux "Autres primes"
         details = bonus.details or {}
@@ -123,8 +137,8 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
         if primemax and eval_amount > primemax.amount:
             raise HTTPException(
                 status_code=400,
-                detail=f"Le montant de l'évaluation ({eval_amount} Ar) dépasse le plafond "
-                       f"autorisé ({primemax.amount} Ar) pour "
+                detail=f"Le montant de l'évaluation ({eval_amount} {emp_symbol}) dépasse le plafond "
+                       f"autorisé ({primemax.amount} {emp_symbol}) pour "
                        f"'{bonus.bonus_type.value}' dans le département '{employee.dept_str}'."
             )
 
@@ -268,14 +282,20 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
         employee = await Employee.get(id=bonus.employee_id)
-        primemax = await PrimeMax.filter(dept_str=employee.dept_str, bonus_type=bonus.bonus_type).first()
+        emp_currency = emp_currency_code(employee)
+        emp_symbol = await currency_symbol(emp_currency)
+        primemax = await PrimeMax.filter(
+            dept_str=employee.dept_str,
+            bonus_type=bonus.bonus_type,
+            currency=emp_currency,
+        ).first()
         # Le plafond ne s'applique qu'à l'évaluation, pas aux "Autres primes"
         details = update_data.get('details') or (bonus.details or {})
         others_list = details.get('others', []) if isinstance(details, dict) else []
         others_total = sum(float(o.get('montant', 0) or 0) for o in others_list)
         eval_amount = float(update_data['total_amount']) - others_total
         if primemax and eval_amount > primemax.amount:
-            raise HTTPException(400, f"Le montant de l'évaluation dépasse le plafond autorisé ({primemax.amount} Ar)")
+            raise HTTPException(400, f"Le montant de l'évaluation dépasse le plafond autorisé ({primemax.amount} {emp_symbol})")
     if 'employee_id' in update_data:
         del update_data['employee_id']
 

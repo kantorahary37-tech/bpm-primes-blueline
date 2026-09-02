@@ -43,7 +43,7 @@ async def export_employees(
         query = query.filter(dept_str=department)
     employees = await query
 
-    all_columns = ["Matricule", "Nom", "Departement", "Manager", "DateCreation"]
+    all_columns = ["Matricule", "Nom", "Departement", "Manager", "Devise", "DateCreation"]
     if columns:
         selected = [c.strip() for c in columns.split(',') if c.strip() in all_columns]
     else:
@@ -54,6 +54,7 @@ async def export_employees(
         "Nom": lambda e: e.name,
         "Departement": lambda e: e.department,
         "Manager": lambda e: e.manager.name if e.manager else '',
+        "Devise": lambda e: e.currency.value if hasattr(e.currency, 'value') else (e.currency or 'Ar'),
         "DateCreation": lambda e: e.created_at.isoformat() if e.created_at else '',
     }
 

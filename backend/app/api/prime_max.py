@@ -14,7 +14,8 @@ async def create_primemax(data: PrimeMaxCreate, user: User = Depends(get_current
         raise HTTPException(403, "Vous ne pouvez créer un plafond que pour votre propre département")
     existing = await PrimeMax.filter(
         dept_str=data.department,
-        bonus_type=data.bonus_type
+        bonus_type=data.bonus_type,
+        currency=data.currency,
     ).first()
     if existing:
         existing.amount = data.amount
@@ -26,6 +27,7 @@ async def create_primemax(data: PrimeMaxCreate, user: User = Depends(get_current
         dept_str=data.department,
         department=dept_obj,
         bonus_type=data.bonus_type,
+        currency=data.currency,
         amount=data.amount,
     )
     return obj
@@ -35,6 +37,7 @@ async def create_primemax(data: PrimeMaxCreate, user: User = Depends(get_current
 async def list_primemax(
     department: Optional[str] = None,
     bonus_type: Optional[str] = None,
+    currency: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
     query = PrimeMax.all()
@@ -44,6 +47,8 @@ async def list_primemax(
         query = query.filter(dept_str=department)
     if bonus_type:
         query = query.filter(bonus_type=bonus_type)
+    if currency:
+        query = query.filter(currency=currency)
     return await query
 
 

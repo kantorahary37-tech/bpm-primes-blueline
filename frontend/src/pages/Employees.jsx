@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { getEmployees, getBonuses, createEmployee, getUsers, adminLdapSyncEmployees } from '../services/api';
+import { getEmployees, getBonuses, createEmployee, updateEmployee, getUsers, adminLdapSyncEmployees, getCurrencies, createCurrency, deleteCurrency } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
+import { useCurrencies } from '../contexts/CurrenciesContext';
 import { Link } from 'react-router-dom';
-import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon } from '../components/Icons';
+import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon, SearchIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 
 const typeIcons = {
@@ -48,7 +49,7 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
-const EXPORT_EMPLOYEE_COLUMNS = ["Matricule", "Nom", "Departement", "Manager", "DateCreation"];
+const EXPORT_EMPLOYEE_COLUMNS = ["Matricule", "Nom", "Departement", "Manager", "Devise", "DateCreation"];
 const EXPORT_EMP_BONUS_COLUMNS = ["Matricule", "Nom", "Departement", "TypePrime", "DateDebut", "DateFin", "Montant", "Statut", "DejaRejete", "CreePar", "DateCreation"];
 
 const Employees = () => {
@@ -57,15 +58,19 @@ const Employees = () => {
   const seeAmounts = canSeeAmounts(user);
   const { departments } = useDepartments();
   const deptNames = departments.map(d => d.name);
+  const { currencies, refresh: refreshCurrencies, symbolFor } = useCurrencies();
+  const currencyOptions = currencies.map(c => ({ value: c.code, label: c.label ? `${c.label} (${c.symbol || c.code})` : (c.symbol || c.code) }));
+  const canManageCurrencies = user?.is_admin || user?.is_dg || user?.is_drh;
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '' });
+  const [form, setForm] = useState({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '', currency: 'Ar' });
   const [managers, setManagers] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [empBonuses, setEmpBonuses] = useState([]);
   const [bonusesLoading, setBonusesLoading] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [bonusTypeFilter, setBonusTypeFilter] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
@@ -75,6 +80,12 @@ const Employees = () => {
   const [showEmpBonusExportModal, setShowEmpBonusExportModal] = useState(false);
   const [empBonusExportColumns, setEmpBonusExportColumns] = useState(EXPORT_EMP_BONUS_COLUMNS);
   const [syncing, setSyncing] = useState(false);
+  const [editEmp, setEditEmp] = useState(null);
+  const [editForm, setEditForm] = useState({ currency: 'Ar', astreinte_rate: '', mensuel_rate: '' });
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [currencyForm, setCurrencyForm] = useState({ code: '', symbol: '', label: '' });
+  const [allCurrencies, setAllCurrencies] = useState([]);
+  const [currencySaving, setCurrencySaving] = useState(false);
 
   const initRef = useRef(false);
 
@@ -121,12 +132,21 @@ const Employees = () => {
     }
   };
 
+  const filteredEmployees = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter(emp =>
+      (emp.name || '').toLowerCase().includes(q) ||
+      (emp.matricule || '').toLowerCase().includes(q)
+    );
+  }, [employees, searchQuery]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       await createEmployee({ ...form, manager_id: parseInt(form.manager_id) });
       setShowForm(false);
-      setForm({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '' });
+      setForm({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '', currency: 'Ar' });
       const emps = await getEmployees();
       setEmployees(emps);
     } catch (err) {
@@ -156,6 +176,66 @@ const Employees = () => {
     }
   };
 
+  const saveEmployeeProfile = async () => {
+    if (!editEmp) return;
+    try {
+      await updateEmployee(editEmp.id, {
+        currency: editForm.currency,
+        astreinte_rate: editForm.astreinte_rate !== '' ? parseInt(editForm.astreinte_rate) : null,
+        mensuel_rate: editForm.mensuel_rate !== '' ? parseInt(editForm.mensuel_rate) : null,
+      });
+      const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
+      setEmployees(emps);
+      setSelectedEmp((prev) => prev && prev.id === editEmp.id ? { ...prev, ...editForm } : prev);
+      setEditEmp(null);
+      toast.success('Profil mis à jour');
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erreur lors de la mise à jour');
+    }
+  };
+
+  const openCurrencyModal = async () => {
+    setShowCurrencyModal(true);
+    setCurrencyForm({ code: '', symbol: '', label: '' });
+    try {
+      const all = await getCurrencies(false);
+      setAllCurrencies(Array.isArray(all) ? all : []);
+    } catch (err) {
+      setAllCurrencies(currencies || []);
+    }
+  };
+
+  const addNewCurrency = async () => {
+    const code = currencyForm.code?.trim();
+    if (!code) { toast.error('Le code de la devise est obligatoire'); return; }
+    setCurrencySaving(true);
+    try {
+      await createCurrency({ ...currencyForm, code });
+      toast.success(`Devise ${code.toUpperCase()} ajoutée`);
+      await refreshCurrencies();
+      setCurrencyForm({ code: '', symbol: '', label: '' });
+      const all = await getCurrencies(false);
+      setAllCurrencies(Array.isArray(all) ? all : []);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de l\'ajout de la devise');
+    } finally {
+      setCurrencySaving(false);
+    }
+  };
+
+  const deleteExistingCurrency = async (code) => {
+    if (!window.confirm(`Supprimer la devise « ${code} » ?`)) return;
+    try {
+      await deleteCurrency(code);
+      toast.success(`Devise ${code} supprimée`);
+      await refreshCurrencies();
+      const all = await getCurrencies(false);
+      setAllCurrencies(Array.isArray(all) ? all : []);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de la suppression');
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><span className="loading loading-spinner loading-lg" /></div>;
   }
@@ -174,6 +254,11 @@ const Employees = () => {
         <button onClick={() => setShowForm(true)} className="btn bg-blue-600 hover:bg-blue-700 text-white border-0 btn-sm flex items-center gap-1.5">
           <PlusIcon className="w-4 h-4" /> Nouvel employé
         </button>
+        {canManageCurrencies && (
+          <button onClick={openCurrencyModal} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5" title="Ajouter ou supprimer des devises">
+            Gérer les devises
+          </button>
+        )}
         <button onClick={() => {
           setExportColumns(EXPORT_EMPLOYEE_COLUMNS)
           setShowExportModal(true)
@@ -209,6 +294,12 @@ const Employees = () => {
                   {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               </div>
+              <div className="form-control">
+                <label className="label"><span className="label-text">Devise</span></label>
+                <select className="select select-bordered select-sm w-36" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} required>
+                  {currencyOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
               <div className="flex gap-2">
                 <button type="submit" className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Créer</button>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => setShowForm(false)}>Annuler</button>
@@ -231,16 +322,26 @@ const Employees = () => {
         ) : (
           <span className="text-sm text-gray-600">Département : <strong>{user?.department}</strong></span>
         )}
-        <span className="text-xs text-gray-400">{employees.length} employé(s)</span>
+        <span className="text-xs text-gray-400">{filteredEmployees.length} employé(s)</span>
+        <div className="relative ml-auto">
+          <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Rechercher nom / matricule..."
+            className="w-64 pl-9 pr-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+          />
+        </div>
       </div>
 
       <div className="space-y-6 mb-6">
-        {employees.length === 0 ? (
+        {filteredEmployees.length === 0 ? (
           <div className="text-center text-gray-400 py-12">Aucun employé</div>
         ) : (
           (() => {
             const grouped = {};
-            employees.forEach(emp => {
+            filteredEmployees.forEach(emp => {
               if (!grouped[emp.department]) grouped[emp.department] = [];
               grouped[emp.department].push(emp);
             });
@@ -267,6 +368,9 @@ const Employees = () => {
                           <p className="font-semibold text-gray-900 text-sm truncate">{emp.name}</p>
                           <p className="text-[11px] text-gray-400">{emp.matricule}</p>
                         </div>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${emp.currency === 'EUR' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+                          {symbolFor(emp.currency)}
+                        </span>
                         <div className="text-right text-[11px]">
                           <div className="text-gray-400">Manager</div>
                           <div className="font-medium text-gray-700">{mgr?.name || 'N/A'}</div>
@@ -291,6 +395,18 @@ const Employees = () => {
                 <h3 className="font-semibold text-gray-900 text-sm">Primes de {selectedEmp.name}</h3>
               </div>
               <div className="flex items-center gap-1">
+                {(user?.is_admin || user?.is_dg || user?.is_drh) && selectedEmp && (
+                  <button onClick={() => {
+                    setEditEmp(selectedEmp);
+                    setEditForm({
+                      currency: selectedEmp.currency || 'Ar',
+                      astreinte_rate: selectedEmp.astreinte_rate != null ? String(selectedEmp.astreinte_rate) : '',
+                      mensuel_rate: selectedEmp.mensuel_rate != null ? String(selectedEmp.mensuel_rate) : '',
+                    });
+                  }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600" title="Modifier le profil (devise)">
+                    Modifier profil
+                  </button>
+                )}
                 <button onClick={() => {
                   setEmpBonusExportColumns(EXPORT_EMP_BONUS_COLUMNS)
                   setShowEmpBonusExportModal(true)
@@ -387,7 +503,7 @@ const Employees = () => {
                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                               {statusLabel(bonus)}
                             </span>
-                            <span className="text-xs font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} Ar` : '••••••'}</span>
+                            <span className="text-xs font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} ${symbolFor(selectedEmp.currency)}` : '••••••'}</span>
                           </Link>
                         )),
                         <div key={`${ym}-sep`} className="border-b border-gray-50 mx-3 last:border-0" />
@@ -400,6 +516,85 @@ const Employees = () => {
           </div>
         </div>
       )}
+
+      <Modal open={!!editEmp} onClose={() => setEditEmp(null)} title={`Profil — ${editEmp?.name || ''}`} size="sm">
+        <div className="space-y-4">
+          <div className="form-control">
+            <label className="label"><span className="label-text">Devise / Profil de l'employé</span></label>
+            <select className="select select-bordered w-full" value={editForm.currency} onChange={(e) => setEditForm({ ...editForm, currency: e.target.value })}>
+              {currencyOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+            <span className="text-[11px] text-gray-400 mt-1">Ar = Ariary par défaut, EUR = Euro pour les employés étrangers, ou toute devise définie par l'admin / le DG / la DRH.</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="form-control">
+              <label className="label"><span className="label-text">Taux astreinte ({editForm.currency || 'Ar'})</span></label>
+              <input type="number" className="input input-bordered input-sm" value={editForm.astreinte_rate}
+                onChange={(e) => setEditForm({ ...editForm, astreinte_rate: e.target.value })} placeholder="Défaut" />
+            </div>
+            <div className="form-control">
+              <label className="label"><span className="label-text">Prime mensuelle ({editForm.currency || 'Ar'})</span></label>
+              <input type="number" className="input input-bordered input-sm" value={editForm.mensuel_rate}
+                onChange={(e) => setEditForm({ ...editForm, mensuel_rate: e.target.value })} placeholder="Défaut" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <button onClick={() => setEditEmp(null)} className="btn btn-sm btn-ghost">Annuler</button>
+            <button onClick={saveEmployeeProfile} className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0">Enregistrer</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={showCurrencyModal} onClose={() => setShowCurrencyModal(false)} title="Gérer les devises" size="sm">
+        <div className="space-y-4">
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+            <p className="text-xs font-semibold text-gray-700">Ajouter une devise</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="form-control">
+                <label className="label"><span className="label-text text-[11px]">Code</span></label>
+                <input className="input input-bordered input-sm" placeholder="USD" value={currencyForm.code}
+                  onChange={(e) => setCurrencyForm({ ...currencyForm, code: e.target.value.toUpperCase() })} />
+              </div>
+              <div className="form-control">
+                <label className="label"><span className="label-text text-[11px]">Symbole</span></label>
+                <input className="input input-bordered input-sm" placeholder="$" value={currencyForm.symbol}
+                  onChange={(e) => setCurrencyForm({ ...currencyForm, symbol: e.target.value })} />
+              </div>
+              <div className="form-control">
+                <label className="label"><span className="label-text text-[11px]">Libellé</span></label>
+                <input className="input input-bordered input-sm" placeholder="Dollar" value={currencyForm.label}
+                  onChange={(e) => setCurrencyForm({ ...currencyForm, label: e.target.value })} />
+              </div>
+            </div>
+            <button onClick={addNewCurrency} disabled={currencySaving} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0 w-full">
+              {currencySaving ? <span className="loading loading-spinner loading-xs"></span> : '+'} Ajouter la devise
+            </button>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-gray-700 mb-2">Devises existantes</p>
+            <div className="space-y-1.5 max-h-52 overflow-y-auto">
+              {allCurrencies.map((c) => (
+                <div key={c.code} className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-semibold text-gray-800">{c.code}</span>
+                    <span className="text-gray-400 text-xs">({c.symbol || c.code})</span>
+                    {c.label && <span className="text-gray-500 text-xs">{c.label}</span>}
+                    {c.is_system && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Système</span>}
+                    {!c.active && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Inactive</span>}
+                  </div>
+                  <button onClick={() => deleteExistingCurrency(c.code)} disabled={c.is_system}
+                    title={c.is_system ? 'Devise système, non supprimable' : 'Supprimer'}
+                    className="text-gray-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {allCurrencies.length === 0 && <p className="text-xs text-gray-400">Aucune devise définie.</p>}
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Exporter les employés" size="sm">
         <div className="space-y-4">

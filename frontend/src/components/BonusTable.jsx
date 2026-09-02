@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useCurrencies } from '../contexts/CurrenciesContext';
 import { EyeIcon, CheckIcon, EditIcon } from './Icons';
 
 // Moyenne pondérée des notes /10 par coefficient pour une section (même logique que la vue cartes)
@@ -14,10 +15,11 @@ const weightedAvg = (items) => {
   return { note: totalCoeff > 0 ? weightedSum / totalCoeff : null, totalCoeff };
 };
 
-const formatAr = (n, seeAmounts) => {
+const formatAr = (n, seeAmounts, currency, symbolFor) => {
   const v = parseFloat(n);
   if (Number.isNaN(v)) return '—';
-  return seeAmounts ? `${v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ar` : '••••••';
+  const symbol = symbolFor(currency);
+  return seeAmounts ? `${v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}` : '••••••';
 };
 
 const formatNote = (bonus) => {
@@ -136,6 +138,7 @@ const BonusTable = ({
   sortDir,
   onSort,
 }) => {
+  const { symbolFor } = useCurrencies();
 
   // Colonnes communes (ordre imposé)
   const typeCols = useMemo(() => {
@@ -263,7 +266,7 @@ const BonusTable = ({
                     : (() => {
                         const raw = col.value(bonus);
                         if (raw == null) return '—';
-                        return col.isAmount ? formatAr(raw, seeAmounts) : raw;
+                        return col.isAmount ? formatAr(raw, seeAmounts, bonus.employee?.currency, symbolFor) : raw;
                       })();
                   return (
                     <td key={col.key} className={`px-4 py-3 whitespace-nowrap text-gray-700 tabular-nums ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}>
@@ -272,7 +275,7 @@ const BonusTable = ({
                   );
                 })}
                 <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-blue-600 tabular-nums">
-                  {formatAr(bonus.total_amount, seeAmounts)}
+                  {formatAr(bonus.total_amount, seeAmounts, bonus.employee?.currency, symbolFor)}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-gray-600" title={creator}>{creator || '—'}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-gray-600">{bonus.employee?.department || 'N/A'}</td>

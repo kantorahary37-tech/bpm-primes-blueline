@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { DepartmentsProvider } from './contexts/DepartmentsContext'
 import { SystemConfigProvider } from './contexts/SystemConfigContext'
+import { CurrenciesProvider } from './contexts/CurrenciesContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import BonusesList from './pages/BonusesList'
@@ -71,7 +72,9 @@ function App() {
       <AuthProvider>
         <SystemConfigProvider>
           <DepartmentsProvider>
-            <AppContent />
+            <CurrenciesProvider>
+              <AppContent />
+            </CurrenciesProvider>
           </DepartmentsProvider>
         </SystemConfigProvider>
       </AuthProvider>

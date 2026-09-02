@@ -3,6 +3,7 @@ import { getBonuses, getEmployees } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
+import { useCurrencies } from '../contexts/CurrenciesContext';
 import {
   ClipboardIcon, ClockIcon, CheckIcon, EmployeesIcon,
   CalendarIcon, MoonIcon, ChartIcon, EyeIcon,
@@ -39,6 +40,7 @@ const getBadgeClass = (status) => {
 const Dashboard = () => {
   const { user } = useAuth();
   const { canSeeAmounts } = useSystemConfig();
+  const { symbolFor } = useCurrencies();
   const seeAmounts = canSeeAmounts(user);
   const [bonuses, setBonuses] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -216,7 +218,7 @@ const Dashboard = () => {
                     <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                       {statusLabel(bonus)}
                     </span>
-                    <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} Ar` : '••••••'}</span>
+                    <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} ${symbolFor(bonus.employee?.currency)}` : '••••••'}</span>
                     <EyeIcon className="w-3 h-3 text-gray-300 shrink-0" />
                   </Link>
                 );

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getBonus, getBonusValidations, getAuditLogs, validateBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
+import { useCurrencies } from '../contexts/CurrenciesContext';
 import toast from 'react-hot-toast';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
@@ -36,6 +37,7 @@ const BonusDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const { canSeeAmounts } = useSystemConfig();
+  const { symbolFor } = useCurrencies();
   const seeAmounts = canSeeAmounts(user);
   const navigate = useNavigate();
   const [bonus, setBonus] = useState(null);
@@ -149,6 +151,7 @@ const BonusDetail = () => {
   });
 
   const formatAr = (n) => seeAmounts ? (n ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '••••••';
+  const currency = symbolFor(bonus?.employee?.currency);
 
   const InfoRow = ({ label, value, big }) => (
     <div>
@@ -206,7 +209,7 @@ const BonusDetail = () => {
                 <th className="text-left py-2 pr-2 font-medium text-gray-600 text-xs">Critères</th>
                 <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Coefficient</th>
                 <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Note /10</th>
-                <th className="text-right py-2 pl-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
+                <th className="text-right py-2 pl-2 font-medium text-gray-600 text-xs">Montant ({currency})</th>
               </tr>
             </thead>
             <tbody>
@@ -320,12 +323,12 @@ const BonusDetail = () => {
           <div className="flex items-center gap-4">
             <div className="flex-1 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
               <p className="text-xs text-blue-600 font-medium mb-1">Montant total</p>
-              <p className="text-2xl font-bold text-blue-700">{formatAr(bonus.total_amount)} Ar</p>
+              <p className="text-2xl font-bold text-blue-700">{formatAr(bonus.total_amount)} ${currency}</p>
             </div>
             {bonus.bonus_type === 'mensuel' && bonus.details?.prime_max && !user?.is_validator_n1 && (
               <div className="flex-1 p-4 rounded-xl bg-gray-50 border border-gray-300">
                 <p className="text-xs text-gray-700 font-medium mb-1">Prime maximum</p>
-                <p className="text-2xl font-bold text-gray-900">{formatAr(bonus.details.prime_max)} Ar</p>
+                <p className="text-2xl font-bold text-gray-900">{formatAr(bonus.details.prime_max)} ${currency}</p>
               </div>
             )}
             {bonus.performance_score && (
@@ -359,8 +362,8 @@ const BonusDetail = () => {
               />
               <div className="border-t border-gray-300 pt-3 mt-3">
                 <div className="flex items-center justify-between text-[11px] text-gray-600">
-                  <span>Total évaluation {user?.is_validator_n1 ? null : <span className="text-gray-400">/ {formatAr(bonus.details?.prime_max || bonus.total_amount)} Ar</span>}</span>
-                  <span>{formatAr(bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0))} Ar</span>
+                  <span>Total évaluation {user?.is_validator_n1 ? null : <span className="text-gray-400">/ {formatAr(bonus.details?.prime_max || bonus.total_amount)} ${currency}</span>}</span>
+                  <span>{formatAr(bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0))} ${currency}</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                   <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.min(((bonus.total_amount - (bonus.details?.others?.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0) || 0)) / (bonus.details?.prime_max || bonus.total_amount || 1)) * 100, 100)}%` }} />
@@ -385,7 +388,7 @@ const BonusDetail = () => {
                         ) : ''}
                       </p>
                     </div>
-                    <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} Ar</span>
+                    <span className="font-semibold text-gray-900 shrink-0">{formatAr(o.montant)} ${currency}</span>
                   </div>
                   {o.file?.url && (
                     <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-500">
@@ -400,11 +403,11 @@ const BonusDetail = () => {
               ))}
               <div className="border-t border-amber-200 pt-3 mt-3 flex items-center justify-between text-[11px] text-gray-600">
                 <span>Autres primes</span>
-                <span>{formatAr(bonus.details.others.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0))} Ar</span>
+                <span>{formatAr(bonus.details.others.reduce((s, o) => s + (parseFloat(o.montant) || 0), 0))} ${currency}</span>
               </div>
               <div className="card-blueline p-3 mt-3 border-l-4 border-l-blue-500 bg-blue-50/40 flex items-center justify-between">
                 <p className="text-sm font-bold text-gray-900">Total général</p>
-                <p className="text-2xl font-bold text-brand-600">{formatAr(bonus.total_amount)} Ar</p>
+                <p className="text-2xl font-bold text-brand-600">{formatAr(bonus.total_amount)} ${currency}</p>
               </div>
             </div>
           </Section>
@@ -419,11 +422,11 @@ const BonusDetail = () => {
               </div>
               <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
                 <p className="text-xs text-gray-600">Prime max / semaine</p>
-                <p className="font-semibold text-gray-900">{formatAr(bonus.details.weekly_max)} Ar</p>
+                <p className="font-semibold text-gray-900">{formatAr(bonus.details.weekly_max)} ${currency}</p>
               </div>
               <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
                 <p className="text-xs text-gray-600">Taux / intervention</p>
-                <p className="font-semibold text-gray-900">{formatAr(bonus.details.intervention_rate)} Ar</p>
+                <p className="font-semibold text-gray-900">{formatAr(bonus.details.intervention_rate)} ${currency}</p>
               </div>
             </div>
 
@@ -435,7 +438,7 @@ const BonusDetail = () => {
                       {bonus.details.disponibilites?.reduce((s, d) => s + (parseInt(d.nombre) || 0), 0)} sem
                     </span>
                   </span>
-                  <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_dispo)} Ar</span>
+                  <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_dispo)} ${currency}</span>
                 </div>
               )}
               {bonus.details.total_interv > 0 && (
@@ -443,7 +446,7 @@ const BonusDetail = () => {
                   <span className="text-gray-600">
                     Interventions <span className="text-gray-400 font-medium">{bonus.details.interventions?.length || 0} × {formatAr(bonus.details.intervention_rate)}</span>
                   </span>
-                  <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_interv)} Ar</span>
+                  <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_interv)} ${currency}</span>
                 </div>
               )}
             </div>
@@ -505,7 +508,7 @@ const BonusDetail = () => {
               </div>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
                 <p className="text-xs text-emerald-600 font-medium">Total commission</p>
-                <p className="font-semibold text-emerald-700">{formatAr(bonus.total_amount)} Ar</p>
+                <p className="font-semibold text-emerald-700">{formatAr(bonus.total_amount)} ${currency}</p>
               </div>
             </div>
 
@@ -516,10 +519,10 @@ const BonusDetail = () => {
                     <tr className="border-b border-gray-300">
                       <th className="text-left py-2 font-medium text-gray-600 text-xs">Produit</th>
                       <th className="text-center py-2 font-medium text-gray-600 text-xs">Ventes</th>
-                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Taux (Ar)</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Taux ({currency})</th>
                       <th className="text-center py-2 font-medium text-gray-600 text-xs">Objectif</th>
                       <th className="text-center py-2 font-medium text-gray-600 text-xs">Doublé</th>
-                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant (Ar)</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant ({currency})</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -540,7 +543,7 @@ const BonusDetail = () => {
                     })}
                     <tr className="font-semibold bg-gray-50">
                       <td colSpan={5} className="py-1.5 text-gray-900">Total commission</td>
-                      <td className="py-1.5 text-right text-emerald-600">{formatAr(bonus.total_amount)} Ar</td>
+                      <td className="py-1.5 text-right text-emerald-600">{formatAr(bonus.total_amount)} ${currency}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -551,11 +554,11 @@ const BonusDetail = () => {
                   <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
                     <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
                       <p className="text-xs text-gray-400">CA réalisé</p>
-                      <p className="font-semibold text-gray-900">{formatAr(bonus.ca_realise)} Ar</p>
+                      <p className="font-semibold text-gray-900">{formatAr(bonus.ca_realise)} ${currency}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
                       <p className="text-xs text-gray-400">CA objectif</p>
-                      <p className="font-semibold text-gray-900">{formatAr(bonus.ca_objectif ?? 0)} Ar</p>
+                      <p className="font-semibold text-gray-900">{formatAr(bonus.ca_objectif ?? 0)} ${currency}</p>
                     </div>
                   </div>
                 ) : (
