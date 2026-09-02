@@ -265,15 +265,13 @@ const [filterMonth, setFilterMonth] = useState('');
   // Les filtres/tri/recherche sont appliqués côté backend : on affiche directement la liste renvoyée
   const filteredBonuses = bonuses;
 
-  // Options de statut uniques par valeur, dérivées des primes réellement renvoyées
+  // Options de statut : toutes les catégories possibles, dérivées du rôle
   const statusOptions = useMemo(() => {
-    const set = new Set();
-    for (const b of bonuses) {
-      if (b.was_rejected) set.add('Prime rejetée');
-      else if (b.status) set.add(b.status);
-    }
-    return [...set];
-  }, [bonuses]);
+    const all = ['Initialisé', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
+    if (user?.is_admin) return all;
+    // DG, DRH, directeur et validator_n1 peuvent tous filtrer sur n'importe quel statut visible
+    return all;
+  }, [user]);
 
   const statusOptionLabel = (s) => {
     const map = {
@@ -451,8 +449,8 @@ const [filterMonth, setFilterMonth] = useState('');
           <option value="astreinte">Astreinte</option>
           <option value="commission">Commission</option>
         </select>
-        {/* Filtre statut : options uniques par valeur, dérivées des primes renvoyées */}
-        {(user?.is_admin || user?.is_dg || user?.is_drh) && (
+        {/* Filtre statut : toutes les catégories */}
+        {user && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
             <option value="">Tous statuts</option>
@@ -499,7 +497,7 @@ const [filterMonth, setFilterMonth] = useState('');
             className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'date' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
             Date
           </button>
-          {(user?.is_dg || user?.is_drh || user?.is_directeur) && (
+          {(user?.is_dg || user?.is_drh || user?.is_directeur || user?.is_admin) && (
             <button onClick={() => setViewMode('department')}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'department' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
               Département

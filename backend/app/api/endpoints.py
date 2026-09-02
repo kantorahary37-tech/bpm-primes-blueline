@@ -443,28 +443,38 @@ async def list_bonuses(
             query = query.filter(employee__dept_str=user.department)
 
         # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
+        all_statuses_list = [s for s in ValidationStatus]
         if user.is_admin:
-            allowed_statuses = [s for s in ValidationStatus]
+            default_statuses = all_statuses_list
+            filterable_statuses = all_statuses_list
         elif user.is_dg:
-            allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
+            default_statuses = [ValidationStatus.EN_ATTENTE_DG]
+            filterable_statuses = all_statuses_list
         elif user.is_drh:
-            allowed_statuses = [ValidationStatus.VALIDE]
+            default_statuses = [ValidationStatus.VALIDE]
+            filterable_statuses = all_statuses_list
         elif user.is_directeur:
-            allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+            default_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+            filterable_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
         elif user.is_validator_n1:
-            allowed_statuses = [ValidationStatus.INITIALISE]
+            default_statuses = [ValidationStatus.INITIALISE]
+            filterable_statuses = [ValidationStatus.INITIALISE]
         else:
-            allowed_statuses = []
+            default_statuses = []
+            filterable_statuses = []
 
         if all_statuses:
             pass  # Kanban : toutes les primes du département, tous statuts
         elif status:
             status_enum = ValidationStatus(status)
-            if status_enum not in allowed_statuses:
+            if status_enum not in filterable_statuses:
                 raise HTTPException(status_code=403, detail="Vous n'avez pas accès aux primes avec ce statut")
             query = query.filter(status=status_enum)
-        else:
-            query = query.filter(status__in=allowed_statuses)
+        elif was_rejected is None:
+            # Pas de filtre status explicite ni was_rejected → appliquer le filtre par défaut du rôle
+            query = query.filter(status__in=default_statuses)
+        # Si was_rejected est fourni sans status, on laisse le filtre was_rejected plus bas
+        # gérer seul (les primes rejetées ont status=INITIALISE)
 
     if show_paid:
         query = query.filter(paid_at__isnull=False)
