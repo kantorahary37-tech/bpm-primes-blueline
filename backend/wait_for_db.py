@@ -219,4 +219,45 @@ try:
 except Exception as e:
     print(f"currency table check skipped: {e}")
 
+print("Ensuring group / director-group tables exist...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "group" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "name" VARCHAR(100) NOT NULL,
+            "department_id" INT NOT NULL REFERENCES "department" ("id") ON DELETE CASCADE,
+            "active" BOOLEAN NOT NULL DEFAULT TRUE,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE ("name", "department_id")
+        );
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS directorgroupassignment (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "director_id" INT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+            "group_id" INT NOT NULL REFERENCES "group" ("id") ON DELETE CASCADE,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE ("director_id", "group_id")
+        );
+    """)
+    cur.execute("""
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "group_id" INT REFERENCES "group" ("id") ON DELETE SET NULL;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_group_department ON "group" ("department_id");
+        CREATE INDEX IF NOT EXISTS idx_directorgroup_director ON directorgroupassignment ("director_id");
+        CREATE INDEX IF NOT EXISTS idx_directorgroup_group ON directorgroupassignment ("group_id");
+        CREATE INDEX IF NOT EXISTS idx_employee_group ON "employee" ("group_id");
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("group / directorgroupassignment tables OK")
+except Exception as e:
+    print(f"group tables check skipped: {e}")
+
 print("Starting application...")

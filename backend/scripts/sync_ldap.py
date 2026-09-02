@@ -38,7 +38,7 @@ from ldap3.core.exceptions import LDAPException
 
 from app.db_config import TORTOISE_ORM
 from tortoise import Tortoise, run_async
-from app.models import User, Employee, Department, PrimeMax
+from app.models import User, Employee, Department, PrimeMax, Group
 from app.auth import get_password_hash
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -140,7 +140,13 @@ def fetch_all_ldap_users() -> list[dict]:
 
 def _dept_name(rec: dict) -> str | None:
     """Department name from LDAP record, or None when unknown."""
-    name = rec.get('departmentNumber') or rec.get('ou')
+    name = rec.get('departmentNumber')
+    return str(name).strip() if name and str(name).strip() else None
+
+
+def _group_name(rec: dict) -> str | None:
+    """Sub-department / group name from LDAP 'ou' attribute, or None."""
+    name = rec.get('ou')
     return str(name).strip() if name and str(name).strip() else None
 
 
@@ -173,6 +179,7 @@ async def sync(scope: str = 'all'):
     await Tortoise.init(config=TORTOISE_ORM)
 
     do_departments = scope in ('all', 'departments')
+    do_groups = scope in ('all', 'groups')
     do_users = scope in ('all', 'users')
     do_employees = scope in ('all', 'employees')
 
@@ -225,6 +232,36 @@ async def sync(scope: str = 'all'):
     else:
         for d in await Department.all():
             dept_cache[d.name] = d
+
+    # ------------------------------------------------------------------
+    # 1b. Groups (sub-departments from LDAP 'ou' attribute)
+    # ------------------------------------------------------------------
+    groups_created = 0
+    group_cache: dict[tuple[str, str], Group] = {}  # (group_name, dept_name) → Group
+
+    if do_groups:
+        all_group_pairs: set[tuple[str, str]] = set()
+        for u in ldap_users:
+            gname = _group_name(u)
+            dname = _dept_name(u)
+            if gname and dname:
+                all_group_pairs.add((gname, dname))
+
+        log.info('=== Groupes / Sous-départements (%d) ===', len(all_group_pairs))
+        for gname, dname in sorted(all_group_pairs):
+            dept = dept_cache.get(dname)
+            if not dept:
+                log.warning('  ⚠ Département "%s" inconnu pour le groupe "%s" — ignoré', dname, gname)
+                continue
+            grp, created = await Group.get_or_create(name=gname, department=dept)
+            group_cache[(gname, dname)] = grp
+            if created:
+                groups_created += 1
+                log.info('  ✓ Créé %s (département: %s)', gname, dname)
+    else:
+        for grp in await Group.all().prefetch_related('department'):
+            dept_name = grp.department.name if grp.department else ''
+            group_cache[(grp.name, dept_name)] = grp
 
     # ------------------------------------------------------------------
     # 2. Determine who is a manager (referenced by ``manager`` in LDAP)
@@ -438,11 +475,16 @@ async def sync(scope: str = 'all'):
                 employees_skipped += 1
                 continue
 
+            # Résoudre le groupe (ou) dans le département
+            gname = _group_name(u)
+            grp_obj = group_cache.get((gname, dept_name)) if gname else None
+
             emp_data = dict(
                 name=name,
                 dept_str=dept_name,
                 dept=dept_obj,
                 manager=manager_user,
+                group=grp_obj,
                 is_active=True,
             )
 
@@ -507,6 +549,8 @@ async def sync(scope: str = 'all'):
     log.info('  Synchronisation terminée (scope : %s)', scope)
     if do_departments:
         log.info('  Départements : %d connus, %d créés', len(all_dept_names), departments_created)
+    if do_groups:
+        log.info('  Groupes      : %d créés', groups_created)
     if do_users:
         log.info('  Utilisateurs : %d créés, %d mis à jour',
                  users_created, users_updated)
@@ -526,7 +570,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Synchronisation LDAP → BPM')
     parser.add_argument(
         '--scope',
-        choices=['all', 'departments', 'users', 'employees'],
+        choices=['all', 'departments', 'groups', 'users', 'employees'],
         default='all',
         help='Partie des données à synchroniser (défaut : all)',
     )

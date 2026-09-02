@@ -144,6 +144,11 @@ async def admin_ldap_sync_employees(_admin: User = Depends(require_admin)):
     return _run_ldap_sync("employees")
 
 
+@router.post("/ldap-sync-groups")
+async def admin_ldap_sync_groups(_admin: User = Depends(require_admin)):
+    return _run_ldap_sync("groups")
+
+
 @router.get("/ldap-search")
 async def admin_ldap_search(q: str = "", _admin: User = Depends(require_admin)):
     if len(q) < 2:

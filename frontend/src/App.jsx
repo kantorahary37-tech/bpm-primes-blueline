@@ -19,6 +19,8 @@ import UsersPage from './pages/UsersPage'
 import EvaluationTemplatesPage from './pages/EvaluationTemplatesPage'
 import CommissionConfigPage from './pages/CommissionConfigPage'
 import AdminConfigPage from './pages/AdminConfigPage'
+import GroupsPage from './pages/GroupsPage'
+import ValidationChainPage from './pages/ValidationChainPage'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
 import ForgotPassword from './pages/ForgotPassword'
@@ -61,6 +63,8 @@ function AppContent() {
       <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin']}><EvaluationTemplatesPage /></RestrictedRoute>} />
       <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh']}><AdminConfigPage /></RestrictedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
+      <Route path="/admin/groups" element={<RestrictedRoute roles={['is_admin']}><GroupsPage /></RestrictedRoute>} />
+      <Route path="/admin/validation-chain" element={<ProtectedRoute><ValidationChainPage /></ProtectedRoute>} />
     </Routes>
   )
 }

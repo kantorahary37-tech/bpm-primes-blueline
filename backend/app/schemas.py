@@ -72,6 +72,7 @@ class EmployeeBase(BaseModel):
     name: str
     department: str
     manager_id: int
+    group_id: Optional[int] = None
     currency: str = 'Ar'
     astreinte_rate: Optional[int] = None
     mensuel_rate: Optional[int] = None
@@ -87,6 +88,7 @@ class EmployeeUpdate(BaseModel):
     astreinte_rate: Optional[int] = None
     mensuel_rate: Optional[int] = None
     is_active: Optional[bool] = None
+    group_id: Optional[int] = None
 
 # Schéma de réponse employé
 class EmployeeResponse(EmployeeBase):
@@ -335,3 +337,62 @@ class EvaluationTemplateResponse(BaseModel):
     department: Optional[str] = None
     quantitative: List[EvaluationTemplateItem]
     qualitative: List[EvaluationTemplateItem]
+
+
+# --- Groupes / Sous-départements ---
+class GroupCreate(BaseModel):
+    name: str
+    department: str
+    active: bool = True
+
+    _dept = field_validator('department', mode='before')(dept_to_str)
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    active: Optional[bool] = None
+
+class GroupResponse(BaseModel):
+    id: int
+    name: str
+    department: str
+    active: bool
+    created_at: datetime
+    employee_count: Optional[int] = 0
+    director_count: Optional[int] = 0
+    class Config:
+        from_attributes = True
+
+# --- Assignation Directeur ↔ Groupe ---
+class DirectorGroupAssignRequest(BaseModel):
+    director_id: int
+    group_id: int
+
+class DirectorGroupUnassignRequest(BaseModel):
+    director_id: int
+    group_id: int
+
+class DirectorGroupAssignmentResponse(BaseModel):
+    id: int
+    director_id: int
+    director_name: Optional[str] = None
+    group_id: int
+    group_name: Optional[str] = None
+    department: Optional[str] = None
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+# --- Assignation Employé ↔ Groupe ---
+class EmployeeGroupAssignRequest(BaseModel):
+    employee_id: int
+    group_id: Optional[int] = None  # None = désassigner
+
+class BulkEmployeeGroupAssignRequest(BaseModel):
+    employee_ids: List[int]
+    group_id: int
+
+class DirectorValidationScope(BaseModel):
+    director_id: int
+    director_name: Optional[str] = None
+    groups: List[Dict[str, Any]] = []
+    total_employees: int = 0

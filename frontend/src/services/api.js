@@ -358,4 +358,86 @@ export const deleteCurrency = async (code) => {
   return data;
 };
 
+// --- Groupes / Sous-départements ---
+export const getGroups = async (department = null, activeOnly = true) => {
+  const params = {};
+  if (department) params.department = department;
+  params.active_only = activeOnly;
+  const { data } = await api.get('/groups/', { params });
+  return data;
+};
+
+export const getAllGroups = async (department = null) => {
+  const params = {};
+  if (department) params.department = department;
+  const { data } = await api.get('/groups/all', { params });
+  return data;
+};
+
+export const createGroup = async (groupData) => {
+  const { data } = await api.post('/groups/', groupData);
+  return data;
+};
+
+export const updateGroup = async (id, groupData) => {
+  const { data } = await api.put(`/groups/${id}`, groupData);
+  return data;
+};
+
+export const deleteGroup = async (id) => {
+  const { data } = await api.delete(`/groups/${id}`);
+  return data;
+};
+
+// --- Assignations Directeur ↔ Groupe ---
+export const getDirectorAssignments = async (department = null) => {
+  const params = {};
+  if (department) params.department = department;
+  const { data } = await api.get('/groups/directors/assignments', { params });
+  return data;
+};
+
+export const assignDirectorToGroup = async (directorId, groupId) => {
+  const { data } = await api.post('/groups/directors/assign', { director_id: directorId, group_id: groupId });
+  return data;
+};
+
+export const unassignDirectorFromGroup = async (directorId, groupId) => {
+  const { data } = await api.post('/groups/directors/unassign', { director_id: directorId, group_id: groupId });
+  return data;
+};
+
+export const getDirectorScope = async (directorId) => {
+  const { data } = await api.get(`/groups/directors/${directorId}/scope`);
+  return data;
+};
+
+export const getAllDirectorScopes = async () => {
+  const { data } = await api.get('/groups/directors/all-scopes');
+  return data;
+};
+
+// --- Assignation Employé ↔ Groupe ---
+export const assignEmployeeToGroup = async (employeeId, groupId) => {
+  const { data } = await api.post('/groups/employees/assign', { employee_id: employeeId, group_id: groupId });
+  return data;
+};
+
+export const bulkAssignEmployeesToGroup = async (employeeIds, groupId) => {
+  const { data } = await api.post('/groups/employees/bulk-assign', { employee_ids: employeeIds, group_id: groupId });
+  return data;
+};
+
+export const changeEmployeeDepartment = async (employeeId, department) => {
+  const { data } = await api.post('/groups/employees/change-department', null, {
+    params: { employee_id: employeeId, department }
+  });
+  return data;
+};
+
+export const adminLdapSyncGroups = async () => {
+  const { data } = await api.post('/admin/ldap-sync-groups');
+  return data;
+};
+
 export default api;

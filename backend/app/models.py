@@ -53,6 +53,35 @@ class Department(models.Model):
     def __str__(self):
         return self.name
 
+# Modèle Groupe / Sous-département (table "group")
+class Group(models.Model):
+    id = fields.IntField(pk=True)
+    name = fields.CharField(max_length=100)
+    # Département parent
+    department = fields.ForeignKeyField('models.Department', related_name='groups')
+    # Actif ou non
+    active = fields.BooleanField(default=True)
+    created_at = fields.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("name", "department"),)
+
+    def __str__(self):
+        return f"{self.name} ({self.department})"
+
+# Modèle d'assignation Directeur ↔ Groupe (table "directorgroupassignment")
+# Un directeur peut valider plusieurs groupes, un groupe peut avoir plusieurs directeurs
+class DirectorGroupAssignment(models.Model):
+    id = fields.IntField(pk=True)
+    # Le directeur (User avec is_directeur=True)
+    director = fields.ForeignKeyField('models.User', related_name='group_assignments')
+    # Le groupe assigné
+    group = fields.ForeignKeyField('models.Group', related_name='director_assignments')
+    created_at = fields.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("director", "group"),)
+
 # Modèle Utilisateur (table "user")
 class User(models.Model):
     # Clé primaire auto-incrémentée
@@ -102,6 +131,8 @@ class Employee(models.Model):
     dept_str = fields.CharField(max_length=50, source_field='department')
     # Département (FK vers Department)
     dept = fields.ForeignKeyField('models.Department', related_name='employees', source_field='department_id')
+    # Groupe / sous-département (optionnel)
+    group = fields.ForeignKeyField('models.Group', related_name='employees', null=True)
     # Relation vers le manager (User) : un manager a plusieurs employés
     manager = fields.ForeignKeyField('models.User', related_name='employees')
     # Devise / profil de l'employé (Ar par défaut, EUR pour les employés étrangers, etc.)

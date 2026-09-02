@@ -14,6 +14,8 @@ const adminNavItems = [
   { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin'] },
+  { path: '/admin/groups', label: 'Groupes', icon: UsersIcon, roles: ['is_admin'] },
+  { path: '/admin/validation-chain', label: 'Chaîne validation', icon: ClipboardIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur'] },
   { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin'] },
 ]
 
