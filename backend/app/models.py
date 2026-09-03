@@ -134,7 +134,7 @@ class Employee(models.Model):
     # Groupe / sous-département (optionnel)
     group = fields.ForeignKeyField('models.Group', related_name='employees', null=True)
     # Relation vers le manager (User) : un manager a plusieurs employés
-    manager = fields.ForeignKeyField('models.User', related_name='employees')
+    manager = fields.ForeignKeyField('models.User', related_name='employees', null=True)
     # Devise / profil de l'employé (Ar par défaut, EUR pour les employés étrangers, etc.)
     currency = fields.CharField(max_length=10, default='Ar', index=True)
     # Taux astreinte personnalisé (unité = devise de l'employé/semaine), null = taux par défaut

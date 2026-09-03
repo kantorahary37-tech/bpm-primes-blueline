@@ -1,11 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { useAuth } from './AuthContext';
 
 const CurrenciesContext = createContext(null);
 
 export function CurrenciesProvider({ children }) {
   const [currencies, setCurrencies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   const load = useCallback(() => {
     api.get('/currencies/', { params: { active_only: true } })
@@ -15,8 +17,13 @@ export function CurrenciesProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (user) {
+      load();
+    } else {
+      setCurrencies([{ code: 'Ar', symbol: 'Ar', label: 'Ariary', is_system: true, active: true }]);
+      setLoading(false);
+    }
+  }, [user, load]);
 
   // Symbole d'affichage d'une devise (retourne le code si introuvable)
   const symbolFor = useCallback((code) => {

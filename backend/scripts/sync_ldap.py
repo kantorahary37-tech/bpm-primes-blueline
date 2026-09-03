@@ -10,9 +10,12 @@ Fetches all users from the company LDAP directory and:
 
 Default scope is ``all`` (everything). Scoped runs reuse the data already
 present in the database for the parts they don't touch.
-Departments without any LDAP information are skipped (no more "Inconnu"):
-employees without a known department are deleted from the database, and the
-legacy "Inconnu" department is removed once unreferenced.
+
+Employee sync behavior:
+  - Creates new employees if they don't already exist
+  - Updates name, department, group, and manager from LDAP for existing employees
+  - Does NOT update currency, astreinte_rate, or mensuel_rate (custom employee data)
+  - Does NOT remove employees even if they are missing from LDAP
 
 Run periodically via CRON or systemd timer to keep data fresh.
 """
@@ -139,14 +142,14 @@ def fetch_all_ldap_users() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _dept_name(rec: dict) -> str | None:
-    """Department name from LDAP record, or None when unknown."""
-    name = rec.get('departmentNumber')
+    """Department name from LDAP record (uses 'ou' attribute), or None."""
+    name = rec.get('ou')
     return str(name).strip() if name and str(name).strip() else None
 
 
 def _group_name(rec: dict) -> str | None:
-    """Sub-department / group name from LDAP 'ou' attribute, or None."""
-    name = rec.get('ou')
+    """Sub-department / group name from LDAP 'departmentNumber' attribute, or None."""
+    name = rec.get('departmentNumber')
     return str(name).strip() if name and str(name).strip() else None
 
 
@@ -177,6 +180,7 @@ def _is_director_poste(poste: str | None) -> bool:
 
 async def sync(scope: str = 'all'):
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     do_departments = scope in ('all', 'departments')
     do_groups = scope in ('all', 'groups')
@@ -393,10 +397,10 @@ async def sync(scope: str = 'all'):
     # 4. Employees (all LDAP users)
     # ------------------------------------------------------------------
     employees_created = 0
-    employees_deleted = 0
+    employees_updated = 0
+    employees_skipped = 0
     manager_resolved = 0
     manager_fallback = 0
-    employees_skipped = 0
 
     if do_employees:
         log.info('=== Employés ===')
@@ -440,25 +444,17 @@ async def sync(scope: str = 'all'):
 
             emp_manager_map[email] = (mgr_user, resolved_dn)
 
+        # Ensure "Inconnu" department exists for employees without one
+        inconnu_dept, _ = await Department.get_or_create(name='Inconnu')
+        dept_cache['Inconnu'] = inconnu_dept
+
         # Process employees in bulk
         to_create: list[Employee] = []
         for u in ldap_users:
             email = u['email']
             matricule = _matricule(u, email)
             name = _full_name(u)
-            dept_name = _dept_name(u)
-
-            if not dept_name:
-                # Employé sans département dans l'AD → suppression de la base
-                existing = existing_employees.get(matricule)
-                if existing:
-                    await existing.delete()
-                    employees_deleted += 1
-                    log.info('  ✗ Supprimé  %s (%s) — sans département dans l\'AD', name, matricule)
-                else:
-                    log.warning('  ⚠ %s (%s) sans département dans l\'AD — ignoré', name, matricule)
-                    employees_skipped += 1
-                continue
+            dept_name = _dept_name(u) or 'Inconnu'
 
             dept_obj = dept_cache.get(dept_name)
             manager_user, mgr_dn = emp_manager_map[email]
@@ -467,11 +463,6 @@ async def sync(scope: str = 'all'):
                 manager_resolved += 1
             elif manager_user and not mgr_dn:
                 manager_fallback += 1
-
-            if not manager_user:
-                log.warning('  ⚠ Aucun manager pour %s (%s) — ignoré', name, matricule)
-                employees_skipped += 1
-                continue
 
             # Résoudre le groupe (ou) dans le département
             gname = _group_name(u)
@@ -488,9 +479,30 @@ async def sync(scope: str = 'all'):
 
             existing = existing_employees.get(matricule)
             if existing:
-                # Employé déjà présent → on ne met RIEN à jour
-                # (département, groupe, manager restent tels quels)
-                continue
+                # Employé déjà présent → mise à jour des infos LDAP
+                # (on ne touche PAS à currency, astreinte_rate, mensuel_rate)
+                updated = False
+                if existing.name != name:
+                    existing.name = name
+                    updated = True
+                if existing.dept_str != dept_name:
+                    existing.dept_str = dept_name
+                    existing.dept = dept_obj
+                    updated = True
+                if existing.manager_id != (manager_user.id if manager_user else None):
+                    existing.manager = manager_user
+                    updated = True
+                grp_id = grp_obj.id if grp_obj else None
+                if existing.group_id != grp_id:
+                    existing.group = grp_obj
+                    updated = True
+                if not existing.is_active:
+                    existing.is_active = True
+                    updated = True
+                if updated:
+                    await existing.save()
+                    employees_updated += 1
+                    log.info('  ~ Mis à jour  %s (%s) [%s]', name, matricule, dept_name)
             else:
                 to_create.append(Employee(matricule=matricule, **emp_data))
                 employees_created += 1
@@ -500,32 +512,26 @@ async def sync(scope: str = 'all'):
             for emp in to_create:
                 log.info('  ✓ Créé  %s (%s) [%s]', emp.name, emp.matricule, emp.dept_str)
 
-        # Supprime les employés encore rattachés au département « Inconnu »
-        inconnu_dept = await Department.get_or_none(name='Inconnu')
-        if inconnu_dept:
-            deleted = await Employee.filter(dept_id=inconnu_dept.id).delete()
-            if deleted:
-                employees_deleted += deleted
-                log.info('  ✗ %d employé(s) supprimé(s) du département « Inconnu »', deleted)
-
     # ------------------------------------------------------------------
     # 5. Remove the legacy "Inconnu" department when unreferenced
     # ------------------------------------------------------------------
-    if do_departments or do_employees:
+    if do_departments:
         inconnu = await Department.get_or_none(name='Inconnu')
         if inconnu:
-            emp_refs = await Employee.filter(dept_id=inconnu.id).count()
             other_refs = await PrimeMax.filter(dept_id=inconnu.id).count()
             if await User.filter(dept_id=inconnu.id).exists():
                 await User.filter(dept_id=inconnu.id).update(dept_id=None, dept_str=None)
-            if emp_refs == 0 and other_refs == 0:
-                await inconnu.delete()
-                log.info('✓ Département « Inconnu » supprimé')
-            elif emp_refs and not do_employees:
-                log.warning(
-                    '⚠ Département « Inconnu » conservé : %d employé(s) — lancez --scope employees pour les supprimer',
-                    emp_refs,
-                )
+            if other_refs == 0:
+                # Only delete if no employees reference it either
+                emp_refs = await Employee.filter(dept_id=inconnu.id).count()
+                if emp_refs == 0:
+                    await inconnu.delete()
+                    log.info('✓ Département « Inconnu » supprimé')
+                else:
+                    log.warning(
+                        '⚠ Département « Inconnu » conservé : %d employé(s)',
+                        emp_refs,
+                    )
             else:
                 log.warning(
                     '⚠ Département « Inconnu » conservé : %d référence(s) plafond/modèle',
@@ -546,8 +552,8 @@ async def sync(scope: str = 'all'):
         log.info('  Utilisateurs : %d créés, %d mis à jour',
                  users_created, users_updated)
     if do_employees:
-        log.info('  Employés     : %d créés, %d supprimés, %d ignorés',
-                 employees_created, employees_deleted, employees_skipped)
+        log.info('  Employés     : %d créés, %d mis à jour, %d ignorés',
+                 employees_created, employees_updated, employees_skipped)
         log.info('  Managers     : %d résolus LDAP, %d par défaut',
                  manager_resolved, manager_fallback)
     log.info('=' * 52)

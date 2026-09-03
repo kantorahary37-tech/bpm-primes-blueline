@@ -1,13 +1,19 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getSystemConfig } from '../services/api';
+import { useAuth } from './AuthContext';
 
 const SystemConfigContext = createContext(null);
 
 export function SystemConfigProvider({ children }) {
   const [config, setConfig] = useState({});
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     getSystemConfig()
       .then(data => {
         const flat = {};
@@ -20,7 +26,7 @@ export function SystemConfigProvider({ children }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   const refresh = async () => {
     try {

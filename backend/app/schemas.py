@@ -71,7 +71,7 @@ class EmployeeBase(BaseModel):
     matricule: str
     name: str
     department: str
-    manager_id: int
+    manager_id: Optional[int] = None
     group_id: Optional[int] = None
     currency: str = 'Ar'
     astreinte_rate: Optional[int] = None
