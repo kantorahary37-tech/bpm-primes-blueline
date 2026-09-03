@@ -393,7 +393,6 @@ async def sync(scope: str = 'all'):
     # 4. Employees (all LDAP users)
     # ------------------------------------------------------------------
     employees_created = 0
-    employees_updated = 0
     employees_deleted = 0
     manager_resolved = 0
     manager_fallback = 0
@@ -443,7 +442,6 @@ async def sync(scope: str = 'all'):
 
         # Process employees in bulk
         to_create: list[Employee] = []
-        to_update: list[Employee] = []
         for u in ldap_users:
             email = u['email']
             matricule = _matricule(u, email)
@@ -490,10 +488,9 @@ async def sync(scope: str = 'all'):
 
             existing = existing_employees.get(matricule)
             if existing:
-                for attr, val in emp_data.items():
-                    setattr(existing, attr, val)
-                to_update.append(existing)
-                employees_updated += 1
+                # Employé déjà présent → on ne met RIEN à jour
+                # (département, groupe, manager restent tels quels)
+                continue
             else:
                 to_create.append(Employee(matricule=matricule, **emp_data))
                 employees_created += 1
@@ -502,12 +499,6 @@ async def sync(scope: str = 'all'):
             await Employee.bulk_create(to_create)
             for emp in to_create:
                 log.info('  ✓ Créé  %s (%s) [%s]', emp.name, emp.matricule, emp.dept_str)
-
-        for emp in to_update:
-            await emp.save()
-
-        if employees_updated:
-            log.info('  ~ Mis à jour %d employé(s)', employees_updated)
 
         # Supprime les employés encore rattachés au département « Inconnu »
         inconnu_dept = await Department.get_or_none(name='Inconnu')
@@ -555,8 +546,8 @@ async def sync(scope: str = 'all'):
         log.info('  Utilisateurs : %d créés, %d mis à jour',
                  users_created, users_updated)
     if do_employees:
-        log.info('  Employés     : %d créés, %d mis à jour, %d supprimés, %d ignorés',
-                 employees_created, employees_updated, employees_deleted, employees_skipped)
+        log.info('  Employés     : %d créés, %d supprimés, %d ignorés',
+                 employees_created, employees_deleted, employees_skipped)
         log.info('  Managers     : %d résolus LDAP, %d par défaut',
                  manager_resolved, manager_fallback)
     log.info('=' * 52)
