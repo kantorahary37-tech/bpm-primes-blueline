@@ -14,6 +14,10 @@ const STEP_COLORS = {
 export default function ValidationChainPage() {
   const { user } = useAuth();
   const { departments } = useDepartments();
+  const isDirectorOrN1 = (user?.is_directeur || user?.is_validator_n1) && !user?.is_admin && !user?.is_dg && !user?.is_drh;
+  const visibleDepts = isDirectorOrN1
+    ? departments.filter(d => d.name === user?.department)
+    : departments;
   const [groups, setGroups] = useState([]);
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -126,7 +130,7 @@ export default function ValidationChainPage() {
         <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)}
           className="select select-bordered select-sm">
           <option value="">Tous les départements</option>
-          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          {visibleDepts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
         <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
           className="select select-bordered select-sm" disabled={!selectedDept}>

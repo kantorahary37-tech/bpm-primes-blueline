@@ -42,6 +42,17 @@ export default function GroupsPage() {
 
   useEffect(() => { load(); }, [filterDept]);
 
+  const isDirectorOrN1 = (user?.is_directeur || user?.is_validator_n1) && !user?.is_admin && !user?.is_dg && !user?.is_drh;
+  const visibleDepts = isDirectorOrN1
+    ? departments.filter(d => d.name === user?.department)
+    : departments;
+
+  useEffect(() => {
+    if (isDirectorOrN1 && user?.department) {
+      setFilterDept(user.department);
+    }
+  }, [isDirectorOrN1, user?.department]);
+
   const tabs = [
     { key: 'groups', label: 'Groupes', icon: UsersIcon },
     { key: 'employees', label: 'Assignation employés', icon: UsersIcon },
@@ -65,7 +76,7 @@ export default function GroupsPage() {
             className="select select-bordered select-sm"
           >
             <option value="">Tous les départements</option>
-            {departments.map(d => (
+            {visibleDepts.map(d => (
               <option key={d.id} value={d.name}>{d.name}</option>
             ))}
           </select>
@@ -116,7 +127,7 @@ export default function GroupsPage() {
         <GroupCreateModal
           onClose={() => setShowCreateModal(false)}
           onCreated={() => { setShowCreateModal(false); load(); }}
-          departments={departments}
+          departments={visibleDepts}
         />
       )}
       {editingGroup && (
@@ -219,12 +230,21 @@ function GroupsList({ groups, loading, departments, onRefresh, onEdit, user }) {
 // EmployeeGroupAssignment
 // ═══════════════════════════════════════════════════════════════════════════
 function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
+  const { user } = useAuth();
+  const isDirN1 = (user?.is_directeur || user?.is_validator_n1) && !user?.is_admin && !user?.is_dg && !user?.is_drh;
+  const visibleDepts = isDirN1 ? departments.filter(d => d.name === user?.department) : departments;
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterDept, setFilterDept] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
   const [search, setSearch] = useState('');
   const [assigning, setAssigning] = useState(null);
+
+  useEffect(() => {
+    if (isDirN1 && user?.department && !filterDept) {
+      setFilterDept(user.department);
+    }
+  }, [isDirN1, user?.department]);
 
   useEffect(() => {
     const loadEmp = async () => {
@@ -287,9 +307,9 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
     }
   };
 
-  const deptGroups = filterDept
-    ? groups.filter(g => g.department === filterDept)
-    : groups;
+  const deptGroups = isDirN1
+    ? groups
+    : (filterDept ? groups.filter(g => g.department === filterDept) : groups);
 
   return (
     <div>
@@ -298,7 +318,7 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
         <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
           className="select select-bordered select-sm">
           <option value="">Tous les départements</option>
-          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          {visibleDepts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
         <select value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}
           className="select select-bordered select-sm">
@@ -335,7 +355,7 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
               <tr><td colSpan={5} className="text-center py-4 text-gray-400">Aucun employé trouvé</td></tr>
             ) : filteredEmployees.map(emp => {
               const empGroup = groups.find(g => g.id === emp.group_id);
-              const empDeptGroups = groups.filter(g => g.department === emp.department);
+              const empDeptGroups = isDirN1 ? groups : groups.filter(g => g.department === emp.department);
               return (
                 <tr key={emp.id} className="hover:bg-gray-50">
                   <td className="font-mono text-xs">{emp.matricule}</td>
@@ -347,7 +367,7 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
                       disabled={assigning === emp.id}
                       className="select select-bordered select-xs"
                     >
-                      {departments.map(d => (
+                      {visibleDepts.map(d => (
                         <option key={d.id} value={d.name}>{d.name}</option>
                       ))}
                     </select>
@@ -385,6 +405,9 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
 // DirectorGroupAssignment
 // ═══════════════════════════════════════════════════════════════════════════
 function DirectorGroupAssignment({ groups, departments, onRefresh }) {
+  const { user } = useAuth();
+  const isDirN1 = (user?.is_directeur || user?.is_validator_n1) && !user?.is_admin && !user?.is_dg && !user?.is_drh;
+  const visibleDepts = isDirN1 ? departments.filter(d => d.name === user?.department) : departments;
   const [directors, setDirectors] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -392,6 +415,12 @@ function DirectorGroupAssignment({ groups, departments, onRefresh }) {
   const [selectedGroup, setSelectedGroup] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [assigning, setAssigning] = useState(false);
+
+  useEffect(() => {
+    if (isDirN1 && user?.department && !filterDept) {
+      setFilterDept(user.department);
+    }
+  }, [isDirN1, user?.department]);
 
   useEffect(() => {
     const load = async () => {
@@ -456,7 +485,7 @@ function DirectorGroupAssignment({ groups, departments, onRefresh }) {
         <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
           className="select select-bordered select-sm">
           <option value="">Tous les départements</option>
-          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          {visibleDepts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
       </div>
 

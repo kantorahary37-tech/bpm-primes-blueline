@@ -319,6 +319,8 @@ const Employees = () => {
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
+        ) : user?.is_directeur || user?.is_validator_n1 ? (
+          <span className="text-sm text-gray-600">Département : <strong>{user?.department}</strong></span>
         ) : (
           <span className="text-sm text-gray-600">Département : <strong>{user?.department}</strong></span>
         )}
