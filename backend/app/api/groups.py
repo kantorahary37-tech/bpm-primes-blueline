@@ -32,10 +32,17 @@ def dept_to_str(v):
 async def list_groups(
     department: Optional[str] = None,
     active_only: bool = True,
+    user: User = Depends(get_current_user),
 ):
-    """Liste tous les groupes, optionnellement filtrés par département."""
+    """Liste les groupes, optionnellement filtrés par département.
+
+    Les directeurs et N+1 ne voient que les groupes de leur propre département.
+    """
+    is_scoped = (user.is_directeur or user.is_validator_n1) and not user.is_admin and not user.is_dg and not user.is_drh
     query = Group.all().prefetch_related('department')
-    if department:
+    if is_scoped:
+        query = query.filter(department__name=user.dept_str)
+    elif department:
         query = query.filter(department__name=department)
     if active_only:
         query = query.filter(active=True)
@@ -58,18 +65,20 @@ async def list_groups(
 
 
 @router.get("/all", response_model=List[GroupResponse])
-async def list_all_groups(department: Optional[str] = None):
+async def list_all_groups(department: Optional[str] = None, user: User = Depends(get_current_user)):
     """Inclut les groupes inactifs (pour l'admin)."""
-    return await list_groups(department=department, active_only=False)
+    return await list_groups(department=department, active_only=False, user=user)
 
 
 @router.post("/", response_model=GroupResponse, status_code=201)
 async def create_group(data: GroupCreate, user: User = Depends(get_current_user)):
-    if not user.is_admin:
-        raise HTTPException(403, "Réservé aux administrateurs")
+    if not user.is_admin and not user.is_directeur and not user.is_validator_n1:
+        raise HTTPException(403, "Non autorisé")
     dept = await Department.get_or_none(name=data.department)
     if not dept:
         raise HTTPException(400, f"Département '{data.department}' introuvable")
+    if not user.is_admin and data.department != user.dept_str:
+        raise HTTPException(403, "Vous ne pouvez créer des groupes que dans votre département")
     existing = await Group.get_or_none(name=data.name, department=dept)
     if existing:
         raise HTTPException(409, f"Le groupe '{data.name}' existe déjà dans '{data.department}'")
@@ -83,11 +92,15 @@ async def create_group(data: GroupCreate, user: User = Depends(get_current_user)
 
 @router.put("/{group_id}", response_model=GroupResponse)
 async def update_group(group_id: int, data: GroupUpdate, user: User = Depends(get_current_user)):
-    if not user.is_admin:
-        raise HTTPException(403, "Réservé aux administrateurs")
+    if not user.is_admin and not user.is_directeur and not user.is_validator_n1:
+        raise HTTPException(403, "Non autorisé")
     g = await Group.get_or_none(id=group_id)
     if not g:
         raise HTTPException(404, "Groupe introuvable")
+    if not user.is_admin:
+        await g.fetch_related('department')
+        if g.department.name != user.dept_str:
+            raise HTTPException(403, "Vous ne pouvez modifier que les groupes de votre département")
     if data.name is not None:
         g.name = data.name
     if data.active is not None:
@@ -105,11 +118,15 @@ async def update_group(group_id: int, data: GroupUpdate, user: User = Depends(ge
 
 @router.delete("/{group_id}")
 async def delete_group(group_id: int, user: User = Depends(get_current_user)):
-    if not user.is_admin:
-        raise HTTPException(403, "Réservé aux administrateurs")
+    if not user.is_admin and not user.is_directeur and not user.is_validator_n1:
+        raise HTTPException(403, "Non autorisé")
     g = await Group.get_or_none(id=group_id)
     if not g:
         raise HTTPException(404, "Groupe introuvable")
+    if not user.is_admin:
+        await g.fetch_related('department')
+        if g.department.name != user.dept_str:
+            raise HTTPException(403, "Vous ne pouvez supprimer que les groupes de votre département")
     # Déassigner les employés avant suppression
     employees_in_group = await Employee.filter(group_id=g.id)
     for emp in employees_in_group:
@@ -151,14 +168,18 @@ async def assign_director_to_group(
     user: User = Depends(get_current_user),
 ):
     """Assigne un directeur à un groupe."""
-    if not user.is_admin:
-        raise HTTPException(403, "Réservé aux administrateurs")
+    if not user.is_admin and not user.is_directeur:
+        raise HTTPException(403, "Non autorisé")
     director = await User.get_or_none(id=data.director_id)
     if not director or not director.is_directeur:
         raise HTTPException(400, "L'utilisateur n'est pas un directeur")
     group = await Group.get_or_none(id=data.group_id)
     if not group:
         raise HTTPException(404, "Groupe introuvable")
+    if not user.is_admin:
+        await group.fetch_related('department')
+        if group.department.name != user.dept_str:
+            raise HTTPException(403, "Vous ne pouvez assigner que des groupes de votre département")
     existing = await DirectorGroupAssignment.get_or_none(
         director_id=data.director_id, group_id=data.group_id
     )
@@ -174,13 +195,19 @@ async def unassign_director_from_group(
     user: User = Depends(get_current_user),
 ):
     """Retire un directeur d'un groupe."""
-    if not user.is_admin:
-        raise HTTPException(403, "Réservé aux administrateurs")
+    if not user.is_admin and not user.is_directeur:
+        raise HTTPException(403, "Non autorisé")
     assignment = await DirectorGroupAssignment.get_or_none(
         director_id=data.director_id, group_id=data.group_id
     )
     if not assignment:
         raise HTTPException(404, "Assignation introuvable")
+    if not user.is_admin:
+        group = await Group.get_or_none(id=data.group_id)
+        if group:
+            await group.fetch_related('department')
+            if group.department.name != user.dept_str:
+                raise HTTPException(403, "Vous ne pouvez modifier que les groupes de votre département")
     await assignment.delete()
     return {"message": "Assignation supprimée"}
 
@@ -257,15 +284,23 @@ async def assign_employee_to_group(
     user: User = Depends(get_current_user),
 ):
     """Assigne un employé à un groupe (ou le désassigne si group_id=None)."""
-    if not user.is_admin:
-        raise HTTPException(403, "Réservé aux administrateurs")
+    if not user.is_admin and not user.is_directeur and not user.is_validator_n1:
+        raise HTTPException(403, "Non autorisé")
     employee = await Employee.get_or_none(id=data.employee_id)
     if not employee:
         raise HTTPException(404, "Employé introuvable")
+    if not user.is_admin:
+        await employee.fetch_related('department')
+        if employee.department.name != user.dept_str:
+            raise HTTPException(403, "Vous ne pouvez assigner que des employés de votre département")
     if data.group_id is not None:
         group = await Group.get_or_none(id=data.group_id)
         if not group:
             raise HTTPException(404, "Groupe introuvable")
+        if not user.is_admin:
+            await group.fetch_related('department')
+            if group.department.name != user.dept_str:
+                raise HTTPException(403, "Vous ne pouvez assigner que des groupes de votre département")
         # Vérifier que le groupe est dans le même département que l'employé
         if group.department_id != employee.dept_id:
             raise HTTPException(400, "Le groupe doit être dans le même département que l'employé")
@@ -282,14 +317,22 @@ async def bulk_assign_employees_to_group(
     user: User = Depends(get_current_user),
 ):
     """Assigne plusieurs employés à un groupe en une seule opération."""
-    if not user.is_admin:
-        raise HTTPException(403, "Réservé aux administrateurs")
+    if not user.is_admin and not user.is_directeur and not user.is_validator_n1:
+        raise HTTPException(403, "Non autorisé")
     group = await Group.get_or_none(id=data.group_id)
     if not group:
         raise HTTPException(404, "Groupe introuvable")
+    if not user.is_admin:
+        await group.fetch_related('department')
+        if group.department.name != user.dept_str:
+            raise HTTPException(403, "Vous ne pouvez assigner que des groupes de votre département")
     employees = await Employee.filter(id__in=data.employee_ids, is_active=True)
     assigned = 0
     for emp in employees:
+        if not user.is_admin:
+            await emp.fetch_related('department')
+            if emp.department.name != user.dept_str:
+                continue
         if emp.dept_id == group.department_id:
             emp.group_id = data.group_id
             await emp.save()

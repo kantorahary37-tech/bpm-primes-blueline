@@ -26,7 +26,11 @@ export default function GroupsPage() {
   const [activeTab, setActiveTab] = useState('groups');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
-  const [filterDept, setFilterDept] = useState('');
+  const [filterDept, setFilterDept] = useState(
+    (user && (user.is_directeur || user.is_validator_n1) && !user.is_admin && !user.is_dg && !user.is_drh)
+      ? user.department
+      : ''
+  );
 
   const load = async () => {
     setLoading(true);
@@ -53,11 +57,14 @@ export default function GroupsPage() {
     }
   }, [isDirectorOrN1, user?.department]);
 
+  const canManageDirectors = user?.is_admin || (user?.is_directeur && !user?.is_validator_n1 && !user?.is_dg && !user?.is_drh);
   const tabs = [
     { key: 'groups', label: 'Groupes', icon: UsersIcon },
     { key: 'employees', label: 'Assignation employés', icon: UsersIcon },
-    { key: 'directors', label: 'Directeurs ↔ Groupes', icon: UsersIcon },
-    { key: 'scope', label: 'Vue directeur', icon: UsersIcon },
+    ...(canManageDirectors ? [
+      { key: 'directors', label: 'Directeurs ↔ Groupes', icon: UsersIcon },
+      { key: 'scope', label: 'Vue directeur', icon: UsersIcon },
+    ] : []),
   ];
 
   return (
@@ -80,7 +87,7 @@ export default function GroupsPage() {
               <option key={d.id} value={d.name}>{d.name}</option>
             ))}
           </select>
-          {user?.is_admin && (
+          {(user?.is_admin || user?.is_directeur || user?.is_validator_n1) && (
             <button onClick={() => setShowCreateModal(true)} className="btn btn-primary btn-sm flex items-center gap-1.5">
               <PlusIcon className="w-4 h-4" />
               Nouveau groupe
@@ -204,7 +211,7 @@ function GroupsList({ groups, loading, departments, onRefresh, onEdit, user }) {
                   {!g.active && (
                     <span className="badge badge-ghost badge-sm text-gray-400">Inactif</span>
                   )}
-                  {user?.is_admin && (
+                  {(user?.is_admin || ((user?.is_directeur || user?.is_validator_n1) && g.department === user?.department)) && (
                     <>
                       <button onClick={() => onEdit(g)} className="btn btn-ghost btn-xs text-gray-400 hover:text-blue-600">
                         <EditIcon className="w-4 h-4" />
