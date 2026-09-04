@@ -24,6 +24,20 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
+const ALL_STATUSES = ['Initialisé', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
+
+// Statuts visibles/filtrables par rôle — chaque validateur ne voit que son flux :
+// Directeur : En attente Directeur · DRH : Prime validée · N+1 : Initialisé · DG : En attente DG · Admin : tous
+const roleStatuses = (user) => {
+  if (!user) return [];
+  if (user.is_admin) return ALL_STATUSES;
+  if (user.is_dg) return ['En attente DG'];
+  if (user.is_drh) return ['Prime validée'];
+  if (user.is_directeur) return ['En attente Directeur'];
+  if (user.is_validator_n1) return ['Initialisé'];
+  return [];
+};
+
 const BonusesList = () => {
   const { user } = useAuth();
   const { canSeeAmounts } = useSystemConfig();
@@ -64,13 +78,13 @@ const [filterMonth, setFilterMonth] = useState('');
   }, []);
 
   useEffect(() => {
+    // Statut par défaut du rôle (un seul statut autorisé hors admin)
     if (!new URLSearchParams(window.location.search).get('status')) {
+      const allowed = roleStatuses(user);
       if (user?.is_admin) setStatusFilter('');
-      else if (user?.is_dg) setStatusFilter('En attente DG');
-      else if (user?.is_directeur) setStatusFilter('En attente Directeur');
-      else if (user?.is_drh) setStatusFilter('Prime validée');
+      else if (allowed.length === 1) setStatusFilter(allowed[0]);
     }
-  }, [user?.is_admin, user?.is_dg, user?.is_directeur]);
+  }, [user?.is_admin, user?.is_dg, user?.is_drh, user?.is_directeur, user?.is_validator_n1]);
 
   // Paramètres de filtrage/tri/recherche envoyés au backend
   const queryParams = useMemo(() => {
@@ -265,13 +279,8 @@ const [filterMonth, setFilterMonth] = useState('');
   // Les filtres/tri/recherche sont appliqués côté backend : on affiche directement la liste renvoyée
   const filteredBonuses = bonuses;
 
-  // Options de statut : toutes les catégories possibles, dérivées du rôle
-  const statusOptions = useMemo(() => {
-    const all = ['Initialisé', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
-    if (user?.is_admin) return all;
-    // DG, DRH, directeur et validator_n1 peuvent tous filtrer sur n'importe quel statut visible
-    return all;
-  }, [user]);
+  // Options de statut : limitées aux statuts que le rôle est autorisé à voir
+  const statusOptions = useMemo(() => roleStatuses(user), [user]);
 
   const statusOptionLabel = (s) => {
     const map = {
@@ -388,7 +397,7 @@ const [filterMonth, setFilterMonth] = useState('');
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
           <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
-          {(user?.is_admin || user?.is_drh || user?.is_dg) && (
+          {(user?.is_admin || user?.is_drh) && (
             <button onClick={() => {
               const token = localStorage.getItem('token')
               fetch(`/api/v1/bonuses/export?status=Prime%20valid%C3%A9e&columns=${EXPORT_COLUMNS_LIST.join(',')}`, { headers: { Authorization: `Bearer ${token}` } })
@@ -449,8 +458,8 @@ const [filterMonth, setFilterMonth] = useState('');
           <option value="astreinte">Astreinte</option>
           <option value="commission">Commission</option>
         </select>
-        {/* Filtre statut : toutes les catégories */}
-        {user && (
+        {/* Filtre statut : limité aux statuts autorisés du rôle */}
+        {statusOptions.length > 0 && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
             <option value="">Tous statuts</option>

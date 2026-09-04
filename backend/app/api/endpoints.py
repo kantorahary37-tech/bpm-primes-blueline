@@ -463,16 +463,22 @@ async def list_bonuses(
             query = query.filter(employee__dept_str=user.department)
 
         # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
+        # Chaque rôle ne voit que les primes au statut qu'il doit traiter :
+        #   - DG : en attente DG
+        #   - DRH : primes validées
+        #   - Directeur : en attente Directeur
+        #   - N+1 : initialisées
+        #   - Admin : tous les statuts
         all_statuses_list = [s for s in ValidationStatus]
         if user.is_admin:
             default_statuses = all_statuses_list
             filterable_statuses = all_statuses_list
         elif user.is_dg:
             default_statuses = [ValidationStatus.EN_ATTENTE_DG]
-            filterable_statuses = all_statuses_list
+            filterable_statuses = [ValidationStatus.EN_ATTENTE_DG]
         elif user.is_drh:
             default_statuses = [ValidationStatus.VALIDE]
-            filterable_statuses = all_statuses_list
+            filterable_statuses = [ValidationStatus.VALIDE]
         elif user.is_directeur:
             default_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
             filterable_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
