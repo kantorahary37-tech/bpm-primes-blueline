@@ -121,7 +121,7 @@ export default function ValidationChainPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Chaîne de validation</h1>
         <p className="text-sm text-gray-400">
-          Visualisez qui valide les primes pour chaque département ou groupe
+          Visualisez qui valide les primes pour chaque département ou équipe
         </p>
       </div>
 
@@ -134,7 +134,7 @@ export default function ValidationChainPage() {
         </select>
         <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
           className="select select-bordered select-sm" disabled={!selectedDept}>
-          <option value="">Tous les groupes</option>
+          <option value="">Toutes les équipes</option>
           {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       </div>
@@ -165,7 +165,7 @@ export default function ValidationChainPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-800 mb-2">
               {chain.department}
-              {chain.group_id ? ` — Groupe #${chain.group_id}` : ''}
+              {chain.group_id ? ` — Équipe #${chain.group_id}` : ''}
             </h3>
             <p className="text-sm text-gray-400 mb-4">{chain.employee_count} employé(s) concerné(s)</p>
             <div className="bg-gray-50 rounded-lg p-4 overflow-x-auto">
@@ -220,7 +220,7 @@ export default function ValidationChainPage() {
         </div>
       ) : (
         <div className="text-center py-12 text-gray-400">
-          <p>Sélectionnez un département ou un groupe pour voir la chaîne de validation.</p>
+          <p>Sélectionnez un département ou une équipe pour voir la chaîne de validation.</p>
         </div>
       )}
     </div>

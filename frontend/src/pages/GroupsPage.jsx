@@ -38,7 +38,7 @@ export default function GroupsPage() {
       const data = await getAllGroups(filterDept || undefined);
       setGroups(data);
     } catch {
-      toast.error('Erreur lors du chargement des groupes');
+      toast.error('Erreur lors du chargement des équipes');
     } finally {
       setLoading(false);
     }
@@ -59,10 +59,10 @@ export default function GroupsPage() {
 
   const canManageDirectors = user?.is_admin || (user?.is_directeur && !user?.is_validator_n1 && !user?.is_dg && !user?.is_drh);
   const tabs = [
-    { key: 'groups', label: 'Groupes', icon: UsersIcon },
+    { key: 'groups', label: 'Équipes', icon: UsersIcon },
     { key: 'employees', label: 'Assignation employés', icon: UsersIcon },
     ...(canManageDirectors ? [
-      { key: 'directors', label: 'Directeurs ↔ Groupes', icon: UsersIcon },
+      { key: 'directors', label: 'Directeurs ↔ Équipes', icon: UsersIcon },
       { key: 'scope', label: 'Vue directeur', icon: UsersIcon },
     ] : []),
   ];
@@ -71,9 +71,9 @@ export default function GroupsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Groupes / Sous-départements</h1>
+          <h1 className="text-xl font-bold text-gray-900">Équipes / Sous-départements</h1>
           <p className="text-sm text-gray-400">
-            Gérer les groupes, assigner les employés et les directeurs
+            Gérer les équipes, assigner les employés et les directeurs
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -90,7 +90,7 @@ export default function GroupsPage() {
           {(user?.is_admin || user?.is_directeur || user?.is_validator_n1) && (
             <button onClick={() => setShowCreateModal(true)} className="btn btn-primary btn-sm flex items-center gap-1.5">
               <PlusIcon className="w-4 h-4" />
-              Nouveau groupe
+              Nouvelle équipe
             </button>
           )}
         </div>
@@ -156,11 +156,11 @@ function GroupsList({ groups, loading, departments, onRefresh, onEdit, user }) {
   const [deleting, setDeleting] = useState(null);
 
   const handleDelete = async (group) => {
-    if (!confirm(`Supprimer le groupe "${group.name}" ? Les employés seront désassignés.`)) return;
+    if (!confirm(`Supprimer l'équipe "${group.name}" ? Les employés seront désassignés.`)) return;
     setDeleting(group.id);
     try {
       await deleteGroup(group.id);
-      toast.success('Groupe supprimé');
+      toast.success('Équipe supprimée');
       onRefresh();
     } catch {
       toast.error('Erreur lors de la suppression');
@@ -185,7 +185,7 @@ function GroupsList({ groups, loading, departments, onRefresh, onEdit, user }) {
       {Object.keys(grouped).length === 0 && (
         <div className="text-center py-12 text-gray-400">
           <UsersIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p>Aucun groupe trouvé. Créez un groupe ou synchronisez depuis LDAP.</p>
+          <p>Aucune équipe trouvée. Créez une équipe ou synchronisez depuis LDAP.</p>
         </div>
       )}
       {Object.entries(grouped).map(([dept, deptGroups]) => (
@@ -291,7 +291,7 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
       setEmployees(prev => prev.map(e =>
         e.id === empId ? { ...e, group_id: groupId || null } : e
       ));
-      toast.success(groupId ? 'Employé assigné au groupe' : 'Assignation retirée');
+      toast.success(groupId ? "Employé assigné à l'équipe" : 'Assignation retirée');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
     } finally {
@@ -329,8 +329,8 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
         </select>
         <select value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}
           className="select select-bordered select-sm">
-          <option value="">Tous les groupes</option>
-          <option value="none">Sans groupe</option>
+          <option value="">Toutes les équipes</option>
+          <option value="none">Sans équipe</option>
           {deptGroups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.department})</option>)}
         </select>
         <div className="relative">
@@ -351,7 +351,7 @@ function EmployeeGroupAssignment({ groups, departments, onRefresh }) {
               <th className="text-left text-xs font-semibold text-gray-500">Matricule</th>
               <th className="text-left text-xs font-semibold text-gray-500">Nom</th>
               <th className="text-left text-xs font-semibold text-gray-500">Département</th>
-              <th className="text-left text-xs font-semibold text-gray-500">Groupe actuel</th>
+              <th className="text-left text-xs font-semibold text-gray-500">Équipe actuelle</th>
               <th className="text-left text-xs font-semibold text-gray-500">Assigner</th>
             </tr>
           </thead>
@@ -450,13 +450,13 @@ function DirectorGroupAssignment({ groups, departments, onRefresh }) {
 
   const handleAssign = async () => {
     if (!selectedDirector || !selectedGroup) {
-      toast.error('Sélectionnez un directeur et un groupe');
+      toast.error('Sélectionnez un directeur et une équipe');
       return;
     }
     setAssigning(true);
     try {
       await assignDirectorToGroup(parseInt(selectedDirector), parseInt(selectedGroup));
-      toast.success('Directeur assigné au groupe');
+      toast.success("Directeur assigné à l'équipe");
       const asgns = await getDirectorAssignments(filterDept || undefined);
       setAssignments(asgns);
       setSelectedDirector('');
@@ -498,7 +498,7 @@ function DirectorGroupAssignment({ groups, departments, onRefresh }) {
 
       {/* Assignment form */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-        <h3 className="font-semibold text-gray-800 text-sm mb-3">Assigner un directeur à un groupe</h3>
+        <h3 className="font-semibold text-gray-800 text-sm mb-3">Assigner un directeur à une équipe</h3>
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[200px]">
             <label className="text-xs text-gray-500 mb-1 block">Directeur</label>
@@ -509,10 +509,10 @@ function DirectorGroupAssignment({ groups, departments, onRefresh }) {
             </select>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className="text-xs text-gray-500 mb-1 block">Groupe</label>
+            <label className="text-xs text-gray-500 mb-1 block">Équipe</label>
             <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
               className="select select-bordered select-sm w-full">
-              <option value="">Choisir un groupe...</option>
+              <option value="">Choisir une équipe...</option>
               {groups.filter(g => g.active).map(g => (
                 <option key={g.id} value={g.id}>{g.name} ({g.department})</option>
               ))}
@@ -531,7 +531,7 @@ function DirectorGroupAssignment({ groups, departments, onRefresh }) {
         <div className="flex justify-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
       ) : Object.keys(byDirector).length === 0 ? (
         <div className="text-center py-12 text-gray-400">
-          <p>Aucune assignation directeur ↔ groupe trouvée.</p>
+          <p>Aucune assignation directeur ↔ équipe trouvée.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -543,7 +543,7 @@ function DirectorGroupAssignment({ groups, departments, onRefresh }) {
                 </div>
                 <div>
                   <p className="font-semibold text-purple-900 text-sm">{info.name}</p>
-                  <p className="text-xs text-purple-500">{info.groups.length} groupe(s) assigné(s)</p>
+                  <p className="text-xs text-purple-500">{info.groups.length} équipe(s) assignée(s)</p>
                 </div>
               </div>
               <div className="p-4 flex flex-wrap gap-2">
@@ -612,7 +612,7 @@ function DirectorScopeView({ groups }) {
 
       if (scope.groups.length === 0) {
         const emptyNode = `EMPTY_${si}`;
-        lines.push(`    ${emptyNode}["⚠️ Aucun groupe assigné"]`);
+        lines.push(`    ${emptyNode}["⚠️ Aucune équipe assignée"]`);
         lines.push(`    ${dirNode} --> ${emptyNode}`);
         lines.push(`    style ${emptyNode} fill:#fef3c7,stroke:#d97706,stroke-width:1px,color:#92400e`);
       }
@@ -657,7 +657,7 @@ function DirectorScopeView({ groups }) {
   if (scopes.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400">
-        <p>Aucun directeur trouvé. Configurez les directeurs et assignez-leur des groupes.</p>
+        <p>Aucun directeur trouvé. Configurez les directeurs et assignez-leur des équipes.</p>
       </div>
     );
   }
@@ -679,7 +679,7 @@ function DirectorScopeView({ groups }) {
             </div>
             <div className="space-y-2">
               {scope.groups.length === 0 ? (
-                <p className="text-sm text-orange-500">⚠️ Aucun groupe assigné</p>
+                <p className="text-sm text-orange-500">⚠️ Aucune équipe assignée</p>
               ) : scope.groups.map((g, i) => (
                 <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                   <div>
@@ -722,7 +722,7 @@ function GroupCreateModal({ onClose, onCreated, departments }) {
     setSaving(true);
     try {
       await createGroup({ name: name.trim(), department, active: true });
-      toast.success('Groupe créé');
+      toast.success('Équipe créée');
       onCreated();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
@@ -732,10 +732,10 @@ function GroupCreateModal({ onClose, onCreated, departments }) {
   };
 
   return (
-    <Modal open onClose={onClose} title="Nouveau groupe" size="sm">
+    <Modal open onClose={onClose} title="Nouvelle équipe" size="sm">
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-gray-700 mb-1 block">Nom du groupe</label>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">Nom de l'équipe</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)}
             className="input input-bordered w-full" placeholder="Ex: Bureau commercial" />
         </div>
@@ -775,7 +775,7 @@ function GroupEditModal({ group, onClose, onSaved }) {
     setSaving(true);
     try {
       await updateGroup(group.id, { name: name.trim(), active });
-      toast.success('Groupe mis à jour');
+      toast.success('Équipe mise à jour');
       onSaved();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur');
@@ -788,7 +788,7 @@ function GroupEditModal({ group, onClose, onSaved }) {
     <Modal open onClose={onClose} title={`Modifier "${group.name}"`} size="sm">
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-gray-700 mb-1 block">Nom du groupe</label>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">Nom de l'équipe</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)}
             className="input input-bordered w-full" />
         </div>
