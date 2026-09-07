@@ -4,21 +4,21 @@ import { useAuth } from '../contexts/AuthContext'
 import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon } from './Icons'
 
 const mainNavItems = [
-  { path: '/', label: 'Dashboard', icon: DashboardIcon },
-  { path: '/employees', label: 'Employés', icon: EmployeesIcon },
-  { path: '/bonuses', label: 'Primes', icon: BonusesIcon },
-  { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true },
+  { path: '/dashboard', label: 'Dashboard', icon: DashboardIcon, desc: 'Vue d\'ensemble et statistiques' },
+  { path: '/employees', label: 'Employés', icon: EmployeesIcon, desc: 'Gestion du personnel et LDAP' },
+  { path: '/bonuses', label: 'Primes', icon: BonusesIcon, desc: 'Suivi et validation des primes' },
+  { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true, desc: 'Configuration des plafonds' },
 ]
 
 const adminNavItems = [
-  { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
-  { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
-  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin'] },
-  { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin'] },
+  { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Paramètres généraux du système' },
+  { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Consultation des archives' },
+  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin'], desc: 'Modèles d\'évaluation' },
+  { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin'], desc: 'Gestion des comptes utilisateurs' },
 ]
 
 function visibleMainItems(user) {
-  return mainNavItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh)))
+  return mainNavItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_validator_n1)))
 }
 
 function visibleAdminItems(user) {
@@ -92,12 +92,18 @@ export default function Layout({ children }) {
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      title={item.desc}
+                      className={`group relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         active ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
                       {item.label}
+                      {item.desc && (
+                        <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2.5 py-1 rounded-lg bg-gray-900 text-white text-[11px] font-normal whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity shadow-lg z-50">
+                          {item.desc}
+                        </span>
+                      )}
                     </Link>
                   )
                 })}
@@ -114,7 +120,8 @@ export default function Layout({ children }) {
                       <ChevronDownIcon className={`w-3.5 h-3.5 shrink-0 transition-transform ${adminOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {adminOpen && (
-                      <div className="absolute left-0 top-full mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 animate-scaleIn">
+                      <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 animate-scaleIn">
+                        <p className="px-4 pt-1.5 pb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Administration</p>
                         {adminItems.map((item) => {
                           const active = isActive(pathname, item.path)
                           const Icon = item.icon
@@ -123,12 +130,17 @@ export default function Layout({ children }) {
                               key={item.path}
                               to={item.path}
                               onClick={() => setAdminOpen(false)}
-                              className={`flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
+                              className={`flex flex-col px-4 py-2 transition-colors ${
                                 active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                               }`}
                             >
-                              <Icon className="w-4 h-4" />
-                              {item.label}
+                              <span className="flex items-center gap-2.5 text-sm">
+                                <Icon className="w-4 h-4" />
+                                {item.label}
+                              </span>
+                              {item.desc && (
+                                <span className="text-[11px] text-gray-400 ml-6.5 mt-0.5 leading-tight">{item.desc}</span>
+                              )}
                             </Link>
                           )
                         })}
@@ -209,8 +221,11 @@ export default function Layout({ children }) {
                       active ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
-                    {item.label}
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span className="flex flex-col">
+                      {item.label}
+                      {item.desc && <span className="text-[11px] font-normal text-gray-400 leading-tight">{item.desc}</span>}
+                    </span>
                   </Link>
                 )
               })}
@@ -229,8 +244,11 @@ export default function Layout({ children }) {
                           active ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                         }`}
                       >
-                        <Icon className="w-5 h-5" />
-                        {item.label}
+                        <Icon className="w-5 h-5 shrink-0" />
+                        <span className="flex flex-col">
+                          {item.label}
+                          {item.desc && <span className="text-[11px] font-normal text-gray-400 leading-tight">{item.desc}</span>}
+                        </span>
                       </Link>
                     )
                   })}

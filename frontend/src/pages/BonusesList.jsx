@@ -371,8 +371,6 @@ const [filterMonth, setFilterMonth] = useState('');
 
   const clearSelection = () => setSelectedBonuses(new Set());
 
-  const validatedCount = useMemo(() => bonuses.filter(b => b.status === 'Prime validée').length, [bonuses]);
-
   const getCommonStep = useCallback(() => {
     const ids = [...selectedBonuses];
     if (ids.length === 0) return null;
@@ -396,36 +394,16 @@ const [filterMonth, setFilterMonth] = useState('');
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Primes</h1>
         <div className="flex gap-2">
-          <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>
-          {(user?.is_admin || user?.is_drh) && (
-            <button onClick={() => {
-              const token = localStorage.getItem('token')
-              fetch(`/api/v1/bonuses/export?status=Prime%20valid%C3%A9e&columns=${EXPORT_COLUMNS_LIST.join(',')}`, { headers: { Authorization: `Bearer ${token}` } })
-                .then(r => r.blob())
-                .then(blob => {
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `export_validees_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
-                  a.click()
-                  URL.revokeObjectURL(url)
-                })
-            }}
-              className="btn bg-emerald-600 hover:bg-emerald-700 text-white border-0 gap-2"
-              title="Export rapide de toutes les primes validées"
-            >
-              <DownloadIcon className="w-4 h-4" />
-              Export validées
-              <span className="badge badge-sm bg-white/20 text-white font-bold">{validatedCount}</span>
-            </button>
-          )}
+          <Link to="/bonuses/new" className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">
+            Nouvelle Prime
+          </Link>
           <button onClick={() => {
             setExportColumns(EXPORT_COLUMNS_LIST)
             setShowExportModal(true)
           }}
-            className="btn btn-outline btn-success"
+            className="btn btn-sm bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 gap-1.5"
           >
-            <DownloadIcon className="w-4 h-4" />
+            <DownloadIcon className="w-3.5 h-3.5" />
             Exporter Excel
           </button>
           {/* <button onClick={() => {

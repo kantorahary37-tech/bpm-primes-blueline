@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { getEmployees, getBonuses, createEmployee, updateEmployee, getUsers, adminLdapSyncEmployees, getCurrencies, createCurrency, deleteCurrency } from '../services/api';
+import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
 import { Link } from 'react-router-dom';
-import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon, SearchIcon } from '../components/Icons';
+import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon, SearchIcon, DatabaseIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 
 const typeIcons = {
@@ -63,8 +63,11 @@ const Employees = () => {
   const canManageCurrencies = user?.is_admin || user?.is_dg || user?.is_drh;
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '', currency: 'Ar' });
+  const [showLdapModal, setShowLdapModal] = useState(false);
+  const [ldapQuery, setLdapQuery] = useState('');
+  const [ldapResults, setLdapResults] = useState([]);
+  const [ldapSearching, setLdapSearching] = useState(false);
+  const [ldapAdding, setLdapAdding] = useState(false);
   const [managers, setManagers] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [empBonuses, setEmpBonuses] = useState([]);
@@ -141,16 +144,39 @@ const Employees = () => {
     );
   }, [employees, searchQuery]);
 
-  const handleSubmit = async (e) => {
+  const searchLdapEmployee = async (e) => {
     e.preventDefault();
+    const q = ldapQuery.trim();
+    if (q.length < 2) { toast.error('Saisissez un email ou un matricule'); return; }
+    setLdapSearching(true);
+    setLdapResults([]);
     try {
-      await createEmployee({ ...form, manager_id: parseInt(form.manager_id) });
-      setShowForm(false);
-      setForm({ matricule: '', name: '', department: deptNames[0] || '', manager_id: '', currency: 'Ar' });
-      const emps = await getEmployees();
+      const results = await adminLdapEmployeeSearch(q);
+      setLdapResults(Array.isArray(results) ? results : []);
+      if (!results || results.length === 0) toast.info('Aucun résultat trouvé dans l\'annuaire LDAP');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de la recherche LDAP');
+    } finally {
+      setLdapSearching(false);
+    }
+  };
+
+  const addEmployeeFromLdap = async (email) => {
+    if (!window.confirm('Ajouter cet employé depuis l\'annuaire LDAP ?')) return;
+    setLdapAdding(true);
+    try {
+      await adminCreateEmployeeFromLdap(email);
+      toast.success('Employé ajouté depuis LDAP');
+      setLdapResults(prev => prev.map(r => r.email === email ? { ...r, exists: true } : r));
+      const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
       setEmployees(emps);
     } catch (err) {
-      alert(err.response?.data?.detail || 'Erreur lors de la création');
+      toast.error(err.response?.data?.detail || 'Erreur lors de l\'ajout');
+      if (err.response?.status === 409) {
+        setLdapResults(prev => prev.map(r => r.email === email ? { ...r, exists: true } : r));
+      }
+    } finally {
+      setLdapAdding(false);
     }
   };
 
@@ -246,14 +272,16 @@ const Employees = () => {
         <h1 className="text-2xl font-bold text-gray-900">Employés</h1>
         <div className="flex items-center gap-2">
         {user?.is_admin && (
-          <button onClick={handleLdapSync} disabled={syncing} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5">
+          <button onClick={handleLdapSync} disabled={syncing} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5" title="Met à jour les informations des employés déjà présents dans BPM depuis l'annuaire LDAP. N'ajoute jamais de nouveaux employés : pour cela utilisez « Ajouter employé (LDAP) ».">
             {syncing ? <span className="loading loading-spinner loading-xs"></span> : null}
-            Sync LDAP
+            <DatabaseIcon className="w-4 h-4" /> Synchroniser avec LDAP
           </button>
         )}
-        <button onClick={() => setShowForm(true)} className="btn bg-blue-600 hover:bg-blue-700 text-white border-0 btn-sm flex items-center gap-1.5">
-          <PlusIcon className="w-4 h-4" /> Nouvel employé
-        </button>
+        {user?.is_admin && (
+          <button onClick={() => { setLdapQuery(''); setLdapResults([]); setShowLdapModal(true); }} className="btn bg-blue-600 hover:bg-blue-700 text-white border-0 btn-sm flex items-center gap-1.5" title="Recherche une personne dans l'annuaire LDAP par email ou matricule, vérifie si elle est déjà dans BPM, puis l'ajoute.">
+            <PlusIcon className="w-4 h-4" /> Ajouter employé (LDAP)
+          </button>
+        )}
         {canManageCurrencies && (
           <button onClick={openCurrencyModal} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5" title="Ajouter ou supprimer des devises">
             Gérer les devises
@@ -268,46 +296,61 @@ const Employees = () => {
         </div>
       </div>
 
-      {showForm && (
-        <div className="card bg-white border border-gray-200 shadow-sm mb-6">
-          <div className="card-body p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Nouvel employé</h3>
-            <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
-              <div className="form-control">
-                <label className="label"><span className="label-text">Matricule</span></label>
-                <input type="text" className="input input-bordered input-sm w-32" value={form.matricule} onChange={(e) => setForm({ ...form, matricule: e.target.value })} required />
-              </div>
-              <div className="form-control">
-                <label className="label"><span className="label-text">Nom</span></label>
-                <input type="text" className="input input-bordered input-sm w-48" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              </div>
-              <div className="form-control">
-                <label className="label"><span className="label-text">Département</span></label>
-                <select className="select select-bordered select-sm w-44" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} required>
-                  {deptNames.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="form-control">
-                <label className="label"><span className="label-text">Manager</span></label>
-                <select className="select select-bordered select-sm w-44" value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })} required>
-                  <option value="">Sélectionner...</option>
-                  {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              </div>
-              <div className="form-control">
-                <label className="label"><span className="label-text">Devise</span></label>
-                <select className="select select-bordered select-sm w-36" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} required>
-                  {currencyOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
-              </div>
-              <div className="flex gap-2">
-                <button type="submit" className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Créer</button>
-                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setShowForm(false)}>Annuler</button>
-              </div>
-            </form>
-          </div>
+      <Modal open={showLdapModal} onClose={() => setShowLdapModal(false)} title="Ajouter un employé depuis LDAP" size="lg">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Recherchez une personne dans l'annuaire LDAP par <strong>email</strong> ou <strong>matricule</strong>.
+            L'application vérifie ensuite si elle existe déjà dans BPM.
+          </p>
+          <form onSubmit={searchLdapEmployee} className="flex gap-2">
+            <input
+              type="text"
+              value={ldapQuery}
+              onChange={(e) => setLdapQuery(e.target.value)}
+              placeholder="Email ou matricule LDAP..."
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+              autoFocus
+            />
+            <button type="submit" disabled={ldapSearching} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">
+              {ldapSearching ? <span className="loading loading-spinner loading-xs"></span> : <SearchIcon className="w-4 h-4" />} Rechercher
+            </button>
+          </form>
+
+          {!ldapSearching && ldapResults.length > 0 && (
+            <div className="space-y-2">
+              {ldapResults.map((r, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl">
+                  <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs shrink-0">
+                    {r.name ? r.name.charAt(0).toUpperCase() : '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm truncate">{r.name}</p>
+                    <p className="text-[11px] text-gray-400 truncate">{r.matricule} • {r.email}</p>
+                    {r.department && <p className="text-[11px] text-gray-400 truncate">{r.department}</p>}
+                  </div>
+                  {r.exists ? (
+                    <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-500 shrink-0">Déjà dans BPM</span>
+                  ) : !r.department ? (
+                    <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700 shrink-0" title="Aucun département dans l'annuaire LDAP">Sans département</span>
+                  ) : (
+                    <button
+                      onClick={() => addEmployeeFromLdap(r.email)}
+                      disabled={ldapAdding}
+                      className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0 shrink-0"
+                    >
+                      {ldapAdding ? <span className="loading loading-spinner loading-xs"></span> : <PlusIcon className="w-4 h-4" />} Ajouter
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!ldapSearching && ldapQuery && ldapResults.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">Aucun résultat dans l'annuaire LDAP.</p>
+          )}
         </div>
-      )}
+      </Modal>
 
       <div className="flex items-center gap-2 mb-4">
         {user?.is_admin || user?.is_dg || user?.is_drh ? (

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import Optional
-from app.models import User, Department
+from app.models import User, Department, Employee
 from app.auth import get_current_user, get_password_hash
-from app.schemas import UserResponse
+from app.ldap_helpers import connect, first, full_name, matricule, dept_name, escape_ldap, LDAP_ATTRS
+from app.schemas import UserResponse, EmployeeResponse
 
 router = APIRouter()
 
@@ -191,3 +192,147 @@ async def admin_ldap_search(q: str = "", _admin: User = Depends(require_admin)):
             conn.unbind()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur LDAP: {str(e)}")
+
+
+@router.get("/ldap-employee-search")
+async def admin_ldap_employee_search(q: str = "", _admin: User = Depends(require_admin)):
+    q = (q or '').strip()
+    if len(q) < 2:
+        return []
+    try:
+        from ldap3 import ALL, Connection, Server
+        import os
+
+        LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI', 'ldap://ldap.blueline.mg:389')
+        LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=blueline,dc=mg')
+        LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', 'blueline2488')
+        LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
+
+        server = Server(LDAP_SERVER_URI, get_info=ALL, connect_timeout=5)
+        conn = Connection(server, user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD, auto_bind=True, receive_timeout=5)
+        try:
+            q_safe = escape_ldap(q)
+            if '@' in q:
+                search_filter = f'(&(mail=*)(mail={q_safe}))'
+            elif q.isdigit():
+                padded = str(int(q)).zfill(5)
+                search_filter = f'(|(employeeNumber={padded})(employeeNumber={q_safe})(uid={q_safe}))'
+            else:
+                search_filter = f'(|(cn={q_safe})(uid={q_safe})(mail={q_safe}))'
+
+            conn.search(
+                search_base=LDAP_USER_SEARCH_BASE,
+                search_filter=search_filter,
+                attributes=['cn', 'mail', 'givenName', 'sn', 'title', 'departmentNumber', 'ou', 'uid', 'employeeNumber', 'manager'],
+                paged_size=30,
+            )
+
+            employees_by_matricule = {e.matricule: e async for e in Employee.all()}
+            results = []
+            for entry in conn.entries:
+                rec = {attr: first(entry, attr) for attr in ['cn', 'mail', 'givenName', 'sn', 'title', 'departmentNumber', 'ou', 'uid', 'employeeNumber', 'manager']}
+                email = (rec.get('mail') or '').strip().lower()
+                if not email:
+                    continue
+                m = matricule(rec, email)
+                existing = employees_by_matricule.get(m)
+                results.append({
+                    'email': email,
+                    'name': full_name(rec),
+                    'matricule': m,
+                    'department': dept_name(rec),
+                    'title': rec.get('title') or '',
+                    'exists': existing is not None,
+                    'employee_id': existing.id if existing else None,
+                })
+            return results
+        finally:
+            conn.unbind()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur LDAP: {str(e)}")
+
+
+class LdapEmployeeCreateRequest(BaseModel):
+    email: str
+
+
+async def _resolve_manager(rec: dict, dept_name_: Optional[str]) -> Optional[User]:
+    """Résout le manager d'un employé : tokensus le DN LDAP du manager, sinon
+    chef de département, sinon DG (mêmes règles de repli que scripts.sync_ldap)."""
+    raw_dn = rec.get('manager')
+    if raw_dn:
+        tokens = []
+        for part in raw_dn.split(','):
+            kv = part.split('=', 1)
+            if len(kv) == 2 and kv[0].strip().lower() in ('cn', 'uid'):
+                tokens.append(kv[1].strip())
+        for tok in tokens:
+            if '@' in tok:
+                u = await User.get_or_none(email=tok.lower())
+                if u:
+                    return u
+        for tok in tokens:
+            if len(tok) >= 3:
+                u = await User.filter(name__icontains=tok).first()
+                if u:
+                    return u
+    if dept_name_:
+        u = await User.filter(dept_str=dept_name_).first()
+        if u:
+            return u
+    return await User.filter(is_dg=True).first()
+
+
+@router.post("/ldap-employees", response_model=EmployeeResponse)
+async def admin_create_employee_from_ldap(req: LdapEmployeeCreateRequest, _admin: User = Depends(require_admin)):
+    import os
+    from ldap3 import ALL, Connection, Server
+
+    email = (req.email or '').strip().lower()
+    if not email or '@' not in email:
+        raise HTTPException(status_code=400, detail="Email invalide")
+
+    LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI', 'ldap://ldap.blueline.mg:389')
+    LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=blueline,dc=mg')
+    LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', 'blueline2488')
+    LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
+
+    server = Server(LDAP_SERVER_URI, get_info=ALL, connect_timeout=5)
+    conn = Connection(server, user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD, auto_bind=True, receive_timeout=5)
+    try:
+        conn.search(
+            search_base=LDAP_USER_SEARCH_BASE,
+            search_filter=f'(&(mail=*)(mail={escape_ldap(email)}))',
+            attributes=['cn', 'mail', 'givenName', 'sn', 'title', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager'],
+            paged_size=5,
+        )
+        if not conn.entries:
+            raise HTTPException(status_code=404, detail="Personne non trouvée dans l'annuaire LDAP")
+        entry = conn.entries[0]
+        rec = {attr: first(entry, attr) for attr in ['cn', 'mail', 'givenName', 'sn', 'title', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager']}
+
+        m = matricule(rec, email)
+        if await Employee.exists(matricule=m):
+            raise HTTPException(status_code=409, detail=f"L'employé {m} existe déjà dans BPM")
+
+        dept_name_ = dept_name(rec)
+        if not dept_name_:
+            raise HTTPException(status_code=400, detail="Cette personne n'a pas de département dans l'annuaire LDAP — impossible de l'ajouter")
+        dept_obj, _ = await Department.get_or_create(name=dept_name_)
+
+        manager_user = await _resolve_manager(rec, dept_name_)
+        if not manager_user:
+            raise HTTPException(status_code=400, detail="Impossible de résoudre le manager de cet employé")
+
+        emp = await Employee.create(
+            matricule=m,
+            name=full_name(rec),
+            dept_str=dept_name_ or '',
+            dept=dept_obj,
+            manager=manager_user,
+            currency='Ar',
+            is_active=True,
+        )
+        return await Employee.get(id=emp.id)
+    finally:
+        conn.unbind()

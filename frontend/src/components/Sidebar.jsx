@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: '📊' },
+  { path: '/dashboard', label: 'Dashboard', icon: '📊' },
   { path: '/employees', label: 'Employés', icon: '👥' },
   { path: '/bonuses', label: 'Primes', icon: '💰' },
   { path: '/settings/primemax', label: 'Plafonds', icon: '⚙️', hideForAdmin: true },

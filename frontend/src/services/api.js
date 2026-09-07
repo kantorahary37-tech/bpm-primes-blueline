@@ -237,6 +237,16 @@ export const adminLdapSearch = async (query) => {
   return data;
 };
 
+export const adminLdapEmployeeSearch = async (query) => {
+  const { data } = await api.get('/admin/ldap-employee-search', { params: { q: query } });
+  return data;
+};
+
+export const adminCreateEmployeeFromLdap = async (email) => {
+  const { data } = await api.post('/admin/ldap-employees', { email });
+  return data;
+};
+
 export const getCommissionConfig = async (includeInactive = false) => {
   const { data } = await api.get('/commission-config', { params: { include_inactive: includeInactive } });
   return data;

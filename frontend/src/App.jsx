@@ -47,7 +47,8 @@ function AppContent() {
       <Route path="/signup" element={<SignUp />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/" element={<ProtectedRoute><Navigate to="/bonuses" replace /></ProtectedRoute>} />
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/bonuses" element={<ProtectedRoute><BonusesList /></ProtectedRoute>} />
       <Route path="/bonuses/new" element={<ProtectedRoute><BonusTypeSelect /></ProtectedRoute>} />
       <Route path="/bonuses/new/:type" element={<ProtectedRoute><BonusForm /></ProtectedRoute>} />

@@ -5,8 +5,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
 import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
+import {
   ClipboardIcon, ClockIcon, CheckIcon, EmployeesIcon,
-  CalendarIcon, MoonIcon, ChartIcon, EyeIcon,
+  CalendarIcon, MoonIcon, ChartIcon,
 } from '../components/Icons';
 
 const typeIcons = {
@@ -88,22 +92,46 @@ const Dashboard = () => {
     return { total, totalAmount, pending, validated, byType, validatedByType, employees: employees.length };
   }, [bonuses, employees]);
 
-  const myPending = useMemo(() => {
-    if (!user) return [];
-    if (user.is_admin) return bonuses;
-    if (user.is_drh) {
-      const toPay = bonuses.filter(b => b.status === 'Prime validée');
-      toPay.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      return toPay;
+  const { monthlyData, donutData, monthLabels } = useMemo(() => {
+    const colors = { mensuel: '#2563eb', astreinte: '#7c3aed', commission: '#d97706', inconnu: '#9ca3af' };
+    const labels = { mensuel: 'Mensuel', astreinte: 'Astreinte', commission: 'Commission', inconnu: '?' };
+
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString('fr-FR', { month: 'short' }), count: { mensuel: 0, astreinte: 0, commission: 0, inconnu: 0 } });
     }
-    const myStatuses = [];
-    if (user.is_validator_n1) myStatuses.push('Initialisé');
-    if (user.is_directeur) myStatuses.push('En attente Directeur');
-    if (user.is_dg) myStatuses.push('En attente DG');
-    const sorted = [...bonuses.filter(b => myStatuses.includes(b.status))];
-    sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    return sorted;
-  }, [bonuses, user]);
+
+    const countByType = { mensuel: 0, astreinte: 0, commission: 0, inconnu: 0 };
+
+    for (const b of bonuses) {
+      const tp = b.bonus_type || 'inconnu';
+      countByType[tp] = (countByType[tp] || 0) + 1;
+      if (!b.created_at) continue;
+      const d = new Date(b.created_at);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const bucket = months.find(m => m.key === key);
+      if (bucket) bucket.count[tp] = (bucket.count[tp] || 0) + 1;
+    }
+
+    const monthlyData = months.map(m => ({
+      name: m.label,
+      Mensuel: m.count.mensuel,
+      Astreinte: m.count.astreinte,
+      Commission: m.count.commission,
+    }));
+
+    const monthLabels = months.map(m => m.label);
+
+    const donutData = Object.entries(countByType)
+      .map(([key, value]) => ({ name: labels[key] || key, value, color: colors[key] || '#9ca3af' }))
+      .filter(d => d.value > 0);
+
+    return { monthlyData, donutData, monthLabels };
+  }, [bonuses]);
+
+
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -184,49 +212,46 @@ const Dashboard = () => {
         })}
       </div>
 
-      <div className="mb-6">
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl text-white ${user?.is_drh ? 'bg-emerald-600' : 'bg-blue-600'}`}>
-          <EyeIcon className="w-4 h-4" />
-          <h2 className="font-semibold">{user?.is_admin ? 'Toutes les primes' : user?.is_drh ? 'À traiter' : 'À valider par vous'}</h2>
-          <Link to={user?.is_drh ? '/validated' : '/bonuses?view=status'} className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/30 hover:text-white transition-all">
-            Voir tout
-          </Link>
-          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full bg-white ${user?.is_drh ? 'text-emerald-700' : 'text-blue-700'}`}>
-            {myPending.length}
-          </span>
+
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-3">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Primes par mois (6 derniers mois)</h3>
+          <div className="w-full h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyData}>
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} width={30} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="Mensuel" stackId="a" fill="#2563eb" />
+                <Bar dataKey="Astreinte" stackId="a" fill="#7c3aed" />
+                <Bar dataKey="Commission" stackId="a" fill="#d97706" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        {myPending.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            {user?.is_admin ? 'Aucune prime' : user?.is_drh ? 'Aucune prime à traiter' : 'Aucune prime en attente de votre validation'}
-          </div>
-        ) : (
-          <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-              {myPending.slice(0, 6).map((bonus) => {
-                return (
-                  <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm transition-all group">
-                    <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                      {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
-                    </div>
-                    <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-                      <span className="font-medium" title={bonus.employee?.name || 'N/A'}>
-                        {bonus.employee?.matricule || 'N/A'}{bonus.employee?.name && bonus.employee.name.split(' ')[0].length <= 12 ? ` ${bonus.employee.name.split(' ')[0]}` : ''}
-                      </span>
-                    </span>
-                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
-                      {statusLabel(bonus)}
-                    </span>
-                    <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${bonus.total_amount} ${symbolFor(bonus.employee?.currency)}` : '••••••'}</span>
-                    <EyeIcon className="w-3 h-3 text-gray-300 shrink-0" />
-                  </Link>
-                );
-              })}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Répartition par type</h3>
+          {donutData.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-400 text-sm">Aucune donnée</div>
+          ) : (
+            <div className="w-full h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                    {donutData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
 
       <div className="flex gap-4">
         <Link to="/bonuses/new" className="btn bg-blue-600 hover:bg-blue-700 text-white border-0">Nouvelle Prime</Link>

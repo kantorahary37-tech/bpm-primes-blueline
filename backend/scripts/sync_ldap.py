@@ -5,8 +5,12 @@ Usage:  python -m scripts.sync_ldap [--scope all|departments|users|employees]
 Fetches all users from the company LDAP directory and:
   1. Creates/updates Department records          (--scope departments)
   2. Creates/updates User records (managers, directors, …)   (--scope users)
-  3. Creates/updates Employee records with manager relationships  (--scope employees)
+  3. Updates existing Employee records with manager relationships (--scope employees)
   4. Resolves the LDAP ``manager`` DN attribute to BPM User FK
+
+Employees are only updated when their matricule already exists in the database:
+LDAP users without a matching employee are skipped (never auto-created). Add new
+employees via the BPM UI ("Ajouter depuis LDAP").
 
 Default scope is ``all`` (everything). Scoped runs reuse the data already
 present in the database for the parts they don't touch.
@@ -33,10 +37,10 @@ if os.path.exists(_env_path):
                 _key, _val = _line.split('=', 1)
                 os.environ.setdefault(_key.strip(), _val.strip())
 
-from ldap3 import ALL, Connection, Server
 from ldap3.core.exceptions import LDAPException
 
 from app.db_config import TORTOISE_ORM
+from app.ldap_helpers import connect, first, full_name, matricule, dept_name, LDAP_ATTRS
 from tortoise import Tortoise, run_async
 from app.models import User, Employee, Department, PrimeMax
 from app.auth import get_password_hash
@@ -45,11 +49,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# LDAP configuration (from environment / .env)
+# LDAP configuration (from environment / .env — shared with app.ldap_helpers)
 # ---------------------------------------------------------------------------
-LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI', 'ldap://ldap.blueline.mg:389')
-LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=blueline,dc=mg')
-LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', 'blueline2488')
 LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
 
 # When True, use the LDAP userPassword attribute for BPM auth.
@@ -57,14 +58,9 @@ LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
 USE_LDAP_PASSWORD = os.getenv('USE_LDAP_PASSWORD', 'false').lower() in ('1', 'true', 'yes')
 
 LDAP_PASSWORD_ATTR = 'userPassword' if USE_LDAP_PASSWORD else None
-
-LDAP_ATTRS = [
-    'uid', 'mail', 'givenName', 'sn', 'cn',
-    'employeeNumber', 'departmentNumber', 'ou',
-    'title', 'employeeType', 'manager',
-]
-if LDAP_PASSWORD_ATTR:
-    LDAP_ATTRS.append(LDAP_PASSWORD_ATTR)
+SYNC_ATTRS = list(LDAP_ATTRS)
+if LDAP_PASSWORD_ATTR and LDAP_PASSWORD_ATTR not in SYNC_ATTRS:
+    SYNC_ATTRS.append(LDAP_PASSWORD_ATTR)
 
 # ---------------------------------------------------------------------------
 # Known directors / special roles
@@ -89,40 +85,22 @@ VALIDATORS_N1: list[str] = [
 ]
 
 # ---------------------------------------------------------------------------
-# LDAP helpers
+# LDAP helpers (shared with app.ldap_helpers)
 # ---------------------------------------------------------------------------
-
-def _connect() -> Connection:
-    server = Server(LDAP_SERVER_URI, get_info=ALL, connect_timeout=5)
-    return Connection(
-        server,
-        user=LDAP_BIND_DN,
-        password=LDAP_BIND_PASSWORD,
-        auto_bind=True,
-        receive_timeout=5,
-    )
-
-
-def _first(entry, attr):
-    if attr not in entry:
-        return None
-    value = entry[attr].value
-    return value[0] if isinstance(value, list) and value else value
-
 
 def fetch_all_ldap_users() -> list[dict]:
     """Return a list of attribute-dicts for every LDAP entry with ``mail``."""
-    conn = _connect()
+    conn = connect()
     results: list[dict] = []
     try:
         conn.search(
             search_base=LDAP_USER_SEARCH_BASE,
             search_filter='(mail=*)',
-            attributes=LDAP_ATTRS,
+            attributes=SYNC_ATTRS,
             paged_size=500,
         )
         for entry in conn.entries:
-            record = {attr: _first(entry, attr) for attr in LDAP_ATTRS}
+            record = {attr: first(entry, attr) for attr in SYNC_ATTRS}
             record['dn'] = entry.entry_dn
             email = (record.get('mail') or '').strip().lower()
             if not email:
@@ -135,29 +113,8 @@ def fetch_all_ldap_users() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Extraction helpers
+# Extraction helpers (shared with app.ldap_helpers)
 # ---------------------------------------------------------------------------
-
-def _dept_name(rec: dict) -> str | None:
-    """Department name from LDAP record, or None when unknown."""
-    name = rec.get('departmentNumber') or rec.get('ou')
-    return str(name).strip() if name and str(name).strip() else None
-
-
-def _full_name(rec: dict) -> str:
-    given = rec.get('givenName') or ''
-    sn = rec.get('sn') or ''
-    if given and sn:
-        return f'{given} {sn}'
-    return rec.get('cn') or given or sn or rec.get('uid', 'Inconnu')
-
-
-def _matricule(rec: dict, email: str) -> str:
-    raw = rec.get('employeeNumber')
-    if raw and str(raw).strip().isdigit():
-        return str(int(raw)).zfill(5)
-    return rec.get('uid') or email.split('@')[0]
-
 
 def _is_director_poste(poste: str | None) -> bool:
     """True si le poste correspond à un(e) Directeur/Directrice."""
@@ -208,7 +165,7 @@ async def sync(scope: str = 'all'):
     # ------------------------------------------------------------------
     # 1. Departments
     # ------------------------------------------------------------------
-    all_dept_names = {_dept_name(u) for u in ldap_users}
+    all_dept_names = {dept_name(u) for u in ldap_users}
     all_dept_names.discard(None)
 
     departments_created = 0
@@ -270,14 +227,14 @@ async def sync(scope: str = 'all'):
             ldap_rec = email_index.get(email)
 
             if ldap_rec:
-                name = _full_name(ldap_rec)
+                name = full_name(ldap_rec)
                 poste = ldap_rec.get('title') or ldap_rec.get('employeeType') or ''
-                dept_name = _dept_name(ldap_rec)
+                user_dept = dept_name(ldap_rec)
             elif email in DIRECTORS:
                 d = DIRECTORS[email]
                 name = d.get('name', email)
                 poste = d.get('poste', '')
-                dept_name = d.get('department', '')
+                user_dept = d.get('department', '')
             else:
                 continue
 
@@ -295,13 +252,13 @@ async def sync(scope: str = 'all'):
                 if email not in VALIDATORS_N1:
                     is_n1 = False
 
-            dept_obj = dept_cache.get(dept_name) if dept_name else None
+            dept_obj = dept_cache.get(user_dept) if user_dept else None
 
             existing = existing_users.get(email)
             if existing:
                 existing.name = name
                 existing.poste = poste
-                existing.dept_str = dept_name
+                existing.dept_str = user_dept
                 existing.dept = dept_obj
                 if dir_from_poste and email not in VALIDATORS_N1:
                     existing.is_validator_n1 = False
@@ -327,7 +284,7 @@ async def sync(scope: str = 'all'):
                     email=email,
                     name=name,
                     poste=poste,
-                    dept_str=dept_name,
+                    dept_str=user_dept,
                     dept=dept_obj,
                     is_validator_n1=is_n1,
                     is_directeur=is_dir,
@@ -355,7 +312,6 @@ async def sync(scope: str = 'all'):
     # ------------------------------------------------------------------
     # 4. Employees (all LDAP users)
     # ------------------------------------------------------------------
-    employees_created = 0
     employees_updated = 0
     employees_deleted = 0
     manager_resolved = 0
@@ -397,35 +353,34 @@ async def sync(scope: str = 'all'):
                 mgr_user = user_by_email.get(mgr_email)
 
             if not mgr_user:
-                dept_name = _dept_name(u)
-                mgr_user = dept_head.get(dept_name) if dept_name else None
+                emp_dept = dept_name(u)
+                mgr_user = dept_head.get(emp_dept) if emp_dept else None
                 if not mgr_user:
                     mgr_user = dg_user
 
             emp_manager_map[email] = (mgr_user, resolved_dn)
 
-        # Process employees in bulk
-        to_create: list[Employee] = []
+        # Process employees (updates only — never auto-create new employees)
         to_update: list[Employee] = []
         for u in ldap_users:
             email = u['email']
-            matricule = _matricule(u, email)
-            name = _full_name(u)
-            dept_name = _dept_name(u)
+            emp_matricule = matricule(u, email)
+            name = full_name(u)
+            emp_dept = dept_name(u)
 
-            if not dept_name:
+            if not emp_dept:
                 # Employé sans département dans l'AD → suppression de la base
-                existing = existing_employees.get(matricule)
+                existing = existing_employees.get(emp_matricule)
                 if existing:
                     await existing.delete()
                     employees_deleted += 1
-                    log.info('  ✗ Supprimé  %s (%s) — sans département dans l\'AD', name, matricule)
+                    log.info('  ✗ Supprimé  %s (%s) — sans département dans l\'AD', name, emp_matricule)
                 else:
-                    log.warning('  ⚠ %s (%s) sans département dans l\'AD — ignoré', name, matricule)
+                    log.warning('  ⚠ %s (%s) sans département dans l\'AD — ignoré', name, emp_matricule)
                     employees_skipped += 1
                 continue
 
-            dept_obj = dept_cache.get(dept_name)
+            dept_obj = dept_cache.get(emp_dept)
             manager_user, mgr_dn = emp_manager_map[email]
 
             if manager_user and mgr_dn:
@@ -434,33 +389,34 @@ async def sync(scope: str = 'all'):
                 manager_fallback += 1
 
             if not manager_user:
-                log.warning('  ⚠ Aucun manager pour %s (%s) — ignoré', name, matricule)
+                log.warning('  ⚠ Aucun manager pour %s (%s) — ignoré', name, emp_matricule)
                 employees_skipped += 1
                 continue
 
             emp_data = dict(
                 name=name,
-                dept_str=dept_name,
+                dept_str=emp_dept,
                 dept=dept_obj,
                 manager=manager_user,
                 is_active=True,
+                is_dg=False,
+                currency='Ar',
             )
+            if USE_LDAP_PASSWORD:
+                if u.get('userPassword'):
+                    emp_data['password'] = u['userPassword']
 
-            existing = existing_employees.get(matricule)
+            existing = existing_employees.get(emp_matricule)
             if existing:
-                for attr, val in emp_data.items():
-                    setattr(existing, attr, val)
+                for k, v in emp_data.items():
+                    setattr(existing, k, v)
                 to_update.append(existing)
-                employees_updated += 1
             else:
-                to_create.append(Employee(matricule=matricule, **emp_data))
-                employees_created += 1
+                log.warning('  ⚠ %s (%s) présent dans l\'AD mais absent de la base — non ajouté', name, emp_matricule)
+                employees_skipped += 1
+                continue
 
-        if to_create:
-            await Employee.bulk_create(to_create)
-            for emp in to_create:
-                log.info('  ✓ Créé  %s (%s) [%s]', emp.name, emp.matricule, emp.dept_str)
-
+        employees_updated = len(to_update)
         for emp in to_update:
             await emp.save()
 
@@ -511,8 +467,8 @@ async def sync(scope: str = 'all'):
         log.info('  Utilisateurs : %d créés, %d mis à jour',
                  users_created, users_updated)
     if do_employees:
-        log.info('  Employés     : %d créés, %d mis à jour, %d supprimés, %d ignorés',
-                 employees_created, employees_updated, employees_deleted, employees_skipped)
+        log.info('  Employés     : %d mis à jour, %d supprimés, %d ignorés',
+                 employees_updated, employees_deleted, employees_skipped)
         log.info('  Managers     : %d résolus LDAP, %d par défaut',
                  manager_resolved, manager_fallback)
     log.info('=' * 52)
