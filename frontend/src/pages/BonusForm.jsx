@@ -803,38 +803,34 @@ export default function BonusForm() {
   )
 
   const sharedHeader = (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
-      <div className="card-blueline p-3">
-        <h2 className="font-semibold text-base-content mb-2 text-sm">{editType === 'astreinte' ? 'Responsable' : editType === 'commission' && !isEditing ? 'Import CSV 4D' : "Informations de l'employé"}</h2>
-        <div className="space-y-1.5">
-          {editType === 'astreinte' ? (
-            <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2">
-              Les employés sont définis dans les tableaux ci-dessous. Une prime sera créée par employé.
-            </div>
-          ) : editType === 'commission' && !isEditing ? (
-            <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2 space-y-1">
-              <p>Les primes commission sont calculées à partir du <b>fichier CSV 4D</b> des ventes du mois (séparateur <b>;</b>).</p>
-              <p>Une prime <b>Initialisée</b> sera créée par employé trouvé (matricule exact) ayant réalisé au moins une vente.</p>
-            </div>
-          ) : isEditing ? (
-            <div className="space-y-1.5">
-              <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nom et prénom</label>
-                <input type="text" value={employee.name} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+    <div className={`grid gap-3 mb-2 ${editType === 'commission' ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+      {editType !== 'commission' && (
+        <div className="card-blueline p-3">
+          <h2 className="font-semibold text-base-content mb-2 text-sm">{editType === 'astreinte' ? 'Responsable' : "Informations de l'employé"}</h2>
+          <div className="space-y-1.5">
+            {editType === 'astreinte' ? (
+              <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2">
+                Les employés sont définis dans les tableaux ci-dessous. Une prime sera créée par employé.
               </div>
-              <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Matricule</label>
-                <input type="text" value={employee.matricule} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+            ) : isEditing ? (
+              <div className="space-y-1.5">
+                <div>
+                  <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nom et prénom</label>
+                  <input type="text" value={employee.name} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-base-content/70 mb-0.5">Matricule</label>
+                  <input type="text" value={employee.matricule} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-base-content/70 mb-0.5">Département</label>
+                  <input type="text" value={employee.department} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Département</label>
-                <input type="text" value={employee.department} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <div ref={empSearchRef} className="relative">
-                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Employé</label>
+            ) : (
+              <div className="space-y-1.5">
+                <div ref={empSearchRef} className="relative">
+                  <label className="block text-sm font-medium text-base-content/70 mb-0.5">Employé</label>
                 <input
                   type="text"
                   placeholder="Rechercher par nom ou matricule..."
@@ -890,6 +886,7 @@ export default function BonusForm() {
           )}
         </div>
       </div>
+      )}
 
       <div className="card-blueline p-3">
         <h2 className="font-semibold text-base-content mb-2 text-sm">Responsable & Période</h2>
@@ -1068,103 +1065,145 @@ export default function BonusForm() {
         <form onSubmit={handleSubmitCommission} className="space-y-3">
           {sharedHeader}
           <div className="card-blueline p-4">
-            <h2 className="font-semibold text-base-content text-sm mb-2">Fichier CSV 4D des ventes</h2>
-            <div className="flex flex-col md:flex-row md:items-end gap-3">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Fichier (séparateur ;, encodage UTF-8)</label>
-                <button type="button" onClick={() => setShowSftp(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300 bg-white hover:border-brand-500 hover:ring-2 hover:ring-brand-500/20 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-left">
-                  <svg className="w-4 h-4 text-brand-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-                  </svg>
-                  {commCsvFile
-                    ? <span className="text-base-content font-medium truncate">{commCsvFile.name}</span>
-                    : <span className="text-base-content/50">Choisir le fichier CSV 4D sur le serveur SFTP…</span>}
-                </button>
-                {commCsvFile && commCsvPath && (
-                  <p className="text-[11px] text-base-content/40 mt-1 truncate">SFTP : {commCsvPath}</p>
-                )}
-              </div>
-              <button type="button" onClick={handlePreviewCommission} disabled={commLoading}
-                className="btn bg-brand-600 hover:bg-brand-700 text-white border-0 shrink-0">
-                {commLoading ? <span className="loading loading-spinner loading-sm" /> : 'Calculer les commissions'}
-              </button>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold">1</span>
+              <h2 className="font-semibold text-base-content text-sm">Importer le fichier CSV des ventes</h2>
             </div>
-            <p className="text-[11px] text-base-content/40 mt-2">
-              Colonnes attendues : Nom ; Matricule ; &lt;produits&gt; ; total montant. Le montant total est lu dans la colonne « total montant ». Le montant par produit est lu directement dans la cellule produit (format « montant(qty) », aucun calcul). (x2) = montant doublé. Une vérification compare la somme des montants produits au « total montant ». Les colonnes situées après « total montant » sont ignorées. Employés non trouvés : ignorés.
-            </p>
+            <div className="flex flex-col md:flex-row gap-3">
+              <button type="button" onClick={() => setShowSftp(true)}
+                className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-base-300 bg-base-50 hover:border-brand-500 hover:bg-brand-50/50 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30 text-left">
+                <svg className="w-6 h-6 text-brand-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <span className="min-w-0">
+                  {commCsvFile
+                    ? <>
+                        <span className="block text-base-content font-medium truncate">{commCsvFile.name}</span>
+                        {commCsvPath && <span className="block text-[11px] text-base-content/40 truncate">SFTP : {commCsvPath}</span>}
+                      </>
+                    : <><span className="block text-base-content font-medium">Sélectionner le fichier CSV 4D</span>
+                       <span className="block text-[11px] text-base-content/40">Serveur SFTP • séparateur « ; » • UTF-8</span></>}
+                </span>
+              </button>
+              <div className="flex md:flex-col gap-2 shrink-0 justify-end">
+                <button type="button" onClick={handlePreviewCommission} disabled={commLoading || !commCsvFile}
+                  className="btn bg-brand-600 hover:bg-brand-700 text-white border-0 disabled:opacity-50">
+                  {commLoading ? <span className="loading loading-spinner loading-sm" /> : 'Calculer les commissions'}
+                </button>
+              </div>
+            </div>
+
+            <details className="mt-3 group">
+              <summary className="text-[11px] text-brand-600 cursor-pointer hover:text-brand-700 list-none flex items-center gap-1">
+                <svg className="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                Format attendu du fichier
+              </summary>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-base-content/60">
+                <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2">
+                  <p className="font-medium text-base-content/80 mb-1">Colonnes reconnues</p>
+                  <ul className="space-y-0.5 list-disc list-inside">
+                    <li>Nom / Matricule</li>
+                    <li>&lt;produits&gt; (ex : 4G prepaye, Airfiber…)</li>
+                    <li>total montant</li>
+                  </ul>
+                </div>
+                <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2">
+                  <p className="font-medium text-base-content/80 mb-1">Valeurs produits</p>
+                  <ul className="space-y-0.5 list-disc list-inside">
+                    <li>format <code className="px-1 rounded bg-base-200">montant(qty)</code> → <code className="px-1 rounded bg-base-200">220000(11)</code></li>
+                    <li>« (x2) » = montant doublé</li>
+                    <li>Le montant est lu tel quel (aucun calcul)</li>
+                  </ul>
+                </div>
+                <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2 md:col-span-2">
+                  <p>Une vérification compare la <b>somme des montants produits</b> à la colonne <b>total montant</b>. Les colonnes de dates après « total montant » et les employés non trouvés sont ignorés.</p>
+                </div>
+              </div>
+            </details>
           </div>
 
           {commPreview && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="card-blueline p-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="card-blueline p-3 border-l-4 border-l-brand-500">
                   <p className="text-xs text-base-content/50">Primes à créer</p>
                   <p className="text-xl font-bold text-base-content">{commPreview.count}</p>
                 </div>
-                <div className="card-blueline p-3">
+                <div className="card-blueline p-3 border-l-4 border-l-emerald-500">
                   <p className="text-xs text-base-content/50">Total commission</p>
-                  <p className="text-xl font-bold text-brand-600">{fmtAr(totalAmount)} Ar</p>
+                  <p className="text-xl font-bold text-emerald-600">{fmtAr(totalAmount)} Ar</p>
                 </div>
-                <div className="card-blueline p-3">
+                <div className="card-blueline p-3 border-l-4 border-l-sky-500">
                   <p className="text-xs text-base-content/50">Produits reconnus</p>
                   <p className="text-base font-medium text-base-content">{commPreview.matched_products?.length ?? 0}</p>
+                </div>
+                <div className="card-blueline p-3 border-l-4 border-l-amber-500">
+                  <p className="text-xs text-base-content/50">Vérifications OK</p>
+                  <p className="text-base font-medium text-base-content">
+                    {commPreview.employees.filter(e => e.verif_match !== false).length}
+                    <span className="text-sm text-base-content/40"> / {commPreview.employees.length}</span>
+                  </p>
                 </div>
               </div>
 
               <div className="card-blueline p-4">
-                <h2 className="font-semibold text-base-content text-sm mb-3">Aperçu par employé</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold">2</span>
+                  <h2 className="font-semibold text-base-content text-sm">Vérifier et créer les primes</h2>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Matricule</th>
-                        <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Employé</th>
-                        <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
-                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
-                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Doublé</th>
-                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant</th>
+                      <tr className="border-b border-gray-300 bg-base-100/60">
+                        <th className="text-left py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Matricule</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Employé</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Produit</th>
+                        <th className="text-center py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Ventes</th>
+                        <th className="text-center py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Doublé</th>
+                        <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Montant</th>
                       </tr>
                     </thead>
                     <tbody>
                       {commPreview.employees.map((emp) => (
                         <Fragment key={emp.employee_id}>
                           {emp.lines.map((line, i) => (
-                            <tr key={i} className="border-b border-gray-200">
+                            <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? 'bg-white' : 'bg-base-50'}`}>
                               {i === 0 && (
                                 <>
-                                  <td className="py-1.5 px-2 text-gray-900 font-medium align-top" rowSpan={emp.lines.length}>{emp.matricule}</td>
-                                  <td className="py-1.5 px-2 text-gray-900 align-top" rowSpan={emp.lines.length}>
+                                  <td className="py-2 px-3 text-gray-900 font-semibold align-top" rowSpan={emp.lines.length}>{emp.matricule}</td>
+                                  <td className="py-2 px-3 text-gray-900 align-top" rowSpan={emp.lines.length}>
                                     {emp.name}
                                     <span className="block text-[11px] text-gray-400">{emp.department}</span>
                                   </td>
                                 </>
                               )}
-                              <td className="py-1.5 px-2 text-gray-800">{line.designation}</td>
-                              <td className="py-1.5 px-2 text-center">{line.nombre}</td>
-                              <td className="py-1.5 px-2 text-center">{line.doublé ? <span className="badge badge-sm badge-amber-100 text-amber-700">doublé</span> : '—'}</td>
-                              <td className="py-1.5 px-2 text-right text-brand-600 font-medium">{line.montant > 0 ? `${fmtAr(line.montant)} Ar` : '—'}</td>
+                              <td className="py-2 px-3 text-gray-800">{line.designation}</td>
+                              <td className="py-2 px-3 text-center">{line.nombre}</td>
+                              <td className="py-2 px-3 text-center">{line.doublé ? <span className="badge badge-sm badge-warning text-amber-700">doublé</span> : '—'}</td>
+                              <td className="py-2 px-3 text-right text-brand-600 font-medium">{line.montant > 0 ? `${fmtAr(line.montant)} Ar` : '—'}</td>
                             </tr>
                           ))}
-                          <tr className="bg-gray-50 border-b border-gray-200">
-                            <td colSpan={4} className="py-1.5 px-2 text-right text-gray-700 font-medium">
+                          <tr className={`bg-gray-50 border-b ${emp.verif_match === false ? 'border-amber-200' : 'border-gray-200'}`}>
+                            <td colSpan={4} className="py-2 px-3 text-right text-gray-700 font-medium">
                               Total {emp.name}
-                              {emp.verif_match === false && (
+                              {emp.verif_match !== false ? (
+                                <span className="ml-1 badge badge-success badge-sm text-emerald-700">vérifié</span>
+                              ) : (
                                 <span className="block text-[11px] font-normal text-amber-600">
                                   Vérif: somme produits {fmtAr(emp.verif_sum)} ≠ total {fmtAr(emp.total)} Ar
                                 </span>
                               )}
                             </td>
-                            <td className="py-1.5 px-2 text-right text-gray-500 text-xs">{emp.lines.length} produit(s)</td>
-                            <td className="py-1.5 px-2 text-right text-brand-600 font-semibold">{fmtAr(emp.total)} Ar</td>
+                            <td className="py-2 px-3 text-right text-gray-500 text-xs">{emp.lines.length} produit(s)</td>
+                            <td className="py-2 px-3 text-right text-brand-600 font-semibold">{fmtAr(emp.total)} Ar</td>
                           </tr>
                         </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="font-semibold border-t-2 border-brand-200">
-                        <td colSpan={5} className="py-2 px-2 text-right">Total général</td>
-                        <td className="py-2 px-2 text-right text-brand-600">{fmtAr(totalAmount)} Ar</td>
+                      <tr className="font-semibold bg-brand-50/50">
+                        <td colSpan={5} className="py-3 px-3 text-right text-base-content/70">Total général</td>
+                        <td className="py-3 px-3 text-right text-brand-700">{fmtAr(totalAmount)} Ar</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1188,10 +1227,13 @@ export default function BonusForm() {
                 )}
               </div>
 
-              <div className="flex gap-3 justify-end">
+              <div className="flex gap-3 justify-end items-center">
+                {commPreview.employees.some(e => e.verif_match === false) && (
+                  <p className="text-xs text-amber-600 mr-auto">Certains écarts de vérification à examiner</p>
+                )}
                 <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
                 <button type="submit" disabled={commLoading || previewCount === 0} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
-                  {commLoading ? <span className="loading loading-spinner" /> : `Valider et créer ${previewCount} prime(s) commission`}
+                  {commLoading ? <span className="loading loading-spinner" /> : `Créer ${previewCount} prime(s) commission`}
                 </button>
               </div>
             </>
