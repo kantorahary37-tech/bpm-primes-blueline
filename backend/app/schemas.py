@@ -268,8 +268,6 @@ class CommissionConfigResponse(BaseModel):
 class CommissionLine(BaseModel):
     designation: str
     nombre: float
-    taux: float
-    objectif: int
     doublé: bool = False
     montant: float
 
@@ -283,6 +281,9 @@ class CommissionEmployeePreview(BaseModel):
     barème_fallback: bool = False
     total: float
     lines: List[CommissionLine]
+    # Vérification : somme des montants produits vs total montant
+    verif_sum: float = 0.0
+    verif_match: bool = True
 
 class CommissionPreviewResponse(BaseModel):
     period: Dict[str, Any]

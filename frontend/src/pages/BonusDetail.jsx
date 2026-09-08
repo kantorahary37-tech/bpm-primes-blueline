@@ -511,6 +511,8 @@ const BonusDetail = () => {
                     <tr className="border-b border-gray-300">
                       <th className="text-left py-2 font-medium text-gray-600 text-xs">Produit</th>
                       <th className="text-center py-2 font-medium text-gray-600 text-xs">Ventes</th>
+                      <th className="text-center py-2 font-medium text-gray-600 text-xs">Doublé</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -518,10 +520,12 @@ const BonusDetail = () => {
                       <tr key={i} className="border-b border-gray-200">
                         <td className="py-1.5 text-gray-900">{sale.designation || '—'}</td>
                         <td className="py-1.5 text-center">{sale.nombre ?? 0}</td>
+                        <td className="py-1.5 text-center">{sale.doublé ? <span className="badge badge-sm badge-amber-100 text-amber-700">doublé</span> : '—'}</td>
+                        <td className="py-1.5 text-right text-emerald-600 font-medium">{sale.montant > 0 ? `${formatAr(sale.montant)} ${currency}` : '—'}</td>
                       </tr>
                     ))}
                     <tr className="font-semibold bg-gray-50">
-                      <td colSpan={1} className="py-1.5 text-gray-900">Total commission</td>
+                      <td colSpan={3} className="py-1.5 text-gray-900">Total commission</td>
                       <td className="py-1.5 text-right text-emerald-600">{formatAr(bonus.total_amount)} {currency}</td>
                     </tr>
                   </tbody>

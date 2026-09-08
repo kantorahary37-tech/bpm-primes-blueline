@@ -1019,6 +1019,8 @@ export default function BonusForm() {
                     <tr className="border-b border-gray-300">
                       <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
                       <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
+                      <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Doublé</th>
+                      <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1026,12 +1028,14 @@ export default function BonusForm() {
                       <tr key={i} className="border-b border-gray-200">
                         <td className="py-1.5 px-2 text-gray-900">{sale.designation || '—'}</td>
                         <td className="py-1.5 px-2 text-center">{sale.nombre ?? 0}</td>
+                        <td className="py-1.5 px-2 text-center">{sale.doublé ? <span className="badge badge-sm badge-amber-100 text-amber-700">doublé</span> : '—'}</td>
+                        <td className="py-1.5 px-2 text-right text-brand-600 font-medium">{sale.montant > 0 ? `${fmtAr(sale.montant)} Ar` : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold border-t-2 border-brand-200">
-                      <td colSpan={1} className="py-2 px-2 text-right">Total commission</td>
+                      <td colSpan={3} className="py-2 px-2 text-right">Total commission</td>
                       <td className="py-2 px-2 text-right text-brand-600">{fmtAr(editTotal)} Ar</td>
                     </tr>
                   </tfoot>
@@ -1087,7 +1091,7 @@ export default function BonusForm() {
               </button>
             </div>
             <p className="text-[11px] text-base-content/40 mt-2">
-              Colonnes attendues : Nom ; Matricule ; &lt;produits&gt; ; total montant. Le montant de chaque prime est lu directement dans la colonne « total montant ». Les colonnes produits (avant le total) sont conservées à titre informatif (nombre de ventes). Les colonnes situées après « total montant » sont ignorées. Employés non trouvés : ignorés.
+              Colonnes attendues : Nom ; Matricule ; &lt;produits&gt; ; total montant. Le montant total est lu dans la colonne « total montant ». Le montant par produit est lu directement dans la cellule produit (format « montant(qty) », aucun calcul). (x2) = montant doublé. Une vérification compare la somme des montants produits au « total montant ». Les colonnes situées après « total montant » sont ignorées. Employés non trouvés : ignorés.
             </p>
           </div>
 
@@ -1118,6 +1122,8 @@ export default function BonusForm() {
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Employé</th>
                         <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
                         <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Ventes</th>
+                        <th className="text-center py-2 px-2 font-medium text-gray-600 text-xs">Doublé</th>
+                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1136,18 +1142,28 @@ export default function BonusForm() {
                               )}
                               <td className="py-1.5 px-2 text-gray-800">{line.designation}</td>
                               <td className="py-1.5 px-2 text-center">{line.nombre}</td>
+                              <td className="py-1.5 px-2 text-center">{line.doublé ? <span className="badge badge-sm badge-amber-100 text-amber-700">doublé</span> : '—'}</td>
+                              <td className="py-1.5 px-2 text-right text-brand-600 font-medium">{line.montant > 0 ? `${fmtAr(line.montant)} Ar` : '—'}</td>
                             </tr>
                           ))}
                           <tr className="bg-gray-50 border-b border-gray-200">
-                            <td colSpan={3} className="py-1.5 px-2 text-right text-gray-700 font-medium">Total {emp.name}</td>
-                            <td className="py-1.5 px-2 text-right text-brand-600 font-semibold">{fmtAr(emp.total)}</td>
+                            <td colSpan={4} className="py-1.5 px-2 text-right text-gray-700 font-medium">
+                              Total {emp.name}
+                              {emp.verif_match === false && (
+                                <span className="block text-[11px] font-normal text-amber-600">
+                                  Vérif: somme produits {fmtAr(emp.verif_sum)} ≠ total {fmtAr(emp.total)} Ar
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2 text-right text-gray-500 text-xs">{emp.lines.length} produit(s)</td>
+                            <td className="py-1.5 px-2 text-right text-brand-600 font-semibold">{fmtAr(emp.total)} Ar</td>
                           </tr>
                         </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="font-semibold border-t-2 border-brand-200">
-                        <td colSpan={3} className="py-2 px-2 text-right">Total général</td>
+                        <td colSpan={5} className="py-2 px-2 text-right">Total général</td>
                         <td className="py-2 px-2 text-right text-brand-600">{fmtAr(totalAmount)} Ar</td>
                       </tr>
                     </tfoot>

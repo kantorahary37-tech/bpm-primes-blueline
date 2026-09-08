@@ -109,19 +109,35 @@ def parse_product_qty(value):
     return parse_ventes(s)
 
 
-async def load_active_configs():
+def parse_product_amount(value):
     """
-    Charge le barème actif : nom normalisé → {is_gpv: config}.
-    Un même produit peut avoir deux lignes : une pour GPV (objectif élevé)
-    et une pour petit point de vente (objectif bas).
+    Extrait le montant depuis une cellule produit du CSV 4D.
+    Format : '<montant>(<quantité>)[(x2)]' → 220000
+    Le montant est utilisé tel quel (aucune multiplication).
+    Si aucun montant n'est trouvé devant la parenthèse, retourne 0.
     """
-    configs = await CommissionConfig.filter(active=True)
-    by_name = {}
-    for c in configs:
-        key = normalize_product_name(c.product_name)
-        if key:
-            by_name.setdefault(key, {})[bool(c.is_gpv)] = c
-    return by_name
+    if value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip().replace('\u00a0', '')
+    if s == '':
+        return 0
+    m = re.match(r'^(\d+(?:\.\d+)?)\s*\(', s)
+    if m:
+        return float(m.group(1))
+    return 0
+
+
+def parse_product_doublé(value):
+    """
+    Détecte si la cellule contient '(x2)' → montant doublé.
+    Format : '<montant>(<quantité>)[(x2)]' → True si (x2) présent.
+    """
+    if value is None:
+        return False
+    s = str(value).strip().replace('\u00a0', '')
+    return bool(re.search(r'\(x2\)', s, re.IGNORECASE))
 
 
 async def parse_csv_4d(content: bytes):
@@ -144,16 +160,18 @@ async def parse_csv_4d(content: bytes):
     return header, data_rows
 
 
-async def compute_commission_rows(content: bytes, by_name: dict):
+async def compute_commission_rows(content: bytes):
     """
     Lit le CSV 4D et calcule le total de commission par employé.
 
-    Nouveau modèle (2026) :
-    - Le montant est lu **directement** dans la colonne « total montant » du fichier.
-    - Les colonnes produits (4G, Airfiber, ...) situées AVANT « total montant » sont
-      conservées comme informations (nombre de ventes) mais ne servent plus au calcul.
+    Modèle 2026 :
+    - Le montant total est lu dans la colonne « total montant » du fichier.
+    - Les colonnes produits (4G prepaye, Airfiber, etc.) situées AVANT « total montant »
+      contiennent le montant et la quantité au format '<montant>(<qty>)'.
+      Le montant est utilisé tel quel (aucune multiplication par un taux).
+    - Une vérification (verif_sum / verif_match) compare la somme des montants
+      produits avec la colonne « total montant ».
     - Les colonnes situées APRÈS « total montant » (dates/journées) sont ignorées.
-    - Plus aucun calcul par barème (PDV, Taux, Objectif).
 
     Retourne : employees (dict matricule → {employee, lines, total}),
                ignored_employees, ignored_columns, matched_products.
@@ -234,6 +252,7 @@ async def compute_commission_rows(content: bytes, by_name: dict):
             entry['total'] = float(total)
 
         # Colonnes produits (avant le total) : conservées à titre informatif
+        # Le montant est lu directement depuis la cellule CSV : '<montant>(<qty>)'
         for idx in product_idxs:
             column_name = normalize_product_name(header[idx]) if idx < len(header) else ''
             if not column_name:
@@ -242,16 +261,17 @@ async def compute_commission_rows(content: bytes, by_name: dict):
             ventes = parse_product_qty(raw)
             if ventes <= 0:
                 continue
+            amount = parse_product_amount(raw)
+            doublé = parse_product_doublé(raw)
             if column_name not in entry['lines']:
                 entry['lines'][column_name] = {
                     'designation': header[idx],
                     'nombre': 0,
-                    'taux': None,
-                    'objectif': None,
-                    'doublé': False,
                     'montant': 0.0,
+                    'doublé': doublé,
                 }
             entry['lines'][column_name]['nombre'] += ventes
+            entry['lines'][column_name]['montant'] += amount
 
     return employees, ignored_employees, ignored_columns, [h for i, h in enumerate(header) if i in product_idxs]
 
@@ -270,13 +290,12 @@ async def build_preview(employees, ignored_employees, ignored_columns, matched_p
             CommissionLine(
                 designation=l['designation'],
                 nombre=l['nombre'],
-                taux=0.0,
-                objectif=0,
                 doublé=l['doublé'],
                 montant=round(l['montant'], 2),
             )
             for l in sorted(entry['lines'].values(), key=lambda x: -x['nombre'])
         ]
+        verif_sum = round(sum(l['montant'] for l in entry['lines'].values()), 2)
         preview_employees.append(CommissionEmployeePreview(
             employee_id=emp.id,
             matricule=emp.matricule,
@@ -286,6 +305,8 @@ async def build_preview(employees, ignored_employees, ignored_columns, matched_p
             barème_fallback=False,
             total=total,
             lines=lines,
+            verif_sum=verif_sum,
+            verif_match=abs(verif_sum - total) < 0.01,
         ))
         total_amount += total
 
@@ -331,8 +352,6 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
             {
                 'designation': l['designation'],
                 'nombre': l['nombre'],
-                'taux': 0,
-                'objectif': 0,
                 'doublé': l['doublé'],
                 'montant': round(l['montant'], 2),
             }
@@ -457,7 +476,7 @@ async def delete_commission_config(config_id: int, user: User = Depends(get_curr
 
 async def _load_csv_and_compute(file: UploadFile):
     content = await file.read()
-    return await compute_commission_rows(content, {})
+    return await compute_commission_rows(content)
 
 
 @router.post("/bonuses/commission/preview", response_model=CommissionPreviewResponse)
