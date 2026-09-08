@@ -165,6 +165,32 @@ export default function BonusForm() {
   const [others, setOthers] = useState([])
   const otherTypes = ['temporaire', 'periodique', 'autres']
 
+  const OTHER_TYPE_DESCRIPTIONS = {
+    temporaire: {
+      idea: "Prime versée UNE SEULE FOIS, en une fois.",
+      when: "À utiliser pour une gratification ponctuelle sur un mois donné sans reconduction automatique.",
+      examples: "Exemples : gratification exceptionnelle, prime d'installation, prime d'un projet achevé, prime de fin d'année.",
+      period: "Période : indiquez simplement le mois de versement (optionnel).",
+    },
+    periodique: {
+      idea: "Prime versée RÉGULIÈREMENT, chaque mois, pendant une durée déterminée.",
+      when: "À utiliser pour une indemnité récurrente qui se répète jusqu'à une date de fin.",
+      examples: "Exemples : indemnité de logement, de transport, de panier, indemnité mensuelle d'une mission.",
+      period: "Période : renseignez la date de DÉBUT et de FIN pour définir la durée de versement.",
+    },
+    autres: {
+      idea: "Prime SPÉCIFIQUE qui ne correspond pas aux catégories ci-dessus.",
+      when: "À utiliser pour un cas particulier non couvert par Temporaire ou Périodique.",
+      examples: "Exemples : prime liée à un événement interne, compensation particulière, gratification d'un fonds dédié.",
+      period: "Précisez le type exact dans le champ prévu et renseignez la période si besoin.",
+    },
+  }
+  const OTHER_TYPE_LABELS = {
+    temporaire: 'Temporaire',
+    periodique: 'Périodique',
+    autres: 'Autres',
+  }
+
   const addOther = () => {
     setOthers(prev => [...prev, { key: Date.now() + Math.random(), libelle: '', type: 'temporaire', typeCustom: '', file: null, fileData: null, debut_mois: '', debut_annee: '', fin_mois: '', fin_annee: '', montant: 0 }])
   }
@@ -1777,7 +1803,7 @@ export default function BonusForm() {
               <ExclamationIcon className="w-4 h-4" /> Chaque « Autre prime » doit avoir un libellé, un type, un montant supérieur à 0, une période (début et fin) et une pièce jointe.
             </div>
           )}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="font-semibold text-gray-900 text-sm">Autres primes</h2>
               <p className="text-[10px] text-gray-500 mt-0.5">Ajoutez des primes supplementaires (installation, interim, etc.)</p>
@@ -1794,7 +1820,7 @@ export default function BonusForm() {
           )}
 
           {others.map((o, idx) => (
-            <div key={o.key} className="bg-white rounded-lg border border-amber-200 p-3 mb-2">
+            <div key={o.key} className="bg-white rounded-lg border border-amber-200 p-4 mb-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-medium text-amber-700">Autre prime #{idx + 1}</span>
                 <button type="button" onClick={() => removeOther(o.key)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
@@ -1810,8 +1836,16 @@ export default function BonusForm() {
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Type</label>
                   <select value={o.type} onChange={(e) => updateOther(o.key, 'type', e.target.value)}
                     className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
-                    {otherTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    {otherTypes.map(t => <option key={t} value={t}>{OTHER_TYPE_LABELS[t] || t}</option>)}
                   </select>
+                  {OTHER_TYPE_DESCRIPTIONS[o.type] && (
+                    <div className="mt-1 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 space-y-1">
+                      <p className="text-[11px] font-semibold text-amber-800 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].idea}</p>
+                      <p className="text-[11px] text-gray-700 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].when}</p>
+                      <p className="text-[11px] text-gray-600 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].examples}</p>
+                      <p className="text-[11px] text-amber-700 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].period}</p>
+                    </div>
+                  )}
                   {o.type === 'autres' && (
                     <input type="text" value={o.typeCustom} onChange={(e) => updateOther(o.key, 'typeCustom', e.target.value)}
                       placeholder="Precisez le type..."
@@ -1892,7 +1926,7 @@ export default function BonusForm() {
           </div>
         )}
 
-        <div className="card-blueline p-3 border-l-4 border-l-blue-500 bg-blue-50/40">
+        <div className="card-blueline p-4 mt-5 border-l-4 border-l-blue-500 bg-blue-50/40">
           <div className="space-y-2">
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-1">Appliquer ce modèle à :</label>
