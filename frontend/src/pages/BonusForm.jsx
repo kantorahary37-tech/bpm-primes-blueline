@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
+import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
 import SftpFilePicker from '../components/SftpFilePicker'
 import * as XLSX from 'xlsx'
@@ -654,10 +655,16 @@ export default function BonusForm() {
     setCommLoading(true)
     try {
       const result = await importCommissionBonuses(commCsvFile, params.startDate, params.endDate)
-      const totalAr = (result.total_amount ?? 0).toLocaleString('fr-FR')
-      const msg = `${result.count} prime(s) commission créée(s) pour un total de ${totalAr} Ar.`
-        + (result.skipped?.length ? ` ${result.skipped.length} employé(s) ignoré(s) (prime déjà existante sur la période).` : '')
-      navigate('/bonuses', { state: { success: msg } })
+      if (result.count > 0) {
+        const totalAr = (result.total_amount ?? 0).toLocaleString('fr-FR')
+        const msg = `${result.count} prime(s) commission créée(s) pour un total de ${totalAr} Ar.`
+          + (result.skipped?.length ? ` ${result.skipped.length} déjà couvert(s).` : '')
+        navigate('/bonuses', { state: { success: msg } })
+      } else if (result.skipped?.length) {
+        toast.error(`Des primes commission pour ${result.skipped.length} employé(s) sont déjà créées pour cette période.`, { duration: 6000 })
+      } else {
+        toast.error('Aucune commission n\'a pu être créée.', { duration: 6000 })
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Erreur lors de la création des primes commission.')
       window.scrollTo({ top: 0, behavior: 'smooth' })

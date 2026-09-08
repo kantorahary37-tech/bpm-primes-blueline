@@ -161,6 +161,10 @@ const [filterMonth, setFilterMonth] = useState('');
       toast.success(location.state.success);
       window.history.replaceState({}, '');
     }
+    if (location.state?.error) {
+      toast.error(location.state.error);
+      window.history.replaceState({}, '');
+    }
   }, [location.state]);
 
   useEffect(() => { setDatePage(1); }, [typeFilter, statusFilter, searchQuery, depFilter, filterMonth, filterYear]);
