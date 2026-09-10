@@ -8,7 +8,7 @@ import re
 # Import de la config de base de données
 from app.db_config import TORTOISE_ORM
 # Import des routes API
-from app.api import endpoints, employees, auth_routes, users, prime_max, departments, notifications, upload, admin, evaluation_templates, commission, sftp_routes, system_config, currencies
+from app.api import endpoints, employees, auth_routes, users, prime_max, departments, notifications, upload, admin, evaluation_templates, commission, sftp_routes, system_config, currencies, services
 from app import scheduler
 
 # Création de l'instance FastAPI avec titre et version
@@ -21,6 +21,7 @@ app.include_router(users.router, prefix="/api/v1/users")
 app.include_router(auth_routes.router, prefix="/api/v1/auth")
 app.include_router(prime_max.router, prefix="/api/v1/primemax")
 app.include_router(departments.router, prefix="/api/v1/departments")
+app.include_router(services.router, prefix="/api/v1/services")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1/admin")

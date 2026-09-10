@@ -307,6 +307,7 @@ const BonusDetail = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
             <InfoRow label="Employé" value={bonus.employee?.name || 'N/A'} />
             <InfoRow label="Département" value={bonus.employee?.department || 'N/A'} />
+            <InfoRow label="Service" value={bonus.employee?.service || '—'} />
             <InfoRow label="Matricule" value={bonus.employee?.matricule || 'N/A'} />
             <InfoRow label="Type de prime" value={
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">

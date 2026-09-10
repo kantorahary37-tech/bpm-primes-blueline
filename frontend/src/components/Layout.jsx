@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon } from './Icons'
+import { getMyServiceAssignments } from '../services/api'
+import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon, FolderIcon } from './Icons'
 
 const mainNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: DashboardIcon, desc: 'Vue d\'ensemble et statistiques' },
   { path: '/employees', label: 'Employés', icon: EmployeesIcon, desc: 'Gestion du personnel et LDAP' },
+  { path: '/services', label: 'Services', icon: FolderIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1'], desc: 'Services des employés par département' },
   { path: '/bonuses', label: 'Primes', icon: BonusesIcon, desc: 'Suivi et validation des primes' },
   { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true, desc: 'Configuration des plafonds' },
 ]
@@ -13,12 +15,15 @@ const mainNavItems = [
 const adminNavItems = [
   { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Paramètres généraux du système' },
   { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Consultation des archives' },
-  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin'], desc: 'Modèles d\'évaluation' },
-  { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin'], desc: 'Gestion des comptes utilisateurs' },
+  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin', 'is_directeur'], desc: 'Modèles d\'évaluation' },
+  { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin', 'is_directeur'], desc: 'Gestion des comptes utilisateurs' },
 ]
 
 function visibleMainItems(user) {
-  return mainNavItems.filter(item => !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_validator_n1)))
+  return mainNavItems.filter(item =>
+    !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_validator_n1)) &&
+    (!item.roles || item.roles.some(r => user?.[r]))
+  )
 }
 
 function visibleAdminItems(user) {
@@ -57,11 +62,18 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [serviceAssignments, setServiceAssignments] = useState([])
   const menuRef = useRef(null)
   const adminRef = useRef(null)
 
   const adminItems = visibleAdminItems(user)
   const adminActive = adminItems.some(item => isActive(pathname, item.path))
+
+  useEffect(() => {
+    if (user?.is_validator_n1) {
+      getMyServiceAssignments().then(setServiceAssignments).catch(() => {})
+    }
+  }, [user])
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -168,13 +180,27 @@ export default function Layout({ children }) {
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 animate-scaleIn">
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 animate-scaleIn">
                     <div className="px-4 py-2.5 border-b border-gray-100">
                       <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
                       <p className="text-xs text-gray-400 truncate mt-0.5">{user?.email}</p>
                       <p className="text-[11px] text-gray-400 truncate mt-0.5">{userDept(user)} · {userRole(user)}</p>
                     </div>
-                    
+
+                    {user?.is_validator_n1 && serviceAssignments.length > 0 && (
+                      <div className="px-4 py-2.5 border-b border-gray-100">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Mes services affectés</p>
+                        <div className="space-y-1">
+                          {serviceAssignments.map((a) => (
+                            <div key={a.id} className="flex items-center justify-between text-xs">
+                              <span className="text-gray-700 font-medium truncate">{a.service_group_name}</span>
+                              <span className="text-gray-400 shrink-0 ml-2">{a.member_count} membre{a.member_count > 1 ? 's' : ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <hr className="my-1 border-gray-100" />
                     <button onClick={logout} className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
                       <LogoutIcon className="w-4 h-4" />
@@ -252,6 +278,17 @@ export default function Layout({ children }) {
                       </Link>
                     )
                   })}
+                </>
+              )}
+              {user?.is_validator_n1 && serviceAssignments.length > 0 && (
+                <>
+                  <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Mes services affectés</p>
+                  {serviceAssignments.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between px-3 py-2 text-sm text-gray-600">
+                      <span className="font-medium">{a.service_group_name}</span>
+                      <span className="text-gray-400 text-xs">{a.member_count} membre{a.member_count > 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
                 </>
               )}
               <hr className="my-2 border-gray-100" />

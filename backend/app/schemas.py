@@ -60,6 +60,8 @@ class UserCreate(UserBase): pass
 class UserResponse(UserBase):
     id: int
     created_at: datetime
+    # Matricule de l'employé correspondant (même nom + département), si existant
+    matricule: Optional[str] = None
     class Config: from_attributes = True
 
 class SignUpResponse(BaseModel):
@@ -70,6 +72,7 @@ class SignUpResponse(BaseModel):
 class EmployeeBase(BaseModel):
     matricule: str
     name: str
+    poste: Optional[str] = None
     department: str
     manager_id: int
     currency: str = 'Ar'
@@ -83,6 +86,7 @@ class EmployeeCreate(EmployeeBase): pass
 
 # Schéma de mise à jour d'employé (champs optionnels)
 class EmployeeUpdate(BaseModel):
+    poste: Optional[str] = None
     currency: Optional[str] = None
     astreinte_rate: Optional[int] = None
     mensuel_rate: Optional[int] = None
@@ -91,6 +95,51 @@ class EmployeeUpdate(BaseModel):
 # Schéma de réponse employé
 class EmployeeResponse(EmployeeBase):
     id: int
+    created_at: datetime
+    service: Optional[str] = None
+    class Config: from_attributes = True
+
+# Schémas pour les services / groupes d'employés
+class ServiceGroupBase(BaseModel):
+    name: str
+    department: str
+
+    _dept = field_validator('department', mode='before')(dept_to_str)
+
+class ServiceGroupCreate(ServiceGroupBase): pass
+
+class ServiceGroupRename(BaseModel):
+    name: str
+
+class ServiceGroupResponse(BaseModel):
+    id: int
+    name: str
+    department: str
+    employee_count: int = 0
+    class Config: from_attributes = True
+
+class ServiceAssignRequest(BaseModel):
+    employee_ids: List[int]
+
+class ServiceManagersAssignRequest(BaseModel):
+    user_ids: List[int]
+
+# Schémas pour les assignations service utilisateur
+class UserServiceAssignmentCreate(BaseModel):
+    service_group_id: int
+    n1_id: Optional[int] = None
+
+class UserServiceAssignmentUpdate(BaseModel):
+    n1_id: Optional[int] = None
+
+class UserServiceAssignmentResponse(BaseModel):
+    id: int
+    service_group_id: int
+    service_group_name: str
+    department: str
+    n1_id: Optional[int] = None
+    n1_name: Optional[str] = None
+    n1_email: Optional[str] = None
     created_at: datetime
     class Config: from_attributes = True
 

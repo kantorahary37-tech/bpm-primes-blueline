@@ -31,6 +31,11 @@ export const getMe = async () => {
   return data;
 };
 
+export const getMyServiceAssignments = async () => {
+  const { data } = await api.get('/auth/me/service-assignments');
+  return data;
+};
+
 export const forgotPassword = async (email) => {
   const { data } = await api.post('/auth/forgot-password', { email });
   return data;
@@ -46,8 +51,10 @@ export const getUsers = async () => {
   return data;
 };
 
-export const getEmployees = async (department = null) => {
-  const params = department ? { department } : {};
+export const getEmployees = async (department = null, search = null) => {
+  const params = {};
+  if (department) params.department = department;
+  if (search) params.search = search;
   const { data } = await api.get('/employees/', { params });
   return data;
 };
@@ -59,6 +66,52 @@ export const createEmployee = async (employeeData) => {
 
 export const updateEmployee = async (id, employeeData) => {
   const { data } = await api.put(`/employees/${id}`, employeeData);
+  return data;
+};
+
+export const getServices = async (department = null) => {
+  const params = department ? { department } : {};
+  const { data } = await api.get('/services/', { params });
+  return data;
+};
+
+export const createService = async (serviceData) => {
+  const { data } = await api.post('/services/', serviceData);
+  return data;
+};
+
+export const renameService = async (id, name) => {
+  const { data } = await api.patch(`/services/${id}`, { name });
+  return data;
+};
+
+export const deleteService = async (id) => {
+  const { data } = await api.delete(`/services/${id}`);
+  return data;
+};
+
+export const assignEmployees = async (id, employeeIds) => {
+  const { data } = await api.post(`/services/${id}/employees`, { employee_ids: employeeIds });
+  return data;
+};
+
+export const unassignEmployee = async (id, employeeId) => {
+  const { data } = await api.delete(`/services/${id}/employees/${employeeId}`);
+  return data;
+};
+
+export const getServiceManagers = async (id) => {
+  const { data } = await api.get(`/services/${id}/managers`);
+  return data;
+};
+
+export const assignServiceManagers = async (id, userIds) => {
+  const { data } = await api.post(`/services/${id}/managers`, { user_ids: userIds });
+  return data;
+};
+
+export const unassignServiceManager = async (id, userId) => {
+  const { data } = await api.delete(`/services/${id}/managers/${userId}`);
   return data;
 };
 
@@ -244,6 +297,26 @@ export const adminLdapEmployeeSearch = async (query) => {
 
 export const adminCreateEmployeeFromLdap = async (email) => {
   const { data } = await api.post('/admin/ldap-employees', { email });
+  return data;
+};
+
+export const getUserServiceAssignments = async (userId) => {
+  const { data } = await api.get(`/admin/users/${userId}/service-assignments`);
+  return data;
+};
+
+export const createUserServiceAssignment = async (userId, assignmentData) => {
+  const { data } = await api.post(`/admin/users/${userId}/service-assignments`, assignmentData);
+  return data;
+};
+
+export const updateUserServiceAssignment = async (userId, assignmentId, assignmentData) => {
+  const { data } = await api.put(`/admin/users/${userId}/service-assignments/${assignmentId}`, assignmentData);
+  return data;
+};
+
+export const deleteUserServiceAssignment = async (userId, assignmentId) => {
+  const { data } = await api.delete(`/admin/users/${userId}/service-assignments/${assignmentId}`);
   return data;
 };
 

@@ -157,6 +157,7 @@ const BonusTable = ({
       { key: 'amount', label: 'Montant', sortable: true, align: 'right', sortValue: (b) => parseFloat(b.total_amount) ?? 0 },
       { key: 'creator', label: 'Créateur', sortable: true, sortValue: (b) => initiatorMap.get(b.created_by_id) ?? '' },
       { key: 'department', label: 'Département', sortable: true, sortValue: (b) => b.employee?.department ?? '' },
+      { key: 'service', label: 'Service', sortable: true, sortValue: (b) => b.employee?.service ?? '' },
       { key: 'actions', label: 'Actions', sortable: false, align: 'center' },
     ];
 
@@ -279,6 +280,7 @@ const BonusTable = ({
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-gray-600" title={creator}>{creator || '—'}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-gray-600">{bonus.employee?.department || 'N/A'}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-gray-600">{bonus.employee?.service || '—'}</td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => onView(bonus.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Voir le détail">

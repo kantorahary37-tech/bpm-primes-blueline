@@ -175,6 +175,22 @@ try:
 except Exception as e:
     print(f"employee currency column check skipped: {e}")
 
+print("Ensuring employee poste column exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "poste" VARCHAR(255);
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("employee poste column OK")
+except Exception as e:
+    print(f"employee poste column check skipped: {e}")
+
 print("Ensuring primemax currency column exists...")
 try:
     import psycopg2
@@ -218,5 +234,80 @@ try:
     print("currency table OK (Ar/EUR seeded)")
 except Exception as e:
     print(f"currency table check skipped: {e}")
+
+print("Ensuring servicegroup table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "servicegroup" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "name" VARCHAR(100) NOT NULL,
+            "department_id" INT NOT NULL REFERENCES "department" ("id"),
+            "created_by_id" INT REFERENCES "user" ("id"),
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    # Un même nom de service ne peut exister qu'une fois par département
+    cur.execute("""
+        ALTER TABLE "servicegroup" DROP CONSTRAINT IF EXISTS "servicegroup_name_department_id_key";
+        ALTER TABLE "servicegroup" ADD CONSTRAINT "servicegroup_name_department_id_key" UNIQUE ("name", "department_id");
+    """)
+    # Colonne de rattachement des employés au service
+    cur.execute("""
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "service_group_id" INT REFERENCES "servicegroup" ("id");
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("servicegroup table OK")
+except Exception as e:
+    print(f"servicegroup table check skipped: {e}")
+
+print("Ensuring user_servicegroup table exists (N+1 → services)...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "user_servicegroup" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "user_id" INT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+            "servicegroup_id" INT NOT NULL REFERENCES "servicegroup" ("id") ON DELETE CASCADE,
+            UNIQUE ("user_id", "servicegroup_id")
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("user_servicegroup table OK")
+except Exception as e:
+    print(f"user_servicegroup table check skipped: {e}")
+
+print("Ensuring user_service_assignment table exists (service + n+1 utilisateur)...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "user_service_assignment" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "user_id" INT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+            "service_group_id" INT NOT NULL REFERENCES "servicegroup" ("id") ON DELETE CASCADE,
+            "n1_id" INT REFERENCES "user" ("id"),
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE ("user_id", "service_group_id")
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("user_service_assignment table OK")
+except Exception as e:
+    print(f"user_service_assignment table check skipped: {e}")
 
 print("Starting application...")

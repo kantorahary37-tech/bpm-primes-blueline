@@ -58,6 +58,7 @@ const Employees = () => {
   const seeAmounts = canSeeAmounts(user);
   const { departments } = useDepartments();
   const deptNames = departments.map(d => d.name);
+  const isFullScope = user?.is_admin || user?.is_dg || user?.is_drh;
   const { currencies, refresh: refreshCurrencies, symbolFor } = useCurrencies();
   const currencyOptions = currencies.map(c => ({ value: c.code, label: c.label ? `${c.label} (${c.symbol || c.code})` : (c.symbol || c.code) }));
   const canManageCurrencies = user?.is_admin || user?.is_dg || user?.is_drh;
@@ -94,7 +95,7 @@ const Employees = () => {
 
   useEffect(() => {
     if (!user) return;
-    if (!initRef.current && user.department && !departmentFilter) {
+    if (!initRef.current && !isFullScope && user.department && !departmentFilter) {
       initRef.current = true;
       setDepartmentFilter(user.department);
       return;
@@ -353,18 +354,18 @@ const Employees = () => {
       </Modal>
 
       <div className="flex items-center gap-2 mb-4">
-        {user?.is_admin || user?.is_dg || user?.is_drh ? (
-          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
-            <option value="">Tous les départements</option>
-            {user?.department && <option value={user.department}>Mon département ({user.department})</option>}
-            {deptNames.filter(d => d !== user?.department).map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="text-sm text-gray-600">Département : <strong>{user?.department}</strong></span>
-        )}
+        <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+          <option value="">{isFullScope ? 'Tous les départements' : (user?.department ? `Mon département (${user?.department})` : 'Tous les départements')}</option>
+          {isFullScope ? (
+            <>
+              {user?.department && <option value={user.department}>Mon département ({user.department})</option>}
+              {deptNames.filter(d => d !== user?.department).map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </>
+          ) : null}
+        </select>
         <span className="text-xs text-gray-400">{filteredEmployees.length} employé(s)</span>
         <div className="relative ml-auto">
           <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -385,45 +386,62 @@ const Employees = () => {
           (() => {
             const grouped = {};
             filteredEmployees.forEach(emp => {
-              if (!grouped[emp.department]) grouped[emp.department] = [];
-              grouped[emp.department].push(emp);
+              const dept = emp.department || 'Sans département';
+              if (!grouped[dept]) grouped[dept] = {};
+              const service = emp.service || 'Sans service';
+              if (!grouped[dept][service]) grouped[dept][service] = [];
+              grouped[dept][service].push(emp);
             });
-            return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([dept, emps]) => (
-              <div key={dept}>
-                <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-t-xl border border-gray-200 border-b-0">
-                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{dept}</span>
-                  <span className="text-[10px] font-medium text-gray-400 bg-white px-1.5 py-0.5 rounded-full">{emps.length}</span>
+            const sortServices = ([a], [b]) => (a === 'Sans service' ? 1 : b === 'Sans service' ? -1 : a.localeCompare(b));
+            return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([dept, services]) => {
+              const deptCount = Object.values(services).reduce((sum, emps) => sum + emps.length, 0);
+              return (
+                <div key={dept}>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-t-xl border border-gray-200 border-b-0">
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{dept}</span>
+                    <span className="text-[10px] font-medium text-gray-400 bg-white px-1.5 py-0.5 rounded-full">{deptCount}</span>
+                  </div>
+                  <div className="p-2 bg-white rounded-b-xl border border-gray-200">
+                    {Object.entries(services).sort(sortServices).map(([service, emps]) => (
+                      <div key={service} className="mb-2 last:mb-0">
+                        <div className="flex items-center gap-2 px-3 py-1.5">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{service}</span>
+                          <span className="text-[10px] font-medium text-gray-300">{emps.length}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {emps.map((emp) => {
+                            const mgr = managers.find((m) => m.id === emp.manager_id);
+                            return (
+                              <button key={emp.id} onClick={() => loadEmployeeBonuses(emp)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-all text-left ${
+                                  selectedEmp?.id === emp.id
+                                    ? 'border-blue-400 bg-blue-50 shadow-sm'
+                                    : 'border-transparent hover:border-blue-200 hover:bg-gray-50'
+                                }`}>
+                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs shrink-0">
+                                  {emp.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-gray-900 text-sm truncate">{emp.name}</p>
+                                  <p className="text-[11px] text-gray-400">{emp.matricule}{emp.poste ? ` · ${emp.poste}` : ''}</p>
+                                </div>
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${emp.currency === 'EUR' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  {symbolFor(emp.currency)}
+                                </span>
+                                <div className="text-right text-[11px]">
+                                  <div className="text-gray-400">Manager</div>
+                                  <div className="font-medium text-gray-700">{mgr?.name || 'N/A'}</div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-1 p-2 bg-white rounded-b-xl border border-gray-200">
-                  {emps.map((emp) => {
-                    const mgr = managers.find((m) => m.id === emp.manager_id);
-                    return (
-                      <button key={emp.id} onClick={() => loadEmployeeBonuses(emp)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-all text-left ${
-                          selectedEmp?.id === emp.id
-                            ? 'border-blue-400 bg-blue-50 shadow-sm'
-                            : 'border-transparent hover:border-blue-200 hover:bg-gray-50'
-                        }`}>
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs shrink-0">
-                          {emp.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 text-sm truncate">{emp.name}</p>
-                          <p className="text-[11px] text-gray-400">{emp.matricule}</p>
-                        </div>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${emp.currency === 'EUR' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
-                          {symbolFor(emp.currency)}
-                        </span>
-                        <div className="text-right text-[11px]">
-                          <div className="text-gray-400">Manager</div>
-                          <div className="font-medium text-gray-700">{mgr?.name || 'N/A'}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ));
+              );
+            });
           })()
         )}
       </div>

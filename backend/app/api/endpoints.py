@@ -6,6 +6,7 @@ from enum import Enum
 from tortoise.expressions import Q
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
+from app.permissions import n1_service_group_ids
 from app.email_service import send_bonus_notification_email
 from app.schemas import *
 from fastapi import HTTPException
@@ -171,6 +172,12 @@ async def batch_validate_bonuses(
             if not bonus:
                 results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Prime introuvable"))
                 continue
+
+            if request.step == "N1" and user.is_validator_n1 and not (user.is_admin or user.is_dg or user.is_drh or user.is_directeur):
+                group_ids = await n1_service_group_ids(user)
+                if group_ids is not None and bonus.employee.service_group_id not in group_ids:
+                    results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Employé hors de vos services affectés"))
+                    continue
 
             if bonus.status == ValidationStatus.VALIDE:
                 results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Déjà validée"))
@@ -454,13 +461,15 @@ async def list_bonuses(
     archive_mode: Optional[bool] = False,
     user: User = Depends(get_current_user),
 ):
-    query = Bonus.all().prefetch_related('employee')
+    query = Bonus.all().prefetch_related('employee', 'employee__service_group')
 
     if archive_mode:
         query = query.filter(status=ValidationStatus.VALIDE)
     else:
-        if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
-            query = query.filter(employee__dept_str=user.department)
+        # Filtre par département selon le rôle
+        if not (user.is_admin or user.is_dg or user.is_drh):
+            if user.department:
+                query = query.filter(employee__dept_str=user.department)
 
         # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
         # Chaque rôle ne voit que les primes au statut qu'il doit traiter :
@@ -470,24 +479,23 @@ async def list_bonuses(
         #   - N+1 : initialisées
         #   - Admin : tous les statuts
         all_statuses_list = [s for s in ValidationStatus]
+        # Filtre par défaut (aucun statut explicite) → chaque rôle ne voit que son flux :
+        #   - DG : en attente DG · DRH : primes validées · Directeur : en attente Directeur
+        #   - N+1 : initialisées · Admin : tous les statuts
         if user.is_admin:
             default_statuses = all_statuses_list
-            filterable_statuses = all_statuses_list
         elif user.is_dg:
             default_statuses = [ValidationStatus.EN_ATTENTE_DG]
-            filterable_statuses = [ValidationStatus.EN_ATTENTE_DG]
         elif user.is_drh:
             default_statuses = [ValidationStatus.VALIDE]
-            filterable_statuses = [ValidationStatus.VALIDE]
         elif user.is_directeur:
             default_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
-            filterable_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
         elif user.is_validator_n1:
             default_statuses = [ValidationStatus.INITIALISE]
-            filterable_statuses = [ValidationStatus.INITIALISE]
         else:
             default_statuses = []
-            filterable_statuses = []
+        # Le filtre statut explicite reste accessible sur tous les statuts pour tous les rôles
+        filterable_statuses = all_statuses_list
 
         if all_statuses:
             pass  # Kanban : toutes les primes du département, tous statuts
@@ -573,11 +581,12 @@ async def export_bonuses(
     show_paid: Optional[bool] = False,
     user: User = Depends(get_current_user),
 ):
-    query = Bonus.all().prefetch_related('employee', 'created_by')
+    query = Bonus.all().prefetch_related('employee', 'created_by', 'employee__service_group')
 
     # Filtre département selon le rôle
-    if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
-        query = query.filter(employee__dept_str=user.department)
+    if not (user.is_admin or user.is_dg or user.is_drh):
+        if user.department:
+            query = query.filter(employee__dept_str=user.department)
 
     # Filtre statut selon le rôle
     if user.is_admin:
@@ -681,11 +690,12 @@ async def export_bonuses_xlsx(
     was_rejected: Optional[bool] = None,
     user: User = Depends(get_current_user),
 ):
-    query = Bonus.all().prefetch_related('employee', 'created_by')
+    query = Bonus.all().prefetch_related('employee', 'created_by', 'employee__service_group')
 
     # Filtre département selon le rôle
-    if not (user.is_admin or user.is_dg or user.is_drh) and user.department:
-        query = query.filter(employee__dept_str=user.department)
+    if not (user.is_admin or user.is_dg or user.is_drh):
+        if user.department:
+            query = query.filter(employee__dept_str=user.department)
 
     # Filtre statut selon le rôle
     if user.is_admin:
@@ -971,8 +981,15 @@ async def validate_bonus(
     user: User = Depends(get_current_user)
 ):
     # Récupération de la prime ou erreur 404
-    bonus = await Bonus.get_or_none(id=bonus_id)
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
+
+    # Un N+1 avec des services affectés ne peut valider que les primes des
+    # employés de ses services (étape N1).
+    if step == "N1" and user.is_validator_n1 and not (user.is_admin or user.is_dg or user.is_drh or user.is_directeur):
+        group_ids = await n1_service_group_ids(user)
+        if group_ids is not None and bonus.employee.service_group_id not in group_ids:
+            raise HTTPException(status_code=403, detail="Vous ne pouvez valider que les primes des employés de vos services affectés.")
     
     # Vérification : si déjà validé, ON BLOQUE
     if bonus.status == ValidationStatus.VALIDE:

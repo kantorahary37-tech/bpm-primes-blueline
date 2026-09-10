@@ -15,6 +15,7 @@ import PlafondsPage from './pages/PlafondsPage'
 import ValidatedBonuses from './pages/ValidatedBonuses'
 import ArchivePage from './pages/ArchivePage'
 import Employees from './pages/Employees'
+import ServicesPage from './pages/ServicesPage'
 import UsersPage from './pages/UsersPage'
 import EvaluationTemplatesPage from './pages/EvaluationTemplatesPage'
 import CommissionConfigPage from './pages/CommissionConfigPage'
@@ -58,8 +59,9 @@ function AppContent() {
       <Route path="/validated" element={<ProtectedRoute><ValidatedBonuses /></ProtectedRoute>} />
       <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg', 'is_admin']}><ArchivePage /></RestrictedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
-      <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin']}><UsersPage /></RestrictedRoute>} />
-      <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin']}><EvaluationTemplatesPage /></RestrictedRoute>} />
+      <Route path="/services" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1']}><ServicesPage /></RestrictedRoute>} />
+      <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><UsersPage /></RestrictedRoute>} />
+      <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><EvaluationTemplatesPage /></RestrictedRoute>} />
       <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh']}><AdminConfigPage /></RestrictedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>

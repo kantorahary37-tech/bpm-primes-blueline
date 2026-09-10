@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
+from tortoise.expressions import Q
 from app.models import Employee, User
 from app.schemas import *
 from app.auth import get_current_user
@@ -19,15 +20,22 @@ async def create_employee(emp: EmployeeCreate):
 @router.get("/", response_model=List[EmployeeResponse])
 async def list_employees(
     department: Optional[str] = None,
+    search: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
-    query = Employee.all().filter(is_active=True)
+    query = Employee.all().filter(is_active=True).prefetch_related('service_group')
 
+    # Restriction par département : les non-admin ne voient que leur département.
     if user.is_admin or user.is_dg or user.is_drh:
         if department:
             query = query.filter(dept_str=department)
     else:
         query = query.filter(dept_str=user.department)
+
+    if search:
+        q = search.strip()
+        if q:
+            query = query.filter(Q(matricule__icontains=q) | Q(name__icontains=q))
 
     return await query
 

@@ -43,6 +43,11 @@ def _default_quali():
     return [EvaluationTemplateItem(**d) for d in DEFAULT_QUALI]
 
 
+def _scoped_director(user: User) -> bool:
+    """Directeur limité aux employés de son département (non admin / dg / drh)."""
+    return bool(user.is_directeur) and not (user.is_admin or user.is_dg or user.is_drh)
+
+
 @router.get("/evaluation-templates", response_model=EvaluationTemplateResponse)
 async def get_evaluation_templates(employee_id: int, user: User = Depends(get_current_user)):
     emp = await Employee.filter(id=employee_id).first()
@@ -85,6 +90,9 @@ async def save_evaluation_templates(
     if not emp:
         raise HTTPException(404, "Employe introuvable")
 
+    if _scoped_director(user) and emp.department != user.department:
+        raise HTTPException(403, "Ce directeur ne peut évaluer que les employés de son département")
+
     await EvaluationTemplate.filter(employee_id=emp.id).delete()
 
     to_create = []
@@ -115,10 +123,12 @@ async def save_evaluation_templates(
 
 @router.get("/evaluation-templates/all")
 async def get_all_templates(user: User = Depends(get_current_user)):
-    if not user.is_admin:
+    if not (user.is_admin or user.is_directeur):
         raise HTTPException(403, "Acces reserve aux administrateurs")
 
     employees = await Employee.filter(is_active=True).order_by("name")
+    if _scoped_director(user):
+        employees = await Employee.filter(is_active=True, dept_str=user.dept_str).order_by("name")
     result = []
 
     for emp in employees:
@@ -146,12 +156,17 @@ async def get_all_templates(user: User = Depends(get_current_user)):
 
 @router.delete("/evaluation-templates/{template_id}")
 async def delete_template(template_id: int, user: User = Depends(get_current_user)):
-    if not user.is_admin:
-        raise HTTPException(403, "Acces reserve aux administrateurs")
+    if not (user.is_admin or user.is_directeur):
+        raise HTTPException(403, "Acces reserve aux administrateurs ou directeurs")
 
     tpl = await EvaluationTemplate.filter(id=template_id).first()
     if not tpl:
         raise HTTPException(404, "Critere introuvable")
+
+    if _scoped_director(user):
+        emp = await Employee.filter(id=tpl.employee_id).first()
+        if not emp or emp.department != user.department:
+            raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations de son département")
 
     await tpl.delete()
     return {"message": "Critere supprime"}
@@ -159,12 +174,15 @@ async def delete_template(template_id: int, user: User = Depends(get_current_use
 
 @router.delete("/evaluation-templates/employee/{employee_id}")
 async def delete_all_employee_templates(employee_id: int, user: User = Depends(get_current_user)):
-    if not user.is_admin:
-        raise HTTPException(403, "Acces reserve aux administrateurs")
+    if not (user.is_admin or user.is_directeur):
+        raise HTTPException(403, "Acces reserve aux administrateurs ou directeurs")
 
     emp = await Employee.filter(id=employee_id).first()
     if not emp:
         raise HTTPException(404, "Employe introuvable")
+
+    if _scoped_director(user) and emp.department != user.department:
+        raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations de son département")
 
     count = await EvaluationTemplate.filter(employee_id=emp.id).delete()
     return {"message": f"{count} critere(s) supprime(s)"}

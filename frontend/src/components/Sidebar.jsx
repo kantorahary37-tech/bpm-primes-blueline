@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/AuthContext'
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: '📊' },
   { path: '/employees', label: 'Employés', icon: '👥' },
+  { path: '/services', label: 'Services', icon: '🧩', roles: ['is_validator_n1', 'is_directeur', 'is_drh', 'is_dg', 'is_admin'] },
   { path: '/bonuses', label: 'Primes', icon: '💰' },
   { path: '/settings/primemax', label: 'Plafonds', icon: '⚙️', hideForAdmin: true },
   { path: '/admin/config', label: 'Configuration', icon: '⚙️', roles: ['is_admin', 'is_dg', 'is_drh'] },
-  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: '📋', roles: ['is_admin'] },
-  { path: '/admin/users', label: 'Utilisateurs', icon: '👤', roles: ['is_admin'] },
+  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: '📋', roles: ['is_admin', 'is_directeur'] },
+  { path: '/admin/users', label: 'Utilisateurs', icon: '👤', roles: ['is_admin', 'is_directeur'] },
 ]
 
 export default function Sidebar({ open, onClose }) {

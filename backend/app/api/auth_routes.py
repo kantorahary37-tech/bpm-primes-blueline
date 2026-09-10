@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Depends
-from app.models import User, Department
+from app.models import User, Department, Employee, UserServiceAssignment, ServiceGroup
 from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.email_service import send_reset_email
@@ -87,3 +87,23 @@ async def get_me(user: User = Depends(get_current_user)):
         "is_dg": user.is_dg,
         "is_admin": user.is_admin,
     }
+
+
+@router.get("/me/service-assignments")
+async def get_my_service_assignments(user: User = Depends(get_current_user)):
+    assignments = await UserServiceAssignment.filter(user_id=user.id).prefetch_related('service_group', 'service_group__department', 'n1')
+    result = []
+    for a in assignments:
+        sg = await a.service_group
+        dept = await sg.department if sg else None
+        member_count = await Employee.filter(service_group_id=sg.id).count() if sg else 0
+        n1_user = await a.n1 if a.n1_id else None
+        result.append({
+            "id": a.id,
+            "service_group_id": a.service_group_id,
+            "service_group_name": sg.name if sg else None,
+            "department_name": dept.name if dept else None,
+            "member_count": member_count,
+            "n1_name": n1_user.name if n1_user else None,
+        })
+    return result

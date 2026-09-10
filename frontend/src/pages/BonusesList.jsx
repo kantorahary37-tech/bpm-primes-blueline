@@ -26,7 +26,7 @@ const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
 const ALL_STATUSES = ['Initialisé', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
 
-// Statuts visibles/filtrables par rôle — chaque validateur ne voit que son flux :
+// Statuts proposés dans le filtre : chaque rôle ne filtre que sur son flux :
 // Directeur : En attente Directeur · DRH : Prime validée · N+1 : Initialisé · DG : En attente DG · Admin : tous
 const roleStatuses = (user) => {
   if (!user) return [];
@@ -36,6 +36,16 @@ const roleStatuses = (user) => {
   if (user.is_directeur) return ['En attente Directeur'];
   if (user.is_validator_n1) return ['Initialisé'];
   return [];
+};
+
+const defaultStatusFor = (user) => {
+  if (!user) return '';
+  if (user.is_admin) return '';
+  if (user.is_dg) return 'En attente DG';
+  if (user.is_drh) return 'Prime validée';
+  if (user.is_directeur) return 'En attente Directeur';
+  if (user.is_validator_n1) return 'Initialisé';
+  return '';
 };
 
 const BonusesList = () => {
@@ -78,11 +88,9 @@ const [filterMonth, setFilterMonth] = useState('');
   }, []);
 
   useEffect(() => {
-    // Statut par défaut du rôle (un seul statut autorisé hors admin)
+    // Statut par défaut du rôle (flux du rôle) quand aucun filtre explicite n'est présent
     if (!new URLSearchParams(window.location.search).get('status')) {
-      const allowed = roleStatuses(user);
-      if (user?.is_admin) setStatusFilter('');
-      else if (allowed.length === 1) setStatusFilter(allowed[0]);
+      setStatusFilter(defaultStatusFor(user));
     }
   }, [user?.is_admin, user?.is_dg, user?.is_drh, user?.is_directeur, user?.is_validator_n1]);
 
@@ -332,7 +340,18 @@ const [filterMonth, setFilterMonth] = useState('');
       if (!groups[d]) groups[d] = [];
       groups[d].push(b);
     });
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([dept, items]) => ({ dept, items }));
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([dept, items]) => {
+      const byService = {};
+      items.forEach(b => {
+        const s = b.employee?.service || 'Non assigné';
+        if (!byService[s]) byService[s] = [];
+        byService[s].push(b);
+      });
+      const services = Object.entries(byService)
+        .sort(([a], [b]) => (a === 'Non assigné' ? 1 : b === 'Non assigné' ? -1 : a.localeCompare(b)))
+        .map(([name, serviceItems]) => ({ name, items: serviceItems }));
+      return { dept, items, services };
+    });
   }, [bonuses]);
 
   const canSelect = (bonus) => {
@@ -444,7 +463,7 @@ const [filterMonth, setFilterMonth] = useState('');
         {statusOptions.length > 0 && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
-            <option value="">Tous statuts</option>
+            {statusOptions.length > 1 && <option value="">Tous statuts</option>}
             {statusOptions.map((s) => (
               <option key={s} value={s}>{statusOptionLabel(s)}</option>
             ))}
@@ -518,7 +537,7 @@ const [filterMonth, setFilterMonth] = useState('');
             </button>
           )}
         </div>
-      ) : viewMode === 'department' ? deptGroups.map(({ dept, items }) => (
+      ) : viewMode === 'department' ? deptGroups.map(({ dept, items, services }) => (
         <div key={dept} className="mb-6">
           <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
             <h2 className="font-semibold text-sm">{dept}</h2>
@@ -572,26 +591,37 @@ const [filterMonth, setFilterMonth] = useState('');
               })()}
             </div>
           </div>
-          <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <BonusTable
-              bonuses={items}
-              getValidStep={getValidStep}
-              canSelect={canSelect}
-              selectedBonuses={selectedBonuses}
-              onToggleSelect={toggleSelect}
-              onSelectAll={() => selectSection(items)}
-              onClearSelection={() => deselectSection(items)}
-              seeAmounts={seeAmounts}
-              initiatorMap={initiatorMap}
-              onView={(id) => navigate(`/bonuses/${id}`)}
-              onValidate={handleValidate}
-              onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
-              badgeClass={getBadgeClass}
-              statusLabel={statusLabel}
-              sortBy={sortBy}
-              sortDir={sortDir}
-              onSort={handleTableSort}
-            />
+          <div className="bg-white rounded-b-xl border border-t-0 border-gray-200 divide-y divide-gray-100">
+            {services.map((serviceGroup) => (
+              <div key={serviceGroup.name} className="p-3">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">{serviceGroup.name}</span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{serviceGroup.items.length}</span>
+                  <span className="text-xs font-bold text-blue-600 ml-1">
+                    {seeAmounts ? `${serviceGroup.items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+                  </span>
+                </div>
+                <BonusTable
+                  bonuses={serviceGroup.items}
+                  getValidStep={getValidStep}
+                  canSelect={canSelect}
+                  selectedBonuses={selectedBonuses}
+                  onToggleSelect={toggleSelect}
+                  onSelectAll={() => selectSection(serviceGroup.items)}
+                  onClearSelection={() => deselectSection(serviceGroup.items)}
+                  seeAmounts={seeAmounts}
+                  initiatorMap={initiatorMap}
+                  onView={(id) => navigate(`/bonuses/${id}`)}
+                  onValidate={handleValidate}
+                  onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
+                  badgeClass={getBadgeClass}
+                  statusLabel={statusLabel}
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onSort={handleTableSort}
+                />
+              </div>
+            ))}
           </div>
         </div>
       )) : viewMode === 'status' ? sections.map((section) => {

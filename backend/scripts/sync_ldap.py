@@ -395,6 +395,7 @@ async def sync(scope: str = 'all'):
 
             emp_data = dict(
                 name=name,
+                poste=u.get('title') or u.get('employeeType') or None,
                 dept_str=emp_dept,
                 dept=dept_obj,
                 manager=manager_user,
@@ -412,9 +413,9 @@ async def sync(scope: str = 'all'):
                     setattr(existing, k, v)
                 to_update.append(existing)
             else:
-                log.warning('  ⚠ %s (%s) présent dans l\'AD mais absent de la base — non ajouté', name, emp_matricule)
-                employees_skipped += 1
-                continue
+                emp_data['matricule'] = emp_matricule
+                to_update.append(Employee(**emp_data))
+                log.info('  ✓ Créé  %s (%s)', name, emp_matricule)
 
         employees_updated = len(to_update)
         for emp in to_update:

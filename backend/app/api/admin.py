@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import Optional
-from app.models import User, Department, Employee
+from app.models import User, Department, Employee, ServiceGroup, UserServiceAssignment
 from app.auth import get_current_user, get_password_hash
 from app.ldap_helpers import connect, first, full_name, matricule, dept_name, escape_ldap, LDAP_ATTRS
-from app.schemas import UserResponse, EmployeeResponse
+from app.schemas import UserResponse, EmployeeResponse, UserServiceAssignmentResponse, UserServiceAssignmentCreate, UserServiceAssignmentUpdate
 
 router = APIRouter()
 
@@ -15,9 +15,37 @@ def require_admin(user: User = Depends(get_current_user)):
     return user
 
 
+def require_admin_or_director(user: User = Depends(get_current_user)):
+    if not (user.is_admin or user.is_directeur):
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs ou directeurs")
+    return user
+
+
+def _scoped_director(user: User) -> bool:
+    """True si 'user' est un directeur avec portée limitée à son département
+    (non admin / dg / drh)."""
+    return bool(user.is_directeur) and not (user.is_admin or user.is_dg or user.is_drh)
+
+
+def _check_user_scope(admin: User, target: User):
+    """Vérifie qu'un directeur scoped ne manipule que des users de son département."""
+    if _scoped_director(admin) and target.dept_str != admin.dept_str:
+        raise HTTPException(status_code=403, detail="Ce directeur ne peut gérer que les utilisateurs de son département")
+
+
+def _check_director_role_edit(admin: User, data):
+    """Un directeur scoped ne peut pas attribuer de rôle à portée système."""
+    if not _scoped_director(admin):
+        return
+    if data.is_admin or data.is_dg or data.is_drh:
+        raise HTTPException(status_code=403, detail="Un directeur ne peut pas attribuer les rôles admin, DG ou DRH")
+
+
 @router.get("/users", response_model=list[UserResponse])
-async def admin_list_users(_admin: User = Depends(require_admin)):
-    users = await User.all()
+async def admin_list_users(admin: User = Depends(require_admin_or_director)):
+    if _scoped_director(admin):
+        return await User.filter(dept_str=admin.dept_str).order_by("name")
+    users = await User.all().order_by("name")
     return users
 
 
@@ -33,10 +61,14 @@ class UserUpdateRequest(BaseModel):
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
-async def admin_update_user(user_id: int, data: UserUpdateRequest, _admin: User = Depends(require_admin)):
-    user = await User.get_or_none(id=user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+async def admin_update_user(user_id: int, data: UserUpdateRequest, admin: User = Depends(require_admin_or_director)):
+    user = await _get_user_or_404(user_id)
+    _check_user_scope(admin, user)
+    _check_director_role_edit(admin, data)
+    if _scoped_director(admin) and (user.is_admin or user.is_dg or user.is_drh):
+        raise HTTPException(status_code=403, detail="Un directeur ne peut pas gérer un compte admin, DG ou DRH")
+    if _scoped_director(admin) and data.department is not None and data.department != admin.dept_str:
+        raise HTTPException(status_code=403, detail="Un directeur ne peut pas changer le département des utilisateurs")
     if data.name is not None:
         user.name = data.name
     if data.poste is not None:
@@ -60,21 +92,19 @@ async def admin_update_user(user_id: int, data: UserUpdateRequest, _admin: User 
 
 
 @router.delete("/users/{user_id}")
-async def admin_delete_user(user_id: int, _admin: User = Depends(require_admin)):
-    user = await User.get_or_none(id=user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-    if user.id == _admin.id:
+async def admin_delete_user(user_id: int, admin: User = Depends(require_admin_or_director)):
+    user = await _get_user_or_404(user_id)
+    _check_user_scope(admin, user)
+    if user.id == admin.id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas supprimer votre propre compte")
     await user.delete()
     return {"message": "Utilisateur supprimé"}
 
 
 @router.post("/users/{user_id}/reset-password")
-async def admin_reset_password(user_id: int, _admin: User = Depends(require_admin)):
-    user = await User.get_or_none(id=user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+async def admin_reset_password(user_id: int, admin: User = Depends(require_admin_or_director)):
+    user = await _get_user_or_404(user_id)
+    _check_user_scope(admin, user)
     user.password_hash = get_password_hash("testprime")
     await user.save()
     return {"message": "Mot de passe réinitialisé à 'testprime'"}
@@ -93,7 +123,12 @@ class CreateUserRequest(BaseModel):
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def admin_create_user(data: CreateUserRequest, _admin: User = Depends(require_admin)):
+async def admin_create_user(data: CreateUserRequest, admin: User = Depends(require_admin_or_director)):
+    if _scoped_director(admin):
+        _check_director_role_edit(admin, data)
+        data.department = admin.dept_str
+        if data.department is None:
+            raise HTTPException(status_code=403, detail="Votre profil n'est associé à aucun département")
     existing = await User.get_or_none(email=data.email)
     if existing:
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
@@ -114,6 +149,101 @@ async def admin_create_user(data: CreateUserRequest, _admin: User = Depends(requ
         is_admin=data.is_admin,
     )
     return user
+
+
+async def _get_user_or_404(user_id: int) -> User:
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    return user
+
+
+async def _assignment_to_response(assignment: UserServiceAssignment) -> dict:
+    sg = await assignment.service_group
+    dept = await sg.department
+    data = {
+        "id": assignment.id,
+        "service_group_id": sg.id,
+        "service_group_name": sg.name,
+        "department": dept.name,
+        "n1_id": None,
+        "n1_name": None,
+        "n1_email": None,
+        "created_at": assignment.created_at,
+    }
+    if assignment.n1_id:
+        n1 = await assignment.n1
+        data["n1_id"] = n1.id
+        data["n1_name"] = n1.name
+        data["n1_email"] = n1.email
+    return data
+
+
+async def _validate_n1(user: User, service_group_id: int, n1_id: Optional[int]):
+    """Valide le n+1 : doit exister, ne pas être l'utilisateur lui-même,
+    et appartenir au service choisi (contrainte stricte)."""
+    if n1_id is None:
+        return None
+    if n1_id == user.id:
+        raise HTTPException(status_code=400, detail="Un utilisateur ne peut pas être son propre N+1")
+    n1 = await User.get_or_none(id=n1_id)
+    if not n1:
+        raise HTTPException(status_code=404, detail="Utilisateur N+1 introuvable")
+    same_service = await UserServiceAssignment.exists(user_id=n1_id, service_group_id=service_group_id)
+    if not same_service:
+        raise HTTPException(status_code=400, detail="Le N+1 doit appartenir au même service que l'utilisateur")
+    return n1
+
+
+@router.get("/users/{user_id}/service-assignments", response_model=list[UserServiceAssignmentResponse])
+async def admin_list_user_service_assignments(user_id: int, admin: User = Depends(require_admin_or_director)):
+    target = await _get_user_or_404(user_id)
+    _check_user_scope(admin, target)
+    assignments = await UserServiceAssignment.filter(user_id=user_id).order_by("created_at")
+    return [await _assignment_to_response(a) for a in assignments]
+
+
+@router.post("/users/{user_id}/service-assignments", response_model=UserServiceAssignmentResponse, status_code=status.HTTP_201_CREATED)
+async def admin_create_user_service_assignment(user_id: int, data: UserServiceAssignmentCreate, admin: User = Depends(require_admin_or_director)):
+    user = await _get_user_or_404(user_id)
+    _check_user_scope(admin, user)
+    service_group = await ServiceGroup.get_or_none(id=data.service_group_id)
+    if not service_group:
+        raise HTTPException(status_code=404, detail="Service introuvable")
+    if await UserServiceAssignment.exists(user_id=user_id, service_group_id=data.service_group_id):
+        raise HTTPException(status_code=400, detail="Cette utilisateur est déjà assigné à ce service")
+    n1 = await _validate_n1(user, data.service_group_id, data.n1_id)
+    assignment = await UserServiceAssignment.create(
+        user=user,
+        service_group=service_group,
+        n1=n1,
+    )
+    return await _assignment_to_response(assignment)
+
+
+@router.put("/users/{user_id}/service-assignments/{assignment_id}", response_model=UserServiceAssignmentResponse)
+async def admin_update_user_service_assignment(user_id: int, assignment_id: int, data: UserServiceAssignmentUpdate, admin: User = Depends(require_admin_or_director)):
+    target = await _get_user_or_404(user_id)
+    _check_user_scope(admin, target)
+    assignment = await UserServiceAssignment.get_or_none(id=assignment_id, user_id=user_id)
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignation introuvable")
+    user = await _get_user_or_404(user_id)
+    n1 = await _validate_n1(user, assignment.service_group_id, data.n1_id)
+    assignment.n1 = n1
+    await assignment.save()
+    return await _assignment_to_response(assignment)
+
+
+@router.delete("/users/{user_id}/service-assignments/{assignment_id}")
+async def admin_delete_user_service_assignment(user_id: int, assignment_id: int, admin: User = Depends(require_admin_or_director)):
+    target = await _get_user_or_404(user_id)
+    _check_user_scope(admin, target)
+    assignment = await UserServiceAssignment.get_or_none(id=assignment_id, user_id=user_id)
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignation introuvable")
+    await assignment.delete()
+    return {"message": "Assignation supprimée"}
 
 
 def _run_ldap_sync(scope: str):
@@ -146,7 +276,7 @@ async def admin_ldap_sync_employees(_admin: User = Depends(require_admin)):
 
 
 @router.get("/ldap-search")
-async def admin_ldap_search(q: str = "", _admin: User = Depends(require_admin)):
+async def admin_ldap_search(q: str = "", _admin: User = Depends(require_admin_or_director)):
     if len(q) < 2:
         return []
     try:
@@ -303,13 +433,13 @@ async def admin_create_employee_from_ldap(req: LdapEmployeeCreateRequest, _admin
         conn.search(
             search_base=LDAP_USER_SEARCH_BASE,
             search_filter=f'(&(mail=*)(mail={escape_ldap(email)}))',
-            attributes=['cn', 'mail', 'givenName', 'sn', 'title', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager'],
+            attributes=['cn', 'mail', 'givenName', 'sn', 'title', 'employeeType', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager'],
             paged_size=5,
         )
         if not conn.entries:
             raise HTTPException(status_code=404, detail="Personne non trouvée dans l'annuaire LDAP")
         entry = conn.entries[0]
-        rec = {attr: first(entry, attr) for attr in ['cn', 'mail', 'givenName', 'sn', 'title', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager']}
+        rec = {attr: first(entry, attr) for attr in ['cn', 'mail', 'givenName', 'sn', 'title', 'employeeType', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager']}
 
         m = matricule(rec, email)
         if await Employee.exists(matricule=m):
@@ -327,6 +457,7 @@ async def admin_create_employee_from_ldap(req: LdapEmployeeCreateRequest, _admin
         emp = await Employee.create(
             matricule=m,
             name=full_name(rec),
+            poste=rec.get('title') or rec.get('employeeType') or None,
             dept_str=dept_name_ or '',
             dept=dept_obj,
             manager=manager_user,

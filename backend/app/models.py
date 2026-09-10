@@ -77,6 +77,9 @@ class User(models.Model):
     is_dg = fields.BooleanField(default=False)
     # Boolean : est Administrateur (tous les privilèges) ?
     is_admin = fields.BooleanField(default=False)
+    # Groupes de services gérés (N+1) : un N+1 peut être affecté à plusieurs services,
+    # et ne peut créer/valider que les primes des employés de ses services affectés.
+    service_groups = fields.ManyToManyField('models.ServiceGroup', related_name='managers', through='user_servicegroup')
     # Mot de passe hashé
     password_hash = fields.CharField(max_length=255, null=True)
     # Token de réinitialisation de mot de passe
@@ -90,6 +93,45 @@ class User(models.Model):
     def department(self):
         return self.dept_str
 
+# Modèle Service / Groupe (table "servicegroup")
+class ServiceGroup(models.Model):
+    # Clé primaire
+    id = fields.IntField(pk=True)
+    # Nom du service
+    name = fields.CharField(max_length=100)
+    # Département auquel appartient le service
+    department = fields.ForeignKeyField('models.Department', related_name='service_groups')
+    # Utilisateur ayant créé le groupe (optionnel)
+    created_by = fields.ForeignKeyField('models.User', null=True)
+    # Date de création
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        # Un même nom de service ne peut exister qu'une fois par département
+        unique_together = (("name", "department"),)
+
+    def __str__(self):
+        return self.name
+
+# Modèle Assignation Service Utilisateur (table "user_service_assignment")
+class UserServiceAssignment(models.Model):
+    # Clé primaire
+    id = fields.IntField(pk=True)
+    # Utilisateur assigné
+    user = fields.ForeignKeyField('models.User', related_name='service_assignments')
+    # Service assigné
+    service_group = fields.ForeignKeyField('models.ServiceGroup', related_name='user_assignments')
+    # N+1 (responsable hiérarchique) pour ce service (optionnel)
+    n1 = fields.ForeignKeyField('models.User', related_name='subordinates', null=True)
+    # Date de création
+    created_at = fields.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Un utilisateur ne peut être assigné qu'une fois au même service
+        unique_together = (("user", "service_group"),)
+        # Nom de table explicite (cohérent avec la migration dans wait_for_db.py)
+        table = "user_service_assignment"
+
 # Modèle Employé (table "employee")
 class Employee(models.Model):
     # Clé primaire
@@ -98,12 +140,16 @@ class Employee(models.Model):
     matricule = fields.CharField(max_length=50, unique=True)
     # Nom de l'employé
     name = fields.CharField(max_length=255)
+    # Poste / fonction de l'employé (optionnel)
+    poste = fields.CharField(max_length=255, null=True)
     # Département (colonne temporaire pour transition)
     dept_str = fields.CharField(max_length=50, source_field='department')
     # Département (FK vers Department)
     dept = fields.ForeignKeyField('models.Department', related_name='employees', source_field='department_id')
     # Relation vers le manager (User) : un manager a plusieurs employés
     manager = fields.ForeignKeyField('models.User', related_name='employees')
+    # Service / groupe auquel l'employé est affecté (null = non assigné)
+    service_group = fields.ForeignKeyField('models.ServiceGroup', related_name='employees_service_group', null=True, source_field='service_group_id')
     # Devise / profil de l'employé (Ar par défaut, EUR pour les employés étrangers, etc.)
     currency = fields.CharField(max_length=10, default='Ar', index=True)
     # Taux astreinte personnalisé (unité = devise de l'employé/semaine), null = taux par défaut
@@ -118,6 +164,10 @@ class Employee(models.Model):
     @property
     def department(self):
         return self.dept_str
+
+    @property
+    def service(self):
+        return self.service_group.name if self.service_group else None
 
 # Modèle Prime (table "bonus")
 class Bonus(models.Model):

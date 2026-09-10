@@ -1,21 +1,27 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getUsers } from '../services/api'
+import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getUsers, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment } from '../services/api'
 import Modal from '../components/Modal'
 import toast from 'react-hot-toast'
-import { EditIcon, TrashIcon, SearchIcon, PlusIcon, UsersIcon, ChevronLeftIcon } from '../components/Icons'
+import { EditIcon, TrashIcon, SearchIcon, PlusIcon, UsersIcon, ChevronLeftIcon, ChevronDownIcon } from '../components/Icons'
 
 const PAGE_SIZE = 15
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth()
   const [users, setUsers] = useState([])
+  const isScopedDirector = currentUser?.is_directeur && !currentUser?.is_admin && !currentUser?.is_dg && !currentUser?.is_drh
+  const visibleUsers = isScopedDirector ? users.filter(u => u.department === currentUser?.department) : users
   const [departments, setDepartments] = useState([])
+  const [serviceGroups, setServiceGroups] = useState([])
+  const [assignmentsByUser, setAssignmentsByUser] = useState({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [roleFilter, setRoleFilter] = useState('')
   const [deptFilter, setDeptFilter] = useState('')
+  const [serviceFilter, setServiceFilter] = useState('')
+  const [collapsedDepts, setCollapsedDepts] = useState({})
   const [editUser, setEditUser] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showDelete, setShowDelete] = useState(null)
@@ -26,16 +32,30 @@ export default function UsersPage() {
   const [showLdap, setShowLdap] = useState(false)
   const [view, setView] = useState('table')
 
+  const loadAllAssignments = useCallback(async (usersList) => {
+    try {
+      const map = {}
+      await Promise.all(usersList.map(async (u) => {
+        try {
+          map[u.id] = await getUserServiceAssignments(u.id)
+        } catch {}
+      }))
+      setAssignmentsByUser(map)
+    } catch {}
+  }, [])
+
   const loadUsers = useCallback(async () => {
     try {
       const data = await getAdminUsers()
       setUsers(data)
+      loadAllAssignments(data)
+      return data
     } catch {
       toast.error('Erreur lors du chargement')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadAllAssignments])
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -45,11 +65,23 @@ export default function UsersPage() {
     } catch {}
   }, [])
 
-  useEffect(() => { loadUsers(); loadDepartments() }, [loadUsers, loadDepartments])
+  const loadServiceGroups = useCallback(async () => {
+    try {
+      const data = await getServices()
+      setServiceGroups(data)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    loadUsers().then(() => {
+      loadDepartments()
+      loadServiceGroups()
+    })
+  }, [loadUsers, loadDepartments, loadServiceGroups])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return users.filter(u => {
+    return visibleUsers.filter(u => {
       if (q && !u.name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q) && !u.department?.toLowerCase().includes(q) && !u.poste?.toLowerCase().includes(q)) return false
       if (roleFilter) {
         if (roleFilter === 'admin' && !u.is_admin) return false
@@ -59,10 +91,14 @@ export default function UsersPage() {
         if (roleFilter === 'n1' && !u.is_validator_n1) return false
         if (roleFilter === 'collab' && (u.is_admin || u.is_dg || u.is_drh || u.is_directeur || u.is_validator_n1)) return false
       }
-      if (deptFilter && u.department !== deptFilter) return false
+      const userAss = assignmentsByUser[u.id] || []
+      // Filtre département : match le département utilisateur OU le département d'un service assigné
+      if (deptFilter && u.department !== deptFilter && !userAss.some(a => a.department === deptFilter)) return false
+      // Filtre service : ne conserve que les utilisateurs assignés au service sélectionné
+      if (serviceFilter && !userAss.some(a => a.service_group_id === Number(serviceFilter))) return false
       return true
     })
-  }, [users, search, roleFilter, deptFilter])
+  }, [visibleUsers, search, roleFilter, deptFilter, serviceFilter, assignmentsByUser])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -71,7 +107,59 @@ export default function UsersPage() {
     return filtered.slice(start, start + PAGE_SIZE)
   }, [filtered, safePage])
 
-  useEffect(() => { setPage(1) }, [search, roleFilter, deptFilter])
+  // Lignes groupées par département puis service (un user multi-service apparaît sous chaque service)
+  const groupedRows = useMemo(() => {
+    const groupsMap = {}
+    paginated.forEach(u => {
+      const ass = assignmentsByUser[u.id] || []
+      const occurrences = ass.length
+        ? ass.map(a => ({ dept: a.department || u.department || 'Sans département', service: a.service_group_name, assignment: a }))
+        : [{ dept: u.department || 'Sans département', service: 'Sans service', assignment: null }]
+      occurrences.forEach(occ => {
+        const key = `${occ.dept}\u0000${occ.service}`
+        if (!groupsMap[key]) groupsMap[key] = { dept: occ.dept, service: occ.service, users: [] }
+        groupsMap[key].users.push({ user: u, assignment: occ.assignment })
+      })
+    })
+    const depts = [...new Set(Object.values(groupsMap).map(g => g.dept))].sort((a, b) => a.localeCompare(b))
+    const sections = []
+    depts.forEach(dept => {
+      const groups = Object.values(groupsMap)
+        .filter(g => g.dept === dept)
+        .sort((a, b) => {
+          if (a.service === 'Sans service') return 1
+          if (b.service === 'Sans service') return -1
+          return a.service.localeCompare(b.service)
+        })
+      sections.push({ type: 'dept', dept, count: groups.reduce((sum, g) => sum + g.users.length, 0) })
+      groups.forEach(g => {
+        sections.push({ type: 'service', dept, service: g.service, count: g.users.length })
+        g.users.forEach(item => {
+          sections.push({ type: 'user', dept, service: g.service, ...item })
+        })
+      })
+    })
+    return sections
+  }, [paginated, assignmentsByUser])
+
+  // Rows rendues : les départements repliés ne montrent que leur header
+  const visibleRows = useMemo(() => {
+    const out = []
+    let currentDept = null
+    groupedRows.forEach(row => {
+      if (row.type === 'dept') {
+        currentDept = row.dept
+        out.push(row)
+      } else if (!collapsedDepts[currentDept]) {
+        out.push(row)
+      }
+    })
+    return out
+  }, [groupedRows, collapsedDepts])
+
+  const toggleDept = (dept) => setCollapsedDepts(prev => ({ ...prev, [dept]: !prev[dept] }))
+
+  useEffect(() => { setPage(1) }, [search, roleFilter, deptFilter, serviceFilter])
 
   const handleUpdate = async (userId, data) => {
     try {
@@ -163,14 +251,14 @@ export default function UsersPage() {
   }
 
   const roleCounts = useMemo(() => ({
-    all: users.length,
-    admin: users.filter(u => u.is_admin).length,
-    dg: users.filter(u => u.is_dg).length,
-    drh: users.filter(u => u.is_drh).length,
-    directeur: users.filter(u => u.is_directeur).length,
-    n1: users.filter(u => u.is_validator_n1).length,
-    collab: users.filter(u => !u.is_admin && !u.is_dg && !u.is_drh && !u.is_directeur && !u.is_validator_n1).length,
-  }), [users])
+    all: visibleUsers.length,
+    admin: visibleUsers.filter(u => u.is_admin).length,
+    dg: visibleUsers.filter(u => u.is_dg).length,
+    drh: visibleUsers.filter(u => u.is_drh).length,
+    directeur: visibleUsers.filter(u => u.is_directeur).length,
+    n1: visibleUsers.filter(u => u.is_validator_n1).length,
+    collab: visibleUsers.filter(u => !u.is_admin && !u.is_dg && !u.is_drh && !u.is_directeur && !u.is_validator_n1).length,
+  }), [visibleUsers])
 
   if (loading) return <div className="flex justify-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
 
@@ -184,17 +272,19 @@ export default function UsersPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900">Utilisateurs</h1>
-            <p className="text-xs text-gray-400">{users.length} utilisateur{users.length > 1 ? 's' : ''} dans le système</p>
+            <p className="text-xs text-gray-400">{visibleUsers.length} utilisateur{visibleUsers.length > 1 ? 's' : ''} {isScopedDirector ? 'dans votre département' : 'dans le système'}</p>
           </div>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowLdap(true)} className="btn btn-outline btn-sm gap-1 border-blue-200 text-blue-600 hover:bg-blue-50">
             <PlusIcon className="w-4 h-4" /> Ajouter
           </button>
-          <button onClick={handleLdapSync} className={`btn btn-outline btn-sm gap-1 ${syncing ? 'loading' : ''}`} disabled={syncing}>
-            {syncing ? <span className="loading loading-spinner loading-sm"></span> : null}
-            Sync LDAP
-          </button>
+          {!isScopedDirector && (
+            <button onClick={handleLdapSync} className={`btn btn-outline btn-sm gap-1 ${syncing ? 'loading' : ''}`} disabled={syncing}>
+              {syncing ? <span className="loading loading-spinner loading-sm"></span> : null}
+              Sync LDAP
+            </button>
+          )}
         </div>
       </div>
 
@@ -216,14 +306,29 @@ export default function UsersPage() {
               </button>
             )}
           </div>
-          <select
-            className="select select-bordered select-sm bg-gray-50 focus:bg-white w-full sm:w-40"
-            value={deptFilter}
-            onChange={e => setDeptFilter(e.target.value)}
-          >
-            <option value="">Tous services</option>
-            {departments.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
+          {!isScopedDirector && (
+            <select
+              className="select select-bordered select-sm bg-gray-50 focus:bg-white w-full sm:w-44"
+              value={deptFilter}
+              onChange={e => { setDeptFilter(e.target.value); setServiceFilter('') }}
+            >
+              <option value="">Tous les départements</option>
+              {departments.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {deptFilter && serviceGroups.some(s => s.department === deptFilter) && (
+            <select
+              className="select select-bordered select-sm bg-gray-50 focus:bg-white w-full sm:w-48"
+              value={serviceFilter}
+              onChange={e => setServiceFilter(e.target.value)}
+            >
+              <option value="">Tous les services</option>
+              {serviceGroups
+                .filter(s => s.department === deptFilter)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
 
@@ -237,7 +342,7 @@ export default function UsersPage() {
           { key: 'directeur', label: 'Directeur', count: roleCounts.directeur, color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
           { key: 'n1', label: 'Valid. N+1', count: roleCounts.n1, color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
           { key: 'collab', label: 'Collab.', count: roleCounts.collab, color: 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100' },
-        ].map(tab => (
+        ].filter(t => !isScopedDirector || !['', 'admin', 'dg', 'drh'].includes(t.key)).map(tab => (
           <button
             key={tab.key}
             onClick={() => setRoleFilter(tab.key === roleFilter ? '' : tab.key)}
@@ -258,9 +363,9 @@ export default function UsersPage() {
       {/* Results count + pagination info */}
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>
-          {filtered.length === users.length
-            ? `${users.length} utilisateur${users.length > 1 ? 's' : ''}`
-            : `${filtered.length} résultat${filtered.length > 1 ? 's' : ''} sur ${users.length}`
+          {filtered.length === visibleUsers.length
+            ? `${visibleUsers.length} utilisateur${visibleUsers.length > 1 ? 's' : ''}`
+            : `${filtered.length} résultat${filtered.length > 1 ? 's' : ''} sur ${visibleUsers.length}`
           }
         </span>
         {totalPages > 1 && (
@@ -282,8 +387,50 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {paginated.map(u => (
-                <tr key={u.id} className="hover:bg-gray-50/50 border-b border-gray-100 last:border-0 transition-colors">
+              {groupedRows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center py-12">
+                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                      <SearchIcon className="w-8 h-8 opacity-30" />
+                      <span className="text-sm">Aucun utilisateur trouvé</span>
+                      {(search || roleFilter || deptFilter || serviceFilter) && (
+                        <button onClick={() => { setSearch(''); setRoleFilter(''); setDeptFilter(''); setServiceFilter('') }} className="text-xs text-blue-500 hover:underline">
+                          Effacer les filtres
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {visibleRows.map((row) => {
+                if (row.type === 'dept') {
+                  return (
+                    <tr key={`dept-${row.dept}`} className="bg-gray-100/80">
+                      <td colSpan={5} className="px-3 py-1.5">
+                        <button onClick={() => toggleDept(row.dept)} className="w-full flex items-center gap-2 text-left cursor-pointer" title={collapsedDepts[row.dept] ? 'Déplier le département' : 'Replier le département'}>
+                          <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform ${collapsedDepts[row.dept] ? '-rotate-90' : ''}`} />
+                          <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{row.dept}</span>
+                          <span className="text-[10px] font-medium text-gray-400 bg-white px-1.5 py-0.5 rounded-full">{row.count}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                }
+                if (row.type === 'service') {
+                  return (
+                    <tr key={`svc-${row.dept}-${row.service}`} className="bg-gray-50/70">
+                      <td colSpan={5} className="px-4 py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{row.service}</span>
+                          <span className="text-[10px] font-medium text-gray-400">{row.count}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                }
+                const u = row.user
+                return (
+                <tr key={`u-${u.id}-${row.dept}-${row.service}`} className="hover:bg-gray-50/50 border-b border-gray-100 last:border-0 transition-colors">
                   <td>
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0
@@ -297,7 +444,13 @@ export default function UsersPage() {
                     </div>
                   </td>
                   <td className="hidden md:table-cell">
-                    <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">{u.department || '—'}</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full w-fit">{row.dept}</span>
+                      <span className="text-[11px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full w-fit border border-blue-100">{row.service}</span>
+                      {(assignmentsByUser[u.id] || []).length > 1 && (
+                        <span className="text-[10px] text-gray-400 px-1">+ {(assignmentsByUser[u.id]).length - 1} autre{((assignmentsByUser[u.id]).length - 1) > 1 ? 's' : ''} service{((assignmentsByUser[u.id]).length - 1) > 1 ? 's' : ''} assigné{((assignmentsByUser[u.id]).length - 1) > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
                   </td>
                   <td className="hidden lg:table-cell">
                     <span className="text-xs text-gray-500">{u.poste || '—'}</span>
@@ -319,22 +472,8 @@ export default function UsersPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
-              {paginated.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="text-center py-12">
-                    <div className="flex flex-col items-center gap-2 text-gray-400">
-                      <SearchIcon className="w-8 h-8 opacity-30" />
-                      <span className="text-sm">Aucun utilisateur trouvé</span>
-                      {(search || roleFilter || deptFilter) && (
-                        <button onClick={() => { setSearch(''); setRoleFilter(''); setDeptFilter('') }} className="text-xs text-blue-500 hover:underline">
-                          Effacer les filtres
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -384,7 +523,7 @@ export default function UsersPage() {
       </div>
 
       {/* Edit User Modal */}
-      <EditUserModal user={editUser} onClose={() => setEditUser(null)} onSave={handleUpdate} departments={departments} />
+      <EditUserModal user={editUser} onClose={() => setEditUser(null)} onSave={handleUpdate} onSaved={() => loadUsers()} departments={departments} serviceGroups={serviceGroups} assignments={assignmentsByUser[editUser?.id] || []} isScopedDirector={isScopedDirector} />
 
       {/* Delete Confirmation Modal */}
       <Modal open={!!showDelete} onClose={() => setShowDelete(null)} title="Supprimer l'utilisateur" size="sm">
@@ -487,7 +626,7 @@ function LockIcon(props) {
   )
 }
 
-function EditUserModal({ user, onClose, onSave, departments }) {
+function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGroups, assignments, isScopedDirector }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -499,6 +638,10 @@ function EditUserModal({ user, onClose, onSave, departments }) {
     is_dg: false,
     is_admin: false,
   })
+  const [localAssignments, setLocalAssignments] = useState([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [newServiceId, setNewServiceId] = useState('')
+  const [savingAssign, setSavingAssign] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -516,6 +659,26 @@ function EditUserModal({ user, onClose, onSave, departments }) {
     }
   }, [user])
 
+  useEffect(() => {
+    setLocalAssignments(assignments || [])
+    setShowAdd(false)
+    setNewServiceId('')
+  }, [assignments])
+
+  const usedServiceIds = localAssignments.map(a => a.service_group_id)
+  // Un validateur N+1 ne s'assigne que des services de son propre département
+  const userServices = user?.department
+    ? serviceGroups.filter(s => s.department === user.department)
+    : serviceGroups
+  const availableServices = userServices.filter(s => !usedServiceIds.includes(s.id))
+  // Le service courant d'une assignation reste affiché même s'il est hors département
+  const serviceOptionsFor = (assignmentId) => {
+    const current = serviceGroups.find(s => s.id === assignmentId)
+    return current && !userServices.some(s => s.id === current.id)
+      ? [...userServices, current]
+      : userServices
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
     onSave(user.id, {
@@ -528,6 +691,52 @@ function EditUserModal({ user, onClose, onSave, departments }) {
       is_dg: form.is_dg,
       is_admin: form.is_admin,
     })
+  }
+
+  const handleAddAssignment = async () => {
+    if (!newServiceId) {
+      toast.error('Veuillez sélectionner un service')
+      return
+    }
+    setSavingAssign(true)
+    try {
+      const created = await createUserServiceAssignment(user.id, {
+        service_group_id: Number(newServiceId),
+      })
+      setLocalAssignments(prev => [...prev, created])
+      setShowAdd(false)
+      setNewServiceId('')
+      toast.success('Service assigné')
+      onSaved()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Erreur')
+    } finally {
+      setSavingAssign(false)
+    }
+  }
+
+  const handleDeleteAssignment = async (assignment) => {
+    try {
+      await deleteUserServiceAssignment(user.id, assignment.id)
+      setLocalAssignments(prev => prev.filter(a => a.id !== assignment.id))
+      toast.success('Assignation supprimée')
+      onSaved()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Erreur')
+    }
+  }
+
+  // Changement de service d'une assignation (la section n'existe que pour les validateurs N+1)
+  const doChangeService = async (assignment, sgId) => {
+    try {
+      await deleteUserServiceAssignment(user.id, assignment.id)
+      const created = await createUserServiceAssignment(user.id, { service_group_id: sgId })
+      setLocalAssignments(prev => prev.map(a => a.id === assignment.id ? created : a))
+      toast.success('Service mis à jour')
+      onSaved()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Erreur')
+    }
   }
 
   return (
@@ -560,13 +769,71 @@ function EditUserModal({ user, onClose, onSave, departments }) {
               <input type="text" className="input input-bordered input-sm" value={form.poste} onChange={e => setForm({...form, poste: e.target.value})} />
             </div>
             <div className="form-control">
-              <label className="label py-1"><span className="label-text text-xs font-medium">Service</span></label>
-              <select className="select select-bordered select-sm" value={form.department} onChange={e => setForm({...form, department: e.target.value})}>
+              <label className="label py-1"><span className="label-text text-xs font-medium">Département</span></label>
+              <select className="select select-bordered select-sm bg-gray-100" value={form.department} onChange={e => setForm({...form, department: e.target.value})} disabled={isScopedDirector}>
                 <option value="">—</option>
                 {departments.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
           </div>
+
+          {/* Services assignés — réservé au rôle Validateur N+1 */}
+          {form.is_validator_n1 && (
+            <div>
+              <label className="label py-1"><span className="label-text text-xs font-medium">Services assignés</span></label>
+              {user?.department ? (
+                <div className="text-[10px] text-gray-400 mb-1.5">Uniquement les services du département « {user.department} »</div>
+              ) : (
+                <div className="text-[10px] text-gray-400 mb-1.5">Définissez un département pour restreindre les services au département du validateur N+1</div>
+              )}
+              {localAssignments.length === 0 ? (
+                <div className="text-xs text-gray-400 py-1.5 px-1">Aucun service assigné pour le moment.</div>
+              ) : (
+                <div className="space-y-2">
+                  {localAssignments.map(a => (
+                    <div key={a.id} className="flex flex-col gap-2 p-2.5 rounded-lg border border-gray-200 bg-gray-50/50">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center gap-2">
+                          <select
+                            className="select select-bordered select-xs flex-1"
+                            value={a.service_group_id}
+                            onChange={e => doChangeService(a, Number(e.target.value))}
+                          >
+                            {serviceOptionsFor(a.service_group_id).map(s => <option key={s.id} value={s.id}>{s.department && `${s.department} — `}{s.name}</option>)}
+                          </select>
+                          <button type="button" onClick={() => handleDeleteAssignment(a)} className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600" title="Retirer ce service">
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showAdd ? (
+                <div className="mt-2 p-2.5 rounded-lg border border-dashed border-blue-200 bg-blue-50/40 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-16 shrink-0">Service</span>
+                    <select className="select select-bordered select-xs flex-1" value={newServiceId} onChange={e => setNewServiceId(e.target.value)}>
+                      <option value="">— Choisir —</option>
+                      {availableServices.map(s => <option key={s.id} value={s.id}>{s.department && `${s.department} — `}{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setShowAdd(false)} className="btn btn-ghost btn-xs">Annuler</button>
+                    <button type="button" onClick={handleAddAssignment} className={`btn btn-primary btn-xs ${savingAssign ? 'loading' : ''}`} disabled={savingAssign}>
+                      {savingAssign ? 'Ajout...' : 'Valider'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setShowAdd(true)} className="btn btn-outline btn-xs mt-2 gap-1 border-blue-200 text-blue-600 hover:bg-blue-50">
+                  <PlusIcon className="w-3.5 h-3.5" /> Ajouter un service
+                </button>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="label py-1"><span className="label-text text-xs font-medium">Rôles</span></label>
@@ -574,10 +841,10 @@ function EditUserModal({ user, onClose, onSave, departments }) {
               {[
                 { key: 'is_validator_n1', label: 'Validateur N+1', color: 'border-blue-300 checked:bg-blue-500' },
                 { key: 'is_directeur', label: 'Directeur', color: 'border-purple-300 checked:bg-purple-500' },
-                { key: 'is_drh', label: 'DRH', color: 'border-emerald-300 checked:bg-emerald-500' },
-                { key: 'is_dg', label: 'Directeur Général', color: 'border-amber-300 checked:bg-amber-500' },
-                { key: 'is_admin', label: 'Admin', color: 'border-red-300 checked:bg-red-500' },
-              ].map(r => (
+                { key: 'is_drh', label: 'DRH', color: 'border-emerald-300 checked:bg-emerald-500', adminOnly: true },
+                { key: 'is_dg', label: 'Directeur Général', color: 'border-amber-300 checked:bg-amber-500', adminOnly: true },
+                { key: 'is_admin', label: 'Admin', color: 'border-red-300 checked:bg-red-500', adminOnly: true },
+              ].filter(r => !isScopedDirector || !r.adminOnly).map(r => (
                 <label key={r.key} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all
                   ${form[r.key] ? 'bg-gray-50 border-gray-300' : 'border-gray-200 hover:border-gray-300'}`}>
                   <input

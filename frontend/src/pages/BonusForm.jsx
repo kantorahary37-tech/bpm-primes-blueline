@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses, getMyServiceAssignments } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'
@@ -99,6 +99,7 @@ export default function BonusForm() {
   const isReadOnly = isEditing && bonusStatus === 'En attente DG' && !connectedUser?.is_dg && !connectedUser?.is_admin && !connectedUser?.is_drh
 
   const [employees, setEmployees] = useState([])
+  const [serviceAssignments, setServiceAssignments] = useState([])
   const [selectedEmp, setSelectedEmp] = useState(null)
   const formCurrency = symbolFor(selectedEmp?.currency)
   const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} Ar` : '••••••'
@@ -356,7 +357,23 @@ export default function BonusForm() {
         setEmployees(all.filter(e => e.department === connectedUser?.department))
       }
     }).catch(() => {})
+
+    getMyServiceAssignments().then(setServiceAssignments).catch(() => {})
   }, [])
+
+  // Pour une prime MENSELLE, un N+1 avec des services affectés ne sélectionne
+  // que les employés de ses services. (Prime ASTREINTE : inchangée.)
+  const restrictedToAssignedServices =
+    editType === 'mensuel' &&
+    connectedUser?.is_validator_n1 &&
+    !(connectedUser?.is_admin || connectedUser?.is_dg || connectedUser?.is_drh || connectedUser?.is_directeur) &&
+    serviceAssignments.length > 0
+
+  const selectableEmployees = useMemo(() => {
+    if (!restrictedToAssignedServices) return employees
+    const names = new Set(serviceAssignments.map(a => a.service_group_name).filter(Boolean))
+    return employees.filter(e => names.has(e.service))
+  }, [restrictedToAssignedServices, employees, serviceAssignments])
 
   useEffect(() => {
     if (!empSearchOpen) return
@@ -367,10 +384,22 @@ export default function BonusForm() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [empSearchOpen])
 
-  const filteredEmployees = employees.filter(e =>
+  const filteredEmployees = selectableEmployees.filter(e =>
     e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
     e.matricule?.toLowerCase().includes(empSearch.toLowerCase())
   )
+
+  const employeeOptGroups = (() => {
+    const grouped = {}
+    employees.forEach(e => {
+      const key = e.service || 'Sans service'
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(e)
+    })
+    return Object.entries(grouped)
+      .map(([service, emps]) => [service, [...emps].sort((a, b) => (a.name || '').localeCompare(b.name || ''))])
+      .sort(([a], [b]) => (a === 'Sans service' ? 1 : b === 'Sans service' ? -1 : a.localeCompare(b)))
+  })()
 
   useEffect(() => {
     if (!selectedEmp || !editType) return
@@ -406,7 +435,7 @@ export default function BonusForm() {
       setEditType(b.bonus_type);
       setBonusStatus(b.status || '');
       setSelectedEmp(b.employee || null);
-      if (b.employee) setEmployee({ department: b.employee.department || '', service: '', name: b.employee.name, function: '', matricule: b.employee.matricule });
+      if (b.employee) setEmployee({ department: b.employee.department || '', service: b.employee.service || '', name: b.employee.name, function: '', matricule: b.employee.matricule });
       setParams((p) => ({ ...p, startDate: b.start_date, endDate: b.end_date }));
       if (b.start_date) { setSelectedMonth(b.start_date.substring(0, 7)); setSelectedYear(parseInt(b.start_date.substring(0, 4))); }
       if (b.details) {
@@ -737,7 +766,7 @@ export default function BonusForm() {
         return
       }
       setError('')
-      setEmployee({ department: emp.department || '', service: '', name: emp.name, function: '', matricule: emp.matricule })
+      setEmployee({ department: emp.department || '', service: emp.service || '', name: emp.name, function: '', matricule: emp.matricule })
     }
     setSelectedEmp(emp)
     setSimpleForm({ ...simpleForm, employee_id: id })
@@ -859,6 +888,10 @@ export default function BonusForm() {
                   <label className="block text-sm font-medium text-base-content/70 mb-0.5">Département</label>
                   <input type="text" value={employee.department} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-base-content/70 mb-0.5">Service</label>
+                  <input type="text" value={employee.service || '—'} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+                </div>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -877,24 +910,41 @@ export default function BonusForm() {
                     {filteredEmployees.length === 0 ? (
                       <div className="px-3 py-2 text-sm text-base-content/40">Aucun employé trouvé</div>
                     ) : (
-                      filteredEmployees.map(e => (
-                        <button
-                          key={e.id}
-                          type="button"
-                          onClick={() => {
-                            handleSelectEmployee({ target: { value: e.id } })
-                            setEmpSearchOpen(false)
-                            setEmpSearch('')
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-base-100 transition-colors ${
-                            selectedEmp?.id === e.id ? 'bg-brand-50 text-brand-700 font-medium' : 'text-base-content'
-                          }`}
-                        >
-                          <span>{e.name}</span>
-                          <span className="text-xs text-base-content/40 ml-1">({e.matricule})</span>
-                          <span className="text-xs text-base-content/30 ml-1">— {e.department}</span>
-                        </button>
-                      ))
+                      (() => {
+                        const grouped = {}
+                        filteredEmployees.forEach(e => {
+                          const key = e.service || 'Sans service'
+                          if (!grouped[key]) grouped[key] = []
+                          grouped[key].push(e)
+                        })
+                        return Object.entries(grouped)
+                          .sort(([a], [b]) => (a === 'Sans service' ? 1 : b === 'Sans service' ? -1 : a.localeCompare(b)))
+                          .map(([service, emps]) => (
+                            <div key={service}>
+                              <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-base-content/40 bg-base-100 sticky top-0">
+                                {service} <span className="font-normal normal-case text-base-content/30">({emps.length})</span>
+                              </div>
+                              {emps.map(e => (
+                                <button
+                                  key={e.id}
+                                  type="button"
+                                  onClick={() => {
+                                    handleSelectEmployee({ target: { value: e.id } })
+                                    setEmpSearchOpen(false)
+                                    setEmpSearch('')
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-base-100 transition-colors ${
+                                    selectedEmp?.id === e.id ? 'bg-brand-50 text-brand-700 font-medium' : 'text-base-content'
+                                  }`}
+                                >
+                                  <span>{e.name}</span>
+                                  <span className="text-xs text-base-content/40 ml-1">({e.matricule})</span>
+                                  <span className="text-xs text-base-content/30 ml-1">— {e.department}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ))
+                      })()
                     )}
                   </div>
                 )}
@@ -913,7 +963,7 @@ export default function BonusForm() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-base-content/70 mb-0.5">Service</label>
-                <input type="text" value={employee.service} onChange={(e) => setEmployee({ ...employee, service: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+                <input type="text" value={employee.service || '—'} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
             </div>
           )}
@@ -1343,7 +1393,11 @@ export default function BonusForm() {
                         <select value={d.employee_id} onChange={(e) => handleDispoChange(i, 'employee_id', parseInt(e.target.value))}
                           className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
                           <option value="">Sélectionner...</option>
-                          {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                          {employeeOptGroups.map(([service, emps]) => (
+                            <optgroup key={service} label={service}>
+                              {emps.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                            </optgroup>
+                          ))}
                         </select>
                       </td>
                       <td className="py-1 px-2 text-center">
@@ -1409,7 +1463,11 @@ export default function BonusForm() {
                         <select value={iv.employee_id} onChange={(e) => handleIntervChange(i, 'employee_id', parseInt(e.target.value))}
                           className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm">
                           <option value="">Sélectionner...</option>
-                          {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                          {employeeOptGroups.map(([service, emps]) => (
+                            <optgroup key={service} label={service}>
+                              {emps.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                            </optgroup>
+                          ))}
                         </select>
                       </td>
                       <td className="py-1 px-2">
