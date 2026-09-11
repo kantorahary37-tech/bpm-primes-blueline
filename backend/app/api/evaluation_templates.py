@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from app.models import User, Employee, EvaluationTemplate
+from app.models import User, Employee, EvaluationTemplate, ServiceGroup
 from app.auth import get_current_user
 from app.schemas import (
     EvaluationTemplateSaveRequest,
     EvaluationTemplateResponse,
     EvaluationTemplateItem,
+    ServiceGroupEvaluationRequest,
 )
 from typing import List
 
@@ -121,14 +122,72 @@ async def save_evaluation_templates(
     return _build_response(emp, data.quantitative, data.qualitative)
 
 
+@router.post("/evaluation-templates/service-group", response_model=dict)
+async def apply_service_group_evaluation(
+    data: ServiceGroupEvaluationRequest,
+    user: User = Depends(get_current_user),
+):
+    if not (user.is_admin or user.is_directeur):
+        raise HTTPException(403, "Acces reserve aux administrateurs ou directeurs")
+
+    if data.service_group_id is None:
+        query = Employee.filter(is_active=True, service_group_id__isnull=True)
+        if _scoped_director(user):
+            query = query.filter(dept_str=user.dept_str)
+        employees = await query
+        group_name = "Sans service"
+    else:
+        group = await ServiceGroup.filter(id=data.service_group_id).prefetch_related("department").first()
+        if not group:
+            raise HTTPException(404, "Service introuvable")
+        if _scoped_director(user) and group.department.name != user.department:
+            raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations des services de son département")
+        employees = await Employee.filter(is_active=True, service_group=group)
+        group_name = group.name
+
+    if not employees:
+        raise HTTPException(400, f"Aucun employe actif ({group_name})")
+
+    await EvaluationTemplate.filter(employee_id__in=[e.id for e in employees]).delete()
+
+    to_create = []
+    for emp in employees:
+        for i, item in enumerate(data.quantitative):
+            to_create.append(EvaluationTemplate(
+                employee_id=emp.id,
+                section="quantitative",
+                criteria_name=item.criteria_name,
+                description=item.description or "",
+                coeff=item.coeff,
+                sort_order=i,
+            ))
+        for i, item in enumerate(data.qualitative):
+            to_create.append(EvaluationTemplate(
+                employee_id=emp.id,
+                section="qualitative",
+                criteria_name=item.criteria_name,
+                description=item.description or "",
+                coeff=item.coeff,
+                sort_order=i,
+            ))
+
+    if to_create:
+        await EvaluationTemplate.bulk_create(to_create)
+
+    return {
+        "message": f"Evaluation appliquee a {len(employees)} employe(s) ({group_name})",
+        "count": len(employees),
+    }
+
+
 @router.get("/evaluation-templates/all")
 async def get_all_templates(user: User = Depends(get_current_user)):
     if not (user.is_admin or user.is_directeur):
         raise HTTPException(403, "Acces reserve aux administrateurs")
 
-    employees = await Employee.filter(is_active=True).order_by("name")
+    employees = await Employee.filter(is_active=True).prefetch_related("service_group").order_by("name")
     if _scoped_director(user):
-        employees = await Employee.filter(is_active=True, dept_str=user.dept_str).order_by("name")
+        employees = await Employee.filter(is_active=True, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
     result = []
 
     for emp in employees:
@@ -146,6 +205,7 @@ async def get_all_templates(user: User = Depends(get_current_user)):
             "employee_name": emp.name,
             "matricule": emp.matricule,
             "department": emp.department or "",
+            "service_group": emp.service_group.name if emp.service_group else "",
             "quantitative": quanti if quanti else [DEFAULT_QUANTI[i] | {"id": None} for i in range(len(DEFAULT_QUANTI))],
             "qualitative": quali if quali else [DEFAULT_QUALI[i] | {"id": None} for i in range(len(DEFAULT_QUALI))],
             "is_default": not rows,

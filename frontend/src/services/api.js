@@ -389,6 +389,11 @@ export const saveEvaluationTemplates = async (payload) => {
   return data;
 };
 
+export const applyServiceGroupTemplates = async (payload) => {
+  const { data } = await api.post('/evaluation-templates/service-group', payload);
+  return data;
+};
+
 export const getAllEvaluationTemplates = async () => {
   const { data } = await api.get('/evaluation-templates/all');
   return data;

@@ -2,8 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { getBonuses, getEmployees } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useSystemConfig } from '../contexts/SystemConfigContext';
-import { useCurrencies } from '../contexts/CurrenciesContext';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -43,9 +41,6 @@ const getBadgeClass = (status) => {
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { canSeeAmounts } = useSystemConfig();
-  const { symbolFor } = useCurrencies();
-  const seeAmounts = canSeeAmounts(user);
   const [bonuses, setBonuses] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -65,31 +60,26 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  const formatAmount = (v) => seeAmounts ? (v || 0).toLocaleString('fr-FR') + ' Ar' : '••••••';
-
   const stats = useMemo(() => {
     const total = bonuses.length;
-    const totalAmount = bonuses.reduce((s, b) => s + (parseFloat(b.total_amount) || 0), 0);
 
     const byType = {};
     const validatedByType = {};
     for (const b of bonuses) {
       const tp = b.bonus_type || 'inconnu';
-      if (!byType[tp]) byType[tp] = { count: 0, amount: 0 };
+      if (!byType[tp]) byType[tp] = { count: 0 };
       byType[tp].count++;
-      byType[tp].amount += parseFloat(b.total_amount) || 0;
 
       if (b.status === 'Prime validée') {
-        if (!validatedByType[tp]) validatedByType[tp] = { count: 0, amount: 0 };
+        if (!validatedByType[tp]) validatedByType[tp] = { count: 0 };
         validatedByType[tp].count++;
-        validatedByType[tp].amount += parseFloat(b.total_amount) || 0;
       }
     }
 
     const pending = bonuses.filter(b => b.status !== 'Validé' && b.status !== 'Rejeté' && b.status !== 'Prime validée' && b.status !== 'Prime rejetée').length;
     const validated = bonuses.filter(b => b.status === 'Validé' || b.status === 'Prime validée').length;
 
-    return { total, totalAmount, pending, validated, byType, validatedByType, employees: employees.length };
+    return { total, pending, validated, byType, validatedByType, employees: employees.length };
   }, [bonuses, employees]);
 
   const { monthlyData, donutData, monthLabels } = useMemo(() => {
@@ -159,7 +149,7 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
         {[
-          { icon: ClipboardIcon, label: 'Total Primes', value: stats.total, sub: formatAmount(stats.totalAmount), bg: 'bg-blue-50', text: 'text-blue-600' },
+          { icon: ClipboardIcon, label: 'Total Primes', value: stats.total, bg: 'bg-blue-50', text: 'text-blue-600' },
           { icon: ClockIcon, label: 'En attente', value: stats.pending, sub: 'Non validées', bg: 'bg-amber-50', text: 'text-amber-600' },
           { icon: CheckIcon, label: 'Validées', value: stats.validated, sub: 'Approuvées', bg: 'bg-emerald-50', text: 'text-emerald-600', to: (user?.is_admin || user?.is_drh) ? '/validated' : undefined },
           { icon: EmployeesIcon, label: `Employés (${user?.department || 'tous'})`, value: stats.employees, sub: 'Actifs', bg: 'bg-violet-50', text: 'text-violet-600', to: '/employees' },
@@ -183,8 +173,8 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
         {Object.entries(typeConfig).map(([key, cfg]) => {
-          const data = stats.byType[key] || { count: 0, amount: 0 };
-          const valData = stats.validatedByType[key] || { count: 0, amount: 0 };
+          const data = stats.byType[key] || { count: 0 };
+          const valData = stats.validatedByType[key] || { count: 0 };
           const Icon = cfg.icon;
           return (
             <Link key={key} to={`/kanban/${key}`} className={`bg-white rounded-xl border ${cfg.border} p-4 hover:shadow-md transition-all`}>
@@ -196,7 +186,6 @@ const Dashboard = () => {
                   <p className="text-sm font-medium text-gray-900">{cfg.label}</p>
                   <p className="text-xs text-gray-400">{data.count} total</p>
                 </div>
-                <p className="text-sm font-bold text-gray-900">{formatAmount(data.amount)}</p>
               </div>
               {valData.count > 0 && (
                 <div className="flex items-center justify-between px-1 pt-2 border-t border-gray-100">
@@ -204,7 +193,6 @@ const Dashboard = () => {
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                     {valData.count} validée{valData.count > 1 ? 's' : ''}
                   </span>
-                  <span className="text-xs font-semibold text-emerald-600">{formatAmount(valData.amount)}</span>
                 </div>
               )}
             </Link>

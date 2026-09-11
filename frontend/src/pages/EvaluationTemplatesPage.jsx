@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getAllEvaluationTemplates, saveEvaluationTemplates, deleteEvaluationTemplate } from '../services/api'
 import Modal from '../components/Modal'
+import ServiceGroupEvaluationModal from '../components/ServiceGroupEvaluationModal'
 import toast from 'react-hot-toast'
 
 export default function EvaluationTemplatesPage() {
@@ -17,6 +18,7 @@ export default function EvaluationTemplatesPage() {
   const [newQuali, setNewQuali] = useState({ criteria_name: '', coeff: 1 })
   const [search, setSearch] = useState('')
   const [collapsedDepts, setCollapsedDepts] = useState({})
+  const [sgModalOpen, setSgModalOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -31,6 +33,8 @@ export default function EvaluationTemplatesPage() {
 
   useEffect(() => { load() }, [load])
 
+  const isScopedDirector = currentUser?.is_directeur && !currentUser?.is_admin && !currentUser?.is_dg && !currentUser?.is_drh
+
   const filteredTemplates = templates.filter(t =>
     t.employee_name?.toLowerCase().includes(search.toLowerCase()) ||
     t.matricule?.toLowerCase().includes(search.toLowerCase()) ||
@@ -38,6 +42,12 @@ export default function EvaluationTemplatesPage() {
   )
 
   const groupedByDept = filteredTemplates.reduce((acc, t) => {
+    if (isScopedDirector) {
+      const key = t.service_group || 'Sans service'
+      if (!acc[key]) acc[key] = []
+      acc[key].push(t)
+      return acc
+    }
     const dept = t.department || 'Sans departement'
     if (!acc[dept]) acc[dept] = []
     acc[dept].push(t)
@@ -128,19 +138,23 @@ export default function EvaluationTemplatesPage() {
 
   const totalCoeff = (list) => list.reduce((s, c) => s + (parseFloat(c.coeff) || 0), 0)
 
-  if (!currentUser?.is_admin && !currentUser?.is_dg && !currentUser?.is_drh) {
-    return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs.</p></div></div>
+  if (!currentUser?.is_admin && !currentUser?.is_directeur) {
+    return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs et directeurs.</p></div></div>
   }
 
   const selectedTemplate = selectedEmp ? templates.find(t => t.employee_id === selectedEmp) : null
 
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-4">
         <div>
           <h1 className="text-xl font-bold text-base-content">Evaluation</h1>
           <p className="text-sm text-base-content/50 mt-1">Criteres d'evaluation mensuelle par employe ({templates.length})</p>
         </div>
+        <button onClick={() => setSgModalOpen(true)}
+          className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0 shrink-0">
+          Evaluation par service
+        </button>
       </div>
 
       {loading ? (
@@ -210,6 +224,7 @@ export default function EvaluationTemplatesPage() {
                     <p className="text-xs text-base-content/40 mt-0.5">
                       {selectedTemplate.matricule && <span>{selectedTemplate.matricule} · </span>}
                       {selectedTemplate.department && <span>{selectedTemplate.department} · </span>}
+                      {selectedTemplate.service_group && <span>{selectedTemplate.service_group} · </span>}
                       {editQuantitative.length} quanti · {editQualitative.length} quali · Coeff total : {totalCoeff(editQuantitative) + totalCoeff(editQualitative)}/10
                     </p>
                     {(totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10 && (
@@ -343,6 +358,13 @@ export default function EvaluationTemplatesPage() {
           </div>
         </Modal>
       )}
+
+      <ServiceGroupEvaluationModal
+        open={sgModalOpen}
+        onClose={() => setSgModalOpen(false)}
+        templates={templates}
+        onApplied={load}
+      />
     </div>
   )
 }

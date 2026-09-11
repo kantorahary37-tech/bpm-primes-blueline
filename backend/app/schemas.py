@@ -378,6 +378,11 @@ class EvaluationTemplateSaveRequest(BaseModel):
     quantitative: List[EvaluationTemplateItem]
     qualitative: List[EvaluationTemplateItem]
 
+class ServiceGroupEvaluationRequest(BaseModel):
+    service_group_id: Optional[int] = None
+    quantitative: List[EvaluationTemplateItem]
+    qualitative: List[EvaluationTemplateItem]
+
 class EvaluationTemplateResponse(BaseModel):
     employee_id: int
     employee_name: Optional[str] = None
