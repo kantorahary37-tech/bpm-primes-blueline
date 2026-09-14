@@ -467,3 +467,297 @@ async def admin_create_employee_from_ldap(req: LdapEmployeeCreateRequest, _admin
         return await Employee.get(id=emp.id)
     finally:
         conn.unbind()
+
+
+# ------------------------------------------------------------------
+# Config Snapshots (sauvegarde des affectations)
+# ------------------------------------------------------------------
+from app.models import ConfigSnapshot
+from datetime import datetime
+import os, json, re
+from fastapi.responses import FileResponse
+
+SNAPSHOTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "snapshots")
+
+
+def _sanitize_filename(name: str) -> str:
+    """Convertit un nom en nom de fichier sûr."""
+    name = re.sub(r'[^\w\s-]', '', name)
+    name = re.sub(r'\s+', '_', name.strip())
+    return name[:80] or 'snapshot'
+
+
+def _generate_sql_file(snapshot_data: list, label: str, created_by_name: str, created_at) -> str:
+    """Génère un fichier SQL de sauvegarde. Retourne le chemin du fichier."""
+    ts = created_at.strftime('%Y%m%d_%H%M%S') if hasattr(created_at, 'strftime') else datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_label = _sanitize_filename(label)
+    filename = f"{ts}_{safe_label}.sql"
+    filepath = os.path.join(SNAPSHOTS_DIR, filename)
+
+    lines = []
+    lines.append(f"-- =============================================")
+    lines.append(f"-- Sauvegarde des affectations employés")
+    lines.append(f"-- Label       : {label}")
+    lines.append(f"-- Créé par    : {created_by_name}")
+    lines.append(f"-- Date        : {created_at}")
+    lines.append(f"-- Employés    : {len(snapshot_data)}")
+    lines.append(f"-- =============================================")
+    lines.append("")
+    lines.append("BEGIN;")
+    lines.append("")
+
+    # 1) S'assurer que les départements existent
+    dept_names = sorted({e.get('department', '') for e in snapshot_data if e.get('department')})
+    if dept_names:
+        lines.append("-- === Départements ===")
+        for d in dept_names:
+            d_escaped = d.replace("'", "''")
+            lines.append(f"INSERT INTO \"department\" (\"name\") VALUES ('{d_escaped}') ON CONFLICT (\"name\") DO NOTHING;")
+        lines.append("")
+
+    # 2) S'assurer que les services existent
+    services_seen = {}
+    for e in snapshot_data:
+        sg_id = e.get('service_group_id')
+        sg_name = e.get('service_group_name')
+        dept = e.get('department', '')
+        if sg_id and sg_name and dept:
+            services_seen[sg_id] = (sg_name, dept)
+    if services_seen:
+        lines.append("-- === Services ===")
+        for sg_id, (sg_name, dept) in services_seen.items():
+            sg_name_escaped = sg_name.replace("'", "''")
+            dept_escaped = dept.replace("'", "''")
+            lines.append(
+                f"INSERT INTO \"servicegroup\" (\"id\", \"name\", \"department_id\") "
+                f"VALUES ({sg_id}, '{sg_name_escaped}', (SELECT \"id\" FROM \"department\" WHERE \"name\" = '{dept_escaped}')) "
+                f"ON CONFLICT (\"id\") DO NOTHING;"
+            )
+        lines.append("")
+
+    # 3) Mettre à jour les employés
+    lines.append("-- === Affectations employés (département + service) ===")
+    for e in snapshot_data:
+        emp_id = e.get('employee_id')
+        dept = e.get('department', '')
+        sg_id = e.get('service_group_id')
+        if not emp_id:
+            continue
+        dept_escaped = dept.replace("'", "''")
+        sg_val = str(sg_id) if sg_id else 'NULL'
+        lines.append(
+            f"UPDATE \"employee\" SET "
+            f"\"department\" = '{dept_escaped}', "
+            f"\"department_id\" = (SELECT \"id\" FROM \"department\" WHERE \"name\" = '{dept_escaped}'), "
+            f"\"service_group_id\" = {sg_val} "
+            f"WHERE \"id\" = {emp_id};"
+        )
+    lines.append("")
+    lines.append("COMMIT;")
+    lines.append("")
+    lines.append(f"-- Fin de la sauvegarde")
+
+    os.makedirs(SNAPSHOTS_DIR, exist_ok=True)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+
+    return filepath
+
+
+class ConfigSnapshotCreate(BaseModel):
+    label: str
+
+
+@router.post("/config-snapshots", status_code=status.HTTP_201_CREATED)
+async def create_config_snapshot(data: ConfigSnapshotCreate, admin: User = Depends(require_admin)):
+    """Crée une sauvegarde DB + fichier SQL de l'état actuel des affectations."""
+    employees = await Employee.filter(is_active=True).prefetch_related('service_group')
+    snapshot_data = []
+    for emp in employees:
+        sg = emp.service_group
+        snapshot_data.append({
+            "employee_id": emp.id,
+            "matricule": emp.matricule,
+            "name": emp.name,
+            "department": emp.dept_str or '',
+            "service_group_id": sg.id if sg else None,
+            "service_group_name": sg.name if sg else None,
+        })
+
+    now = datetime.now()
+
+    # 1) Sauvegarde en base
+    snapshot = await ConfigSnapshot.create(
+        label=data.label.strip(),
+        created_by=admin,
+        snapshot_data=snapshot_data,
+        employee_count=len(snapshot_data),
+    )
+
+    # 2) Sauvegarde fichier SQL
+    sql_path = _generate_sql_file(snapshot_data, data.label.strip(), admin.name, now)
+    sql_filename = os.path.basename(sql_path)
+
+    return {
+        "id": snapshot.id,
+        "label": snapshot.label,
+        "employee_count": snapshot.employee_count,
+        "created_at": snapshot.created_at,
+        "sql_file": sql_filename,
+    }
+
+
+@router.get("/config-snapshots")
+async def list_config_snapshots(admin: User = Depends(require_admin)):
+    """Liste toutes les sauvegardes (DB + fichiers sur disque)."""
+    # Snapshots en base
+    snapshots = await ConfigSnapshot.all().prefetch_related('created_by').order_by('-created_at')
+    db_list = [
+        {
+            "id": s.id,
+            "label": s.label,
+            "employee_count": s.employee_count,
+            "created_by_name": s.created_by.name if s.created_by else None,
+            "created_at": s.created_at,
+            "source": "database",
+        }
+        for s in snapshots
+    ]
+
+    # Fichiers SQL sur disque
+    file_list = []
+    if os.path.isdir(SNAPSHOTS_DIR):
+        for fname in sorted(os.listdir(SNAPSHOTS_DIR), reverse=True):
+            if fname.endswith('.sql'):
+                fpath = os.path.join(SNAPSHOTS_DIR, fname)
+                fsize = os.path.getsize(fpath)
+                file_list.append({
+                    "filename": fname,
+                    "size_bytes": fsize,
+                    "size_display": f"{fsize / 1024:.1f} Ko" if fsize >= 1024 else f"{fsize} o",
+                    "source": "file",
+                })
+
+    return {"snapshots": db_list, "files": file_list}
+
+
+@router.get("/config-snapshots/{snapshot_id}")
+async def get_config_snapshot(snapshot_id: int, admin: User = Depends(require_admin)):
+    """Détail d'une sauvegarde (données complètes)."""
+    snapshot = await ConfigSnapshot.get_or_none(id=snapshot_id).prefetch_related('created_by')
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Sauvegarde introuvable")
+    return {
+        "id": snapshot.id,
+        "label": snapshot.label,
+        "employee_count": snapshot.employee_count,
+        "created_by_name": snapshot.created_by.name if snapshot.created_by else None,
+        "created_at": snapshot.created_at,
+        "snapshot_data": snapshot.snapshot_data,
+    }
+
+
+@router.get("/config-snapshots/files/{filename}")
+async def download_snapshot_file(filename: str, admin: User = Depends(require_admin)):
+    """Télécharge un fichier SQL de sauvegarde."""
+    # Sécurité : pas de ../ dans le nom
+    safe = os.path.basename(filename)
+    filepath = os.path.join(SNAPSHOTS_DIR, safe)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+    return FileResponse(
+        filepath,
+        media_type='text/plain',
+        filename=safe,
+    )
+
+
+@router.post("/config-snapshots/files/{filename}/restore")
+async def restore_from_sql_file(filename: str, admin: User = Depends(require_admin)):
+    """Restaure les affectations en exécutant un fichier SQL de sauvegarde."""
+    safe = os.path.basename(filename)
+    filepath = os.path.join(SNAPSHOTS_DIR, safe)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="Fichier SQL introuvable")
+
+    try:
+        from tortoise import connections
+        conn = connections.get('default')
+        with open(filepath, 'r', encoding='utf-8') as f:
+            sql = f.read()
+        # Exécuter le SQL brut (BEGIN/COMMIT gérés dans le fichier)
+        await conn.execute_script(sql)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'exécution SQL : {str(e)}")
+
+    # Compter les employés affectés dans le fichier
+    import re
+    update_count = len(re.findall(r'UPDATE "employee"', sql))
+
+    return {
+        "message": f"Fichier {safe} exécuté avec succès",
+        "employees_affected": update_count,
+        "filename": safe,
+    }
+
+
+@router.post("/config-snapshots/{snapshot_id}/restore")
+async def restore_config_snapshot(snapshot_id: int, admin: User = Depends(require_admin)):
+    """Restaure les affectations depuis une sauvegarde."""
+    snapshot = await ConfigSnapshot.get_or_none(id=snapshot_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Sauvegarde introuvable")
+
+    data = snapshot.snapshot_data
+    restored = 0
+    skipped = 0
+    errors = []
+
+    for entry in data:
+        emp_id = entry.get("employee_id")
+        emp = await Employee.get_or_none(id=emp_id)
+        if not emp:
+            skipped += 1
+            continue
+        try:
+            dept_name_str = entry.get("department", "")
+            if dept_name_str:
+                dept_obj, _ = await Department.get_or_create(name=dept_name_str)
+                emp.dept_str = dept_name_str
+                emp.dept = dept_obj
+            sg_id = entry.get("service_group_id")
+            if sg_id:
+                sg = await ServiceGroup.get_or_none(id=sg_id)
+                emp.service_group = sg
+            else:
+                emp.service_group = None
+            await emp.save()
+            restored += 1
+        except Exception as e:
+            errors.append({"employee_id": emp_id, "error": str(e)})
+
+    return {
+        "restored": restored,
+        "skipped": skipped,
+        "errors": errors,
+        "snapshot_label": snapshot.label,
+    }
+
+
+@router.delete("/config-snapshots/{snapshot_id}")
+async def delete_config_snapshot(snapshot_id: int, admin: User = Depends(require_admin)):
+    """Supprime une sauvegarde de configuration (DB + fichier)."""
+    snapshot = await ConfigSnapshot.get_or_none(id=snapshot_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Sauvegarde introuvable")
+    # Supprimer le fichier SQL correspondant si présent
+    if os.path.isdir(SNAPSHOTS_DIR):
+        label_safe = _sanitize_filename(snapshot.label)
+        for fname in os.listdir(SNAPSHOTS_DIR):
+            if fname.endswith('.sql') and label_safe in fname:
+                try:
+                    os.remove(os.path.join(SNAPSHOTS_DIR, fname))
+                except OSError:
+                    pass
+    await snapshot.delete()
+    return {"message": "Sauvegarde supprimée"}

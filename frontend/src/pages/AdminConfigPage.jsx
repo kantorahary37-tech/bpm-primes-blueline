@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import PlafondsPage from './PlafondsPage';
 import CommissionConfigPage from './CommissionConfigPage';
 import SystemConfigPage from './SystemConfigPage';
+import ConfigSnapshotPage from './ConfigSnapshotPage';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import { adminLdapSyncDepartments } from '../services/api';
@@ -12,6 +13,7 @@ import { SettingsIcon, ChartIcon, ArchiveIcon } from '../components/Icons';
 const TABS_ALL = [
   { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon },
   { key: 'bareme', label: 'Barème commission', Icon: ChartIcon },
+  { key: 'affectations', label: 'Affectations', Icon: ArchiveIcon, adminOnly: true },
   { key: 'system', label: 'Paramètres système', Icon: SettingsIcon, adminOnly: true },
 ];
 
@@ -71,6 +73,7 @@ export default function AdminConfigPage() {
       <div>
         {activeTab === 'plafonds' && <PlafondsPage />}
         {activeTab === 'bareme' && <CommissionConfigPage />}
+        {activeTab === 'affectations' && user?.is_admin && <ConfigSnapshotPage />}
         {activeTab === 'system' && user?.is_admin && <SystemConfigPage />}
       </div>
     </div>

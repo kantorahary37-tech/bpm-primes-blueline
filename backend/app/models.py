@@ -315,3 +315,18 @@ class Notification(models.Model):
     message = fields.TextField()
     is_read = fields.BooleanField(default=False)
     created_at = fields.DatetimeField(auto_now_add=True)
+
+# Modèle Snapshot de configuration (table "configsnapshot")
+class ConfigSnapshot(models.Model):
+    """Sauvegarde de l'état des affectations (département + service) de tous les employés."""
+    id = fields.IntField(pk=True)
+    # Nom / description de la sauvegarde
+    label = fields.CharField(max_length=255)
+    # Administrateur ayant créé la sauvegarde
+    created_by = fields.ForeignKeyField('models.User', related_name='config_snapshots')
+    # Données JSON : liste d'objets { employee_id, matricule, name, department, service_group_id, service_group_name }
+    snapshot_data = fields.JSONField()
+    # Nombre d'employés dans la sauvegarde
+    employee_count = fields.IntField(default=0)
+    # Date de création
+    created_at = fields.DatetimeField(auto_now_add=True)

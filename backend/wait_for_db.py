@@ -310,4 +310,27 @@ try:
 except Exception as e:
     print(f"user_service_assignment table check skipped: {e}")
 
+print("Ensuring configsnapshot table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "configsnapshot" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "label" VARCHAR(255) NOT NULL,
+            "created_by_id" INT NOT NULL REFERENCES "user" ("id"),
+            "snapshot_data" JSONB NOT NULL,
+            "employee_count" INT NOT NULL DEFAULT 0,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("configsnapshot table OK")
+except Exception as e:
+    print(f"configsnapshot table check skipped: {e}")
+
 print("Starting application...")

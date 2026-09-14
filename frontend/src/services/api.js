@@ -446,4 +446,35 @@ export const deleteCurrency = async (code) => {
   return data;
 };
 
+// --- Config Snapshots (sauvegarde des affectations) ---
+export const getConfigSnapshots = async () => {
+  const { data } = await api.get('/admin/config-snapshots');
+  return data;
+};
+
+export const getConfigSnapshot = async (snapshotId) => {
+  const { data } = await api.get(`/admin/config-snapshots/${snapshotId}`);
+  return data;
+};
+
+export const createConfigSnapshot = async (label) => {
+  const { data } = await api.post('/admin/config-snapshots', { label });
+  return data;
+};
+
+export const restoreConfigSnapshot = async (snapshotId) => {
+  const { data } = await api.post(`/admin/config-snapshots/${snapshotId}/restore`);
+  return data;
+};
+
+export const deleteConfigSnapshot = async (snapshotId) => {
+  const { data } = await api.delete(`/admin/config-snapshots/${snapshotId}`);
+  return data;
+};
+
+export const restoreFromSqlFile = async (filename) => {
+  const { data } = await api.post(`/admin/config-snapshots/files/${encodeURIComponent(filename)}/restore`);
+  return data;
+};
+
 export default api;
