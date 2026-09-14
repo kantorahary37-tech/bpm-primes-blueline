@@ -59,6 +59,14 @@ export const getEmployees = async (department = null, search = null) => {
   return data;
 };
 
+export const moveEmployeesDepartment = async (employeeIds, targetDepartment) => {
+  const { data } = await api.post('/employees/move-department', {
+    employee_ids: employeeIds,
+    target_department: targetDepartment,
+  });
+  return data;
+};
+
 export const createEmployee = async (employeeData) => {
   const { data } = await api.post('/employees/', employeeData);
   return data;

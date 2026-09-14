@@ -2,9 +2,10 @@ import csv, io
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from typing import List, Optional
 from tortoise.expressions import Q
-from app.models import Employee, User
+from app.models import Employee, User, Department
 from app.schemas import *
 from app.auth import get_current_user
 
@@ -93,3 +94,36 @@ async def update_employee(emp_id: int, data: EmployeeUpdate):
         await emp.update_from_dict(update_data)
         await emp.save()
     return await Employee.get(id=emp_id)
+
+
+class MoveDepartmentRequest(BaseModel):
+    employee_ids: List[int]
+    target_department: str
+
+
+@router.post("/move-department")
+async def move_employees_department(
+    data: MoveDepartmentRequest,
+    user: User = Depends(get_current_user),
+):
+    """Déplace un ou plusieurs employés vers un département cible."""
+    if not (user.is_admin or user.is_dg or user.is_drh):
+        raise HTTPException(status_code=403, detail="Réservé aux admin / DG / DRH")
+    if not data.employee_ids:
+        raise HTTPException(status_code=400, detail="Aucun employé sélectionné")
+
+    target = data.target_department.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="Département cible invalide")
+
+    dept_obj, _ = await Department.get_or_create(name=target)
+    employees = await Employee.filter(id__in=data.employee_ids, is_active=True)
+
+    moved = 0
+    for emp in employees:
+        emp.dept_str = target
+        emp.dept = dept_obj
+        await emp.save()
+        moved += 1
+
+    return {"moved": moved, "target_department": target}

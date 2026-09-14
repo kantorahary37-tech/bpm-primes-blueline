@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency } from '../services/api';
+import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
@@ -90,6 +90,10 @@ const Employees = () => {
   const [currencyForm, setCurrencyForm] = useState({ code: '', symbol: '', label: '' });
   const [allCurrencies, setAllCurrencies] = useState([]);
   const [currencySaving, setCurrencySaving] = useState(false);
+  const [selectedEmpIds, setSelectedEmpIds] = useState(new Set());
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveTarget, setMoveTarget] = useState('');
+  const [moving, setMoving] = useState(false);
 
   const initRef = useRef(false);
 
@@ -263,6 +267,63 @@ const Employees = () => {
     }
   };
 
+  const toggleEmpSelection = (empId) => {
+    setSelectedEmpIds(prev => {
+      const next = new Set(prev);
+      if (next.has(empId)) next.delete(empId);
+      else next.add(empId);
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    const allIds = filteredEmployees.map(e => e.id);
+    const allSelected = allIds.length > 0 && allIds.every(id => selectedEmpIds.has(id));
+    if (allSelected) {
+      setSelectedEmpIds(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedEmpIds(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const toggleDeptSelection = (deptEmps) => {
+    const ids = deptEmps.map(e => e.id);
+    const allSelected = ids.every(id => selectedEmpIds.has(id));
+    setSelectedEmpIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) ids.forEach(id => next.delete(id));
+      else ids.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const handleMoveEmployees = async () => {
+    if (!moveTarget) { toast.error('Sélectionnez un département cible'); return; }
+    setMoving(true);
+    try {
+      const ids = Array.from(selectedEmpIds);
+      const result = await moveEmployeesDepartment(ids, moveTarget);
+      toast.success(`${result.moved} employé(s) déplacé(s) vers « ${result.target_department} »`);
+      setSelectedEmpIds(new Set());
+      setShowMoveModal(false);
+      setMoveTarget('');
+      const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
+      setEmployees(emps);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors du déplacement');
+    } finally {
+      setMoving(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><span className="loading loading-spinner loading-lg" /></div>;
   }
@@ -367,6 +428,14 @@ const Employees = () => {
           ) : null}
         </select>
         <span className="text-xs text-gray-400">{filteredEmployees.length} employé(s)</span>
+        {user?.is_admin && filteredEmployees.length > 0 && (
+          <label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
+            <input type="checkbox" checked={filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmpIds.has(e.id))}
+              onChange={toggleAllVisible}
+              className="checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600" />
+            <span className="text-[11px] text-gray-500">Tout sélectionner</span>
+          </label>
+        )}
         <div className="relative ml-auto">
           <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
@@ -412,12 +481,20 @@ const Employees = () => {
                           {emps.map((emp) => {
                             const mgr = managers.find((m) => m.id === emp.manager_id);
                             return (
-                              <button key={emp.id} onClick={() => loadEmployeeBonuses(emp)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-all text-left ${
+                              <div key={emp.id} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
                                   selectedEmp?.id === emp.id
                                     ? 'border-blue-400 bg-blue-50 shadow-sm'
-                                    : 'border-transparent hover:border-blue-200 hover:bg-gray-50'
+                                    : selectedEmpIds.has(emp.id)
+                                      ? 'border-blue-200 bg-blue-50/50'
+                                      : 'border-transparent hover:border-blue-200 hover:bg-gray-50'
                                 }`}>
+                                {user?.is_admin && (
+                                  <input type="checkbox" checked={selectedEmpIds.has(emp.id)}
+                                    onChange={() => toggleEmpSelection(emp.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600 shrink-0" />
+                                )}
+                                <button onClick={() => loadEmployeeBonuses(emp)} className="flex-1 flex items-center gap-3 text-left">
                                 <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs shrink-0">
                                   {emp.name.charAt(0).toUpperCase()}
                                 </div>
@@ -432,7 +509,8 @@ const Employees = () => {
                                   <div className="text-gray-400">Manager</div>
                                   <div className="font-medium text-gray-700">{mgr?.name || 'N/A'}</div>
                                 </div>
-                              </button>
+                                </button>
+                              </div>
                             );
                           })}
                         </div>
@@ -764,6 +842,77 @@ const Employees = () => {
                   })
               }} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Exporter</button>
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Floating action bar for bulk move */}
+      {user?.is_admin && selectedEmpIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-4 px-6 py-3 bg-gray-900 text-white rounded-2xl shadow-2xl border border-gray-700">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                {selectedEmpIds.size}
+              </div>
+              <span className="text-sm font-medium">
+                {selectedEmpIds.size === 1 ? 'employé sélectionné' : 'employés sélectionnés'}
+              </span>
+            </div>
+            <div className="w-px h-6 bg-gray-600" />
+            <button
+              onClick={() => {
+                const depts = [...new Set(filteredEmployees.filter(e => selectedEmpIds.has(e.id)).map(e => e.department))];
+                setMoveTarget(depts.length === 1 ? '' : '');
+                setShowMoveModal(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              Déplacer vers...
+            </button>
+            <button
+              onClick={() => setSelectedEmpIds(new Set())}
+              className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              title="Désélectionner"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Move to department modal */}
+      <Modal open={showMoveModal} onClose={() => setShowMoveModal(false)} title="Déplacer vers un département" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Déplacer <strong>{selectedEmpIds.size} employé(s)</strong> vers le département :
+          </p>
+          <select
+            value={moveTarget}
+            onChange={(e) => setMoveTarget(e.target.value)}
+            className="select select-bordered w-full"
+          >
+            <option value="">— Choisir un département —</option>
+            {deptNames.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+          {moveTarget && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+              <p className="text-xs text-emerald-700">
+                {selectedEmpIds.size} employé(s) seront déplacés vers « {moveTarget} »
+              </p>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <button onClick={() => setShowMoveModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+            <button
+              onClick={handleMoveEmployees}
+              disabled={moving || !moveTarget}
+              className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+            >
+              {moving ? <span className="loading loading-spinner loading-xs" /> : null}
+              Déplacer {selectedEmpIds.size} employé(s)
+            </button>
           </div>
         </div>
       </Modal>
