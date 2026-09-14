@@ -16,6 +16,7 @@ from datetime import date
 
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     dept_cache = {}
     async def get_dept(name):

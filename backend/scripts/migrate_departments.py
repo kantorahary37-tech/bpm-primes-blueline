@@ -61,6 +61,7 @@ BONUS_TYPE_DEPARTMENTS = {
 
 async def migrate():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     # --- 1. Ensure target departments exist ---
     target_names = set(DEPT_MAP.values())

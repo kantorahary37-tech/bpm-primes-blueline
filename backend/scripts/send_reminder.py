@@ -14,6 +14,7 @@ from app.scheduler import send_daily_reminders
 
 async def main():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
     summary = await send_daily_reminders()
     print(f"Rappels : {summary['emails_sent']} envoyé(s), {summary['emails_failed']} échec(s)")
     await Tortoise.close_connections()

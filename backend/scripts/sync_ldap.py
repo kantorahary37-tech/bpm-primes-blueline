@@ -128,6 +128,7 @@ def _is_director_poste(poste: str | None) -> bool:
 
 async def sync(scope: str = 'all'):
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     do_departments = scope in ('all', 'departments')
     do_users = scope in ('all', 'users')

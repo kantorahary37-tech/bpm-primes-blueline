@@ -12,6 +12,7 @@ from app.models import Bonus, Validation, AuditLog, Notification
 
 async def delete_all():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     notifications = await Notification.all().delete()
     audit_logs = await AuditLog.all().delete()

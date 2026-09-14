@@ -112,6 +112,7 @@ def make_commission_details():
 
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     employees = await Employee.all().prefetch_related('manager')
     users = await User.all()

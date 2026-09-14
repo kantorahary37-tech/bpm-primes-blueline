@@ -53,6 +53,7 @@ BAREME = [
 
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     created = 0
     updated = 0

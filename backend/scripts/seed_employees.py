@@ -55,6 +55,7 @@ EMPLOYEES_PER_DEPT = {}
 
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     users_map = {}
 

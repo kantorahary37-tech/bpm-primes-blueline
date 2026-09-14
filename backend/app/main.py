@@ -37,7 +37,7 @@ uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
 
 # Enregistrement de Tortoise ORM avec FastAPI
-register_tortoise(app, config=TORTOISE_ORM, add_exception_handlers=False)
+register_tortoise(app, config=TORTOISE_ORM, add_exception_handlers=False, generate_schemas=True)
 
 
 # Démarrage du planificateur de rappels (après init Tortoise)

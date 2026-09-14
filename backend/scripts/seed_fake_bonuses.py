@@ -199,6 +199,7 @@ def period_for(i):
 
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     employees = await Employee.all().prefetch_related('manager')
     users = await User.all()
@@ -397,6 +398,7 @@ async def seed():
 async def seed_clean():
     """Supprime toutes les primes existantes (base de dev), puis re-seed."""
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
     nb = await Bonus.all().count()
     await Bonus.all().delete()
     print(f"🗑  {nb} prime(s) supprimée(s)")

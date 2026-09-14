@@ -42,6 +42,7 @@ BONUS_TYPE_DEPARTMENTS = {
 
 async def seed():
     await Tortoise.init(config=TORTOISE_ORM)
+    await Tortoise.generate_schemas()
 
     for dept_name in DEPARTMENTS:
         dept_obj = await Department.get_or_none(name=dept_name)
