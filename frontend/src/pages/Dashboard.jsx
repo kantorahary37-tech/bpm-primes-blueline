@@ -21,8 +21,8 @@ const typeIcons = {
 const typeLabels = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
-  commission: 'Commission',
-  commission_gc: 'Commission GC',
+  commission: 'Commission GP (Grand Public)',
+  commission_gc: 'Commission GC (Grand Compte)',
 };
 
 const statusLabel = (bonus) => {
@@ -135,8 +135,8 @@ const Dashboard = () => {
   const typeConfig = {
     mensuel: { label: 'Mensuel', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', icon: CalendarIcon },
     astreinte: { label: 'Astreinte', color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200', icon: MoonIcon },
-    commission: { label: 'Commission', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: ChartIcon },
-    commission_gc: { label: 'Commission GC', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', icon: ChartIcon },
+    commission: { label: 'Commission GP (Grand Public)', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: ChartIcon },
+    commission_gc: { label: 'Commission GC (Grand Compte)', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', icon: ChartIcon },
   };
 
   if (loading) {
@@ -175,7 +175,7 @@ const Dashboard = () => {
         })}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
         {Object.entries(typeConfig).map(([key, cfg]) => {
           const data = stats.byType[key] || { count: 0 };
           const valData = stats.validatedByType[key] || { count: 0 };
@@ -219,6 +219,7 @@ const Dashboard = () => {
                 <Bar dataKey="Mensuel" stackId="a" fill="#2563eb" />
                 <Bar dataKey="Astreinte" stackId="a" fill="#7c3aed" />
                 <Bar dataKey="Commission" stackId="a" fill="#d97706" />
+                <Bar dataKey="Commission GC" stackId="a" fill="#b45309" />
               </BarChart>
             </ResponsiveContainer>
           </div>
