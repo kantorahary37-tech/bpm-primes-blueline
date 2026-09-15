@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses, previewCommissionGCImport, importCommissionGCBonuses, getMyServiceAssignments } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses, previewCommissionGCImport, importCommissionGCBonuses, getMyServiceAssignments, getOtherPrimesTypes } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'
@@ -164,6 +164,7 @@ export default function BonusForm() {
 
   const [editLoaded, setEditLoaded] = useState(!isEditing)
   const [others, setOthers] = useState([])
+  const [otherPrimesTypes, setOtherPrimesTypes] = useState([])
   const otherTypes = ['temporaire', 'periodique', 'autres']
 
   const OTHER_TYPE_DESCRIPTIONS = {
@@ -193,7 +194,7 @@ export default function BonusForm() {
   }
 
   const addOther = () => {
-    setOthers(prev => [...prev, { key: Date.now() + Math.random(), libelle: '', type: 'temporaire', typeCustom: '', file: null, fileData: null, debut_mois: '', debut_annee: '', fin_mois: '', fin_annee: '', montant: 0 }])
+    setOthers(prev => [...prev, { key: Date.now() + Math.random(), libelle: '', selectedTypeId: '', type: 'temporaire', typeCustom: '', file: null, fileData: null, debut_mois: '', debut_annee: '', fin_mois: '', fin_annee: '', montant: 0 }])
   }
   const removeOther = (key) => setOthers(prev => prev.filter(o => o.key !== key))
   const updateOther = (key, field, value) => setOthers(prev => prev.map(o => o.key === key ? { ...o, [field]: value } : o))
@@ -366,6 +367,7 @@ export default function BonusForm() {
     }).catch(() => {})
 
     getMyServiceAssignments().then(setServiceAssignments).catch(() => {})
+    getOtherPrimesTypes().then(setOtherPrimesTypes).catch(() => {})
   }, [])
 
   // Pour une prime MENSELLE, un N+1 avec des services affectés ne sélectionne
@@ -458,6 +460,7 @@ export default function BonusForm() {
         if (d.others) setOthers(d.others.map((o, i) => ({
           key: Date.now() + Math.random() + i,
           libelle: o.libelle || '',
+          selectedTypeId: o.selectedTypeId || '',
           type: o.type || 'temporaire',
           typeCustom: o.type === 'autres' ? '' : '',
           file: o.file && o.file.url ? o.file : null,
@@ -898,6 +901,7 @@ export default function BonusForm() {
               total_evaluation: totalValue,
               others: others.map(o => ({
                 libelle: o.libelle, type: o.type === 'autres' ? o.typeCustom : o.type,
+                selectedTypeId: o.selectedTypeId || null,
                 file: o.file ? { filename: o.file.filename, original_name: o.file.original_name, url: o.file.url } : null,
                 debut_mois: o.debut_mois, debut_annee: o.debut_annee, fin_mois: o.fin_mois, fin_annee: o.fin_annee, montant: parseFloat(o.montant) || 0,
               })),
@@ -2316,30 +2320,34 @@ export default function BonusForm() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                 <div className="lg:col-span-2">
-                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Libelle</label>
-                  <input type="text" value={o.libelle} onChange={(e) => updateOther(o.key, 'libelle', e.target.value)}
-                    placeholder="ex: Prime d'installation"
-                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Type de prime *</label>
+                  <select
+                    value={o.selectedTypeId || ''}
+                    onChange={(e) => {
+                      const typeId = e.target.value
+                      const selected = otherPrimesTypes.find(t => t.id === parseInt(typeId))
+                      if (selected) {
+                        updateOther(o.key, 'selectedTypeId', selected.id)
+                        updateOther(o.key, 'libelle', `${selected.libelle} - ${selected.category}`)
+                        updateOther(o.key, 'montant', selected.amount)
+                      } else {
+                        updateOther(o.key, 'selectedTypeId', '')
+                        updateOther(o.key, 'libelle', '')
+                        updateOther(o.key, 'montant', 0)
+                      }
+                    }}
+                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
+                    <option value="">-- Sélectionner un type --</option>
+                    {otherPrimesTypes.filter(t => t.active).map(t => (
+                      <option key={t.id} value={t.id}>{t.libelle} - {t.category}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="lg:col-span-2">
-                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Type</label>
-                  <select value={o.type} onChange={(e) => updateOther(o.key, 'type', e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
-                    {otherTypes.map(t => <option key={t} value={t}>{OTHER_TYPE_LABELS[t] || t}</option>)}
-                  </select>
-                  {OTHER_TYPE_DESCRIPTIONS[o.type] && (
-                    <div className="mt-1 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 space-y-1">
-                      <p className="text-[11px] font-semibold text-amber-800 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].idea}</p>
-                      <p className="text-[11px] text-gray-700 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].when}</p>
-                      <p className="text-[11px] text-gray-600 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].examples}</p>
-                      <p className="text-[11px] text-amber-700 leading-snug">{OTHER_TYPE_DESCRIPTIONS[o.type].period}</p>
-                    </div>
-                  )}
-                  {o.type === 'autres' && (
-                    <input type="text" value={o.typeCustom} onChange={(e) => updateOther(o.key, 'typeCustom', e.target.value)}
-                      placeholder="Precisez le type..."
-                      className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm mt-1" />
-                  )}
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Libellé</label>
+                  <input type="text" value={o.libelle} readOnly
+                    className="w-full px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-600 text-sm cursor-not-allowed"
+                    placeholder="Rempli automatiquement" />
                 </div>
                 <div className="lg:col-span-3">
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Période (optionnel)</label>
@@ -2373,8 +2381,13 @@ export default function BonusForm() {
                 </div>
                 <div className="lg:col-span-1">
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant ({formCurrency})</label>
-                  <input type="number" min="0" value={o.montant} onChange={(e) => updateOther(o.key, 'montant', e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                  {o.selectedTypeId ? (
+                    <input type="text" value={`${parseFloat(o.montant || 0).toLocaleString('fr-FR')} ${formCurrency}`} readOnly
+                      className="w-full px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-600 text-sm font-medium cursor-not-allowed" />
+                  ) : (
+                    <input type="number" min="0" value={o.montant} onChange={(e) => updateOther(o.key, 'montant', e.target.value)}
+                      className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                  )}
                 </div>
               </div>
               <div className="mt-2">

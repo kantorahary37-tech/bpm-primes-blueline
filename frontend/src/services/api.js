@@ -528,4 +528,30 @@ export const restoreFromSqlFile = async (filename) => {
   return data;
 };
 
+// --- Autres primes types ---
+export const getOtherPrimesTypes = async () => {
+  const { data } = await api.get('/admin/other-primes-types');
+  return data;
+};
+
+export const getAllOtherPrimesTypes = async () => {
+  const { data } = await api.get('/admin/other-primes-types/all');
+  return data;
+};
+
+export const createOtherPrimeType = async (typeData) => {
+  const { data } = await api.post('/admin/other-primes-types', typeData);
+  return data;
+};
+
+export const updateOtherPrimeType = async (id, typeData) => {
+  const { data } = await api.put(`/admin/other-primes-types/${id}`, typeData);
+  return data;
+};
+
+export const deleteOtherPrimeType = async (id) => {
+  const { data } = await api.delete(`/admin/other-primes-types/${id}`);
+  return data;
+};
+
 export default api;
