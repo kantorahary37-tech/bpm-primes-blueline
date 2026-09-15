@@ -12,12 +12,13 @@ const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', {
   day: '2-digit', month: 'short', year: 'numeric',
 });
 
-const typeLetter = (t) => t === 'mensuel' ? 'M' : t === 'astreinte' ? 'A' : t === 'commission' ? 'C' : '?';
+const typeLetter = (t) => t === 'mensuel' ? 'M' : t === 'astreinte' ? 'A' : t === 'commission' ? 'C' : t === 'commission_gc' ? 'G' : '?';
 
 const typeColor = (t) => {
   if (t === 'mensuel') return 'bg-blue-50 text-blue-600';
   if (t === 'astreinte') return 'bg-violet-50 text-violet-600';
   if (t === 'commission') return 'bg-amber-50 text-amber-600';
+  if (t === 'commission_gc') return 'bg-amber-50 text-amber-700';
   return 'bg-gray-50 text-gray-600';
 };
 

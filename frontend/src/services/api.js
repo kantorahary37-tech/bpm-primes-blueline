@@ -371,6 +371,49 @@ export const importCommissionBonuses = async (file, startDate, endDate) => {
   return data;
 };
 
+// --- Prime Commission Entreprise / Grand Compte ---
+export const getCommissionGCConfig = async (includeInactive = false) => {
+  const { data } = await api.get('/commission-gc-config', { params: { include_inactive: includeInactive } });
+  return data;
+};
+
+export const createCommissionGCConfig = async (configData) => {
+  const { data } = await api.post('/commission-gc-config', configData);
+  return data;
+};
+
+export const updateCommissionGCConfig = async (id, configData) => {
+  const { data } = await api.put(`/commission-gc-config/${id}`, configData);
+  return data;
+};
+
+export const deleteCommissionGCConfig = async (id) => {
+  const { data } = await api.delete(`/commission-gc-config/${id}`);
+  return data;
+};
+
+export const previewCommissionGCImport = async (file, startDate, endDate) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('start_date', startDate);
+  formData.append('end_date', endDate);
+  const { data } = await api.post('/bonuses/commission-gc/preview', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+export const importCommissionGCBonuses = async (file, startDate, endDate) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('start_date', startDate);
+  formData.append('end_date', endDate);
+  const { data } = await api.post('/bonuses/commission-gc/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
 // --- Explorateur SFTP (fichier CSV 4D des ventes) ---
 export const sftpInfo = async () => {
   const { data } = await api.get('/sftp/info');

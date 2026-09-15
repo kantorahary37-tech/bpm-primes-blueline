@@ -45,6 +45,7 @@ const TYPE_LABELS = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
   commission: 'Commission',
+  commission_gc: 'Commission GC',
 };
 
 const typeBadgeClass = (t) => {
@@ -52,6 +53,7 @@ const typeBadgeClass = (t) => {
     case 'mensuel': return 'bg-blue-100 text-blue-700';
     case 'astreinte': return 'bg-purple-100 text-purple-700';
     case 'commission': return 'bg-emerald-100 text-emerald-700';
+    case 'commission_gc': return 'bg-amber-100 text-amber-700';
     default: return 'bg-gray-100 text-gray-600';
   }
 };

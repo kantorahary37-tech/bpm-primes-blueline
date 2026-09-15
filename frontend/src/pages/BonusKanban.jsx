@@ -12,6 +12,7 @@ const typeLabels = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
   commission: 'Commission',
+  commission_gc: 'Commission GC',
 };
 
 const statusLabel = (bonus) => {

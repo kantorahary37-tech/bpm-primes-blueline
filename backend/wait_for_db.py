@@ -159,6 +159,32 @@ try:
 except Exception as e:
     print(f"commissionconfig check skipped: {e}")
 
+print("Ensuring commissiongcconfig table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "commissiongcconfig" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "mrc_objective" DECIMAL(15,2) NOT NULL,
+            "fms_objective" DECIMAL(15,2) NOT NULL,
+            "commission_at_100" DECIMAL(15,2) NOT NULL,
+            "max_commission" DECIMAL(15,2) NOT NULL DEFAULT 1000000,
+            "active" BOOLEAN NOT NULL DEFAULT TRUE,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        ALTER TABLE "commissiongcconfig" DROP COLUMN IF EXISTS "period";
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("commissiongcconfig table OK")
+except Exception as e:
+    print(f"commissiongcconfig check skipped: {e}")
+
 print("Ensuring employee currency column exists...")
 try:
     import psycopg2

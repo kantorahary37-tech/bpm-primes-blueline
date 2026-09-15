@@ -14,13 +14,19 @@ const typeIcons = {
   mensuel: CalendarIcon,
   astreinte: MoonIcon,
   commission: ChartIcon,
+  commission_gc: ChartIcon,
 }
 
 const typeColors = {
   mensuel: 'blue',
   astreinte: 'violet',
   commission: 'emerald',
+  commission_gc: 'emerald',
 }
+
+const typeLabel = (t) => t === 'commission_gc'
+  ? 'Commission Grand Compte'
+  : (typeIcons[t] ? ['Mensuelle', 'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(t)] : t)
 
 const EXPORT_COLUMNS = {
   common: [
@@ -31,6 +37,7 @@ const EXPORT_COLUMNS = {
   mensuel: ["Score", "Quantitatif", "Qualitatif"],
   astreinte: ["NbDisponibilite", "TotalDisponibilite", "TotalInterventions", "Exceptionnelle", "Ponctuelle"],
   commission: ["NbVentes"],
+  commission_gc: [],
 }
 
 const BonusDetail = () => {
@@ -270,8 +277,8 @@ const BonusDetail = () => {
           </div>
 
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-gray-900 truncate">
-              Prime {typeIcons[bonus.bonus_type] ? ['Mensuelle', 'd\'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(bonus.bonus_type)] : bonus.bonus_type}
+            <h1 className="text-xl font-bold text-gray-900">
+              Prime {typeLabel(bonus.bonus_type)}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
               <p className="text-sm text-gray-500">{bonus.employee?.name || 'N/A'}</p>
@@ -312,7 +319,7 @@ const BonusDetail = () => {
             <InfoRow label="Type de prime" value={
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
                 <span className={`w-1.5 h-1.5 rounded-full bg-${typeColors[bonus.bonus_type] || 'blue'}-500`} />
-                {typeIcons[bonus.bonus_type] ? ['Mensuelle', 'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(bonus.bonus_type)] : bonus.bonus_type}
+                {typeIcons[bonus.bonus_type] ? typeLabel(bonus.bonus_type) : bonus.bonus_type}
               </span>
             } />
             <InfoRow label="Période" value={`${formatDate(bonus.start_date)} → ${formatDate(bonus.end_date)}`} />
@@ -549,6 +556,104 @@ const BonusDetail = () => {
                   'Détails non disponibles'
                 )}
               </div>
+            )}
+          </Section>
+        )}
+
+        {bonus.bonus_type === 'commission_gc' && (
+          <Section title={
+            <span className="flex items-center gap-2">
+              Détails commission grand compte
+              <span className="relative inline-block group/calcmode">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full border border-brand-600 text-brand-600 text-[11px] font-semibold cursor-help">i</span>
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-7 z-30 w-80 max-w-[85vw] opacity-0 invisible group-hover/calcmode:opacity-100 group-hover/calcmode:visible transition-opacity">
+                  <span className="block rounded-xl border border-base-300 bg-base-100 shadow-xl p-3.5 text-[11px] text-base-content/70 text-left space-y-1.5">
+                    <p className="font-medium text-base-content/90">Mode de calcul de la commission</p>
+                    <p>• MRC% = MRC réalisé ÷ objectif MRC</p>
+                    <p>• FMS% = (FMS réalisé ÷ 12) ÷ objectif FMS</p>
+                    <p>• Commission = commission@100% × (MRC% + FMS%)</p>
+                    <p>• Total plafonné à max_commission (arrondi à 2 déc.)</p>
+                  </span>
+                </span>
+              </span>
+            </span>
+          } icon={ChartIcon}>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">MRC réalisé</p>
+                <p className="font-semibold text-gray-900">{formatAr(bonus.details?.mrc_actual ?? 0)} {currency}</p>
+                <p className="text-[11px] text-gray-400">Objectif {formatAr(bonus.details?.mrc_objective ?? 0)} {currency}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">FMS réalisé</p>
+                <p className="font-semibold text-gray-900">{formatAr(bonus.details?.fms_actual ?? 0)} {currency}</p>
+                <p className="text-[11px] text-gray-400">Objectif {formatAr(bonus.details?.fms_objective ?? 0)} {currency} (÷ 12)</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Total réalisé (MRC+FMS)</p>
+                <p className="font-semibold text-gray-900">{formatAr((parseFloat(bonus.details?.mrc_actual) || 0) + (parseFloat(bonus.details?.fms_actual) || 0))} {currency}</p>
+                <p className="text-[11px] text-gray-400">Somme des ventes produits</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-300">
+                <p className="text-xs text-gray-600">Atteinte objectif</p>
+                <p className="font-semibold text-gray-900">
+                  MRC {((parseFloat(bonus.details?.mrc_pct) || 0) * 100).toFixed(2)} %
+                </p>
+                <p className="text-[11px] text-gray-400">FMS {((parseFloat(bonus.details?.fms_pct) || 0) * 100).toFixed(2)} %</p>
+              </div>
+              <div className={`p-3 rounded-lg border ${bonus.details?.capped ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-100'}`}>
+                <p className={`text-xs font-medium ${bonus.details?.capped ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {bonus.details?.capped ? 'Commission plafonnée' : 'Commission'}
+                </p>
+                <p className={`font-semibold ${bonus.details?.capped ? 'text-amber-700' : 'text-emerald-700'}`}>{formatAr(bonus.total_amount)} {currency}</p>
+                {bonus.details?.capped && <p className="text-[11px] text-amber-600/70">Plafond {formatAr(bonus.details?.max_commission)} {currency}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+              <div className="p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-400 mb-1">Répartition de la commission</p>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">Commission MRC</span><span className="font-medium text-gray-900">{formatAr(bonus.details?.mrc_commission ?? 0)} {currency}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">Commission FMS</span><span className="font-medium text-gray-900">{formatAr(bonus.details?.fms_commission ?? 0)} {currency}</span></div>
+                <div className="flex justify-between text-sm font-semibold border-t border-gray-200 mt-1 pt-1"><span className="text-gray-600">Total</span><span className="text-emerald-600">{formatAr(bonus.total_amount)} {currency}</span></div>
+              </div>
+              <div className="p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-400 mb-1">Paramètres</p>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">Commission à 100%</span><span className="font-medium text-gray-900">{formatAr(bonus.details?.commission_at_100 ?? 0)} {currency}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">Plafond max</span><span className="font-medium text-gray-900">{formatAr(bonus.details?.max_commission ?? 0)} {currency}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">FMS ÷ 12</span><span className="font-medium text-gray-900">{(bonus.details?.fms_divisor ?? 12) + ''}</span></div>
+              </div>
+            </div>
+
+            {(bonus.details?.lines || []).length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-300">
+                      <th className="text-left py-2 font-medium text-gray-600 text-xs">Produit</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">MRC (Ar)</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">FMS (Ar)</th>
+                      <th className="text-right py-2 font-medium text-gray-600 text-xs">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bonus.details.lines.map((line, i) => (
+                      <tr key={i} className="border-b border-gray-200">
+                        <td className="py-1.5 text-gray-900">{line.product}</td>
+                        <td className="py-1.5 text-right">{line.mrc > 0 ? formatAr(line.mrc) : '—'}</td>
+                        <td className="py-1.5 text-right">{line.fms > 0 ? formatAr(line.fms) : '—'}</td>
+                        <td className="py-1.5 text-right text-emerald-600 font-medium">{line.total > 0 ? `${formatAr(line.total)} ${currency}` : '—'}</td>
+                      </tr>
+                    ))}
+                    <tr className="font-semibold bg-gray-50">
+                      <td colSpan={3} className="py-1.5 text-gray-900">Total commission</td>
+                      <td className="py-1.5 text-right text-emerald-600">{formatAr(bonus.total_amount)} {currency}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 py-4 text-sm">Détails non disponibles</div>
             )}
           </Section>
         )}

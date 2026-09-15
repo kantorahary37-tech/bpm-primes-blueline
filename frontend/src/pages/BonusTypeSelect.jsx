@@ -12,6 +12,7 @@ const BONUS_TYPE_DEPARTMENTS = {
   astreinte: ['Direction BBS', 'Direction des Operations',
               "Direction des Systemes d'Informations", 'Direction Technique'],
   commission: ['Direction Commerciale'],
+  commission_gc: ['Direction Commerciale'],
 }
 
 const CalendarSvg = () => (

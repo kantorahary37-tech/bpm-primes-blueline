@@ -17,6 +17,7 @@ class BonusType(str, Enum):
     MENSUEL = "mensuel"
     ASTREINTE = "astreinte"
     COMMISSION = "commission"
+    COMMISSION_GC = "commission_gc"
     INTERVENTION = "intervention"
     PONCTUELLE = "ponctuelle"
     EXCEPTIONNEL = "exceptionnel"
@@ -259,6 +260,32 @@ class CommissionConfig(models.Model):
     class Meta:
         # Un même produit peut exister en deux lignes : une pour GPV, une pour petit PDV
         unique_together = (("product_name", "is_gpv"),)
+
+# Modèle Configuration Prime Commission Entreprise / Grand Compte (table "commissiongcconfig")
+# Configuration GLOBALE (sans période) :
+#   MRC % = MRC réalisé / objectif MRC
+#   FMS % = (FMS réalisé / 12) / objectif FMS
+#   Commission = commission@100% × % ; plafonnée à max_commission par employé.
+class CommissionGCConfig(models.Model):
+    # Clé primaire
+    id = fields.IntField(pk=True)
+    # Objectif mensuel MRC (en Ar)
+    mrc_objective = fields.DecimalField(max_digits=15, decimal_places=2)
+    # Objectif FMS (en Ar) — le réalisé FMS est ramené par FMS_DIVISOR (12) avant comparaison
+    fms_objective = fields.DecimalField(max_digits=15, decimal_places=2)
+    # Commission (en Ar) versée pour 100% de l'objectif atteint
+    commission_at_100 = fields.DecimalField(max_digits=15, decimal_places=2)
+    # Plafond de la commission totale par employé (en Ar)
+    max_commission = fields.DecimalField(max_digits=15, decimal_places=2, default=1000000)
+    # Configuration active ou non
+    active = fields.BooleanField(default=True)
+    # Date de création automatique
+    created_at = fields.DatetimeField(auto_now_add=True)
+    # Date de mise à jour automatique
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "commissiongcconfig"
 
 # Modèle Prime Max (table "primemax")
 class PrimeMax(models.Model):

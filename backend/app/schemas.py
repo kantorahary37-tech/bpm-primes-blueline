@@ -350,6 +350,74 @@ class CommissionImportResult(BaseModel):
     total_amount: float
     count: int
 
+# --- Prime Commission Entreprise / Grand Compte ---
+class CommissionGCConfigCreate(BaseModel):
+    mrc_objective: float
+    fms_objective: float
+    commission_at_100: float
+    max_commission: float = 1000000
+    active: bool = True
+
+class CommissionGCConfigUpdate(BaseModel):
+    mrc_objective: Optional[float] = None
+    fms_objective: Optional[float] = None
+    commission_at_100: Optional[float] = None
+    max_commission: Optional[float] = None
+    active: Optional[bool] = None
+
+class CommissionGCConfigResponse(BaseModel):
+    id: int
+    mrc_objective: float
+    fms_objective: float
+    commission_at_100: float
+    max_commission: float
+    active: bool
+    class Config:
+        from_attributes = True
+
+# Ligne produit d'un employé (montants MRC / FMS agrégés)
+class CommissionGCLine(BaseModel):
+    product: str
+    mrc: float
+    fms: float
+    total: float
+
+# Ligne d'aperçu par employé
+class CommissionGCEmployeePreview(BaseModel):
+    employee_id: int
+    matricule: str
+    name: str
+    department: str
+    mrc_actual: float
+    fms_actual: float
+    total_actual: float
+    mrc_objective: float
+    fms_objective: float
+    mrc_pct: float
+    fms_pct: float
+    mrc_commission: float
+    fms_commission: float
+    total_commission: float
+    capped: bool = False
+    lines: List[CommissionGCLine]
+
+class CommissionGCPreviewResponse(BaseModel):
+    period: Dict[str, Any]
+    config: Optional[CommissionGCConfigResponse] = None
+    employees: List[CommissionGCEmployeePreview]
+    matched_products: List[str]
+    ignored_employees: List[str]
+    ignored_columns: List[str]
+    total_amount: float
+    count: int
+
+# Résultat de la création effective
+class CommissionGCImportResult(BaseModel):
+    created: List[Dict[str, Any]]
+    skipped: List[Dict[str, Any]]
+    total_amount: float
+    count: int
+
 # --- Configuration Système ---
 class SystemConfigItem(BaseModel):
     key: str

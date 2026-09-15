@@ -15,12 +15,14 @@ const typeIcons = {
   mensuel: CalendarIcon,
   astreinte: MoonIcon,
   commission: ChartIcon,
+  commission_gc: ChartIcon,
 };
 
 const typeLabels = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
   commission: 'Commission',
+  commission_gc: 'Commission GC',
 };
 
 const statusLabel = (bonus) => {
@@ -83,17 +85,17 @@ const Dashboard = () => {
   }, [bonuses, employees]);
 
   const { monthlyData, donutData, monthLabels } = useMemo(() => {
-    const colors = { mensuel: '#2563eb', astreinte: '#7c3aed', commission: '#d97706', inconnu: '#9ca3af' };
-    const labels = { mensuel: 'Mensuel', astreinte: 'Astreinte', commission: 'Commission', inconnu: '?' };
+    const colors = { mensuel: '#2563eb', astreinte: '#7c3aed', commission: '#d97706', commission_gc: '#b45309', inconnu: '#9ca3af' };
+    const labels = { mensuel: 'Mensuel', astreinte: 'Astreinte', commission: 'Commission', commission_gc: 'Commission GC', inconnu: '?' };
 
     const now = new Date();
     const months = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString('fr-FR', { month: 'short' }), count: { mensuel: 0, astreinte: 0, commission: 0, inconnu: 0 } });
+      months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString('fr-FR', { month: 'short' }), count: { mensuel: 0, astreinte: 0, commission: 0, commission_gc: 0, inconnu: 0 } });
     }
 
-    const countByType = { mensuel: 0, astreinte: 0, commission: 0, inconnu: 0 };
+    const countByType = { mensuel: 0, astreinte: 0, commission: 0, commission_gc: 0, inconnu: 0 };
 
     for (const b of bonuses) {
       const tp = b.bonus_type || 'inconnu';
@@ -110,6 +112,7 @@ const Dashboard = () => {
       Mensuel: m.count.mensuel,
       Astreinte: m.count.astreinte,
       Commission: m.count.commission,
+      'Commission GC': m.count.commission_gc,
     }));
 
     const monthLabels = months.map(m => m.label);
@@ -133,6 +136,7 @@ const Dashboard = () => {
     mensuel: { label: 'Mensuel', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', icon: CalendarIcon },
     astreinte: { label: 'Astreinte', color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200', icon: MoonIcon },
     commission: { label: 'Commission', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: ChartIcon },
+    commission_gc: { label: 'Commission GC', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', icon: ChartIcon },
   };
 
   if (loading) {

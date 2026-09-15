@@ -13,12 +13,14 @@ const typeIcons = {
   mensuel: CalendarIcon,
   astreinte: MoonIcon,
   commission: ChartIcon,
+  commission_gc: ChartIcon,
 };
 
 const typeLabels = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
   commission: 'Commission',
+  commission_gc: 'Commission GC',
 };
 
 const statusLabel = (bonus) => {
@@ -566,6 +568,7 @@ const Employees = () => {
                     <option value="mensuel">Mensuelle</option>
                     <option value="astreinte">Astreinte</option>
                     <option value="commission">Commission</option>
+                    <option value="commission_gc">Commission GC</option>
                   </select>
                   <div className="flex gap-2">
                     <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}
@@ -633,7 +636,7 @@ const Employees = () => {
                           <Link key={bonus.id} to={`/bonuses/${bonus.id}`}
                             className="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all">
                             <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-[11px] font-bold">
-                              {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : '?'}
+                              {bonus.bonus_type === 'mensuel' ? 'M' : bonus.bonus_type === 'astreinte' ? 'A' : bonus.bonus_type === 'commission' ? 'C' : bonus.bonus_type === 'commission_gc' ? 'G' : '?'}
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900">{typeLabels[bonus.bonus_type] || bonus.bonus_type}</p>

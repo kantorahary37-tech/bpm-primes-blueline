@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses, getMyServiceAssignments } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses, previewCommissionGCImport, importCommissionGCBonuses, getMyServiceAssignments } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'
@@ -332,6 +332,13 @@ export default function BonusForm() {
   const [showSftp, setShowSftp] = useState(false)
   const [commPreview, setCommPreview] = useState(null)
   const [commLoading, setCommLoading] = useState(false)
+  // Type de prime commission sélectionné : 'gp' (Prime Commission GP) ou 'gc' (Entreprise / Grand Compte)
+  const [commSubType, setCommSubType] = useState('gp')
+  // --- État du flux commission Entreprise / Grand Compte (création) ---
+  const [gcCsvFile, setGcCsvFile] = useState(null)
+  const [gcPreview, setGcPreview] = useState(null)
+  const [gcLoading, setGcLoading] = useState(false)
+  const gcFileInputRef = useRef(null)
   // Tableau des ventes (utilisé uniquement en édition d'une prime commission existante)
   const [sales, setSales] = useState([])
   // Prime chargée en édition
@@ -499,7 +506,7 @@ export default function BonusForm() {
     )
   }
 
-  if (editLoaded && !['mensuel', 'astreinte', 'commission'].includes(editType)) {
+  if (editLoaded && !['mensuel', 'astreinte', 'commission', 'commission_gc'].includes(editType)) {
     return (
       <div className="page-container">
         <div className="card-blueline p-8 text-center">
@@ -683,7 +690,20 @@ export default function BonusForm() {
   const handleSftpSelect = (file, info) => {
     setCommCsvFile(file)
     setCommCsvPath(info?.path || '')
+    setGcCsvFile(file)
     setCommPreview(null)
+    setGcPreview(null)
+  }
+
+  const handleLocalFile = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    setCommCsvFile(f)
+    setCommCsvPath('')
+    setGcCsvFile(f)
+    setCommPreview(null)
+    setGcPreview(null)
   }
 
   const handlePreviewCommission = async () => {
@@ -737,6 +757,72 @@ export default function BonusForm() {
         start_date: params.startDate,
         end_date: params.endDate,
         bonus_type: 'commission',
+        total_amount: parseFloat(loadedBonus?.total_amount ?? 0),
+        commission_amount: loadedBonus?.commission_amount != null
+          ? parseFloat(loadedBonus.commission_amount)
+          : parseFloat(loadedBonus?.total_amount ?? 0),
+        details: loadedBonus?.details,
+      })
+      navigate(`/bonuses/${id}`)
+    } catch (err) {
+      setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : `Erreur (${err.response?.status}): ${err.response?.data?.detail || err.message || "inconnue"}`)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePreviewCommissionGC = async () => {
+    setError('')
+    setGcPreview(null)
+    if (!gcCsvFile) { setError("Sélectionnez d'abord le fichier CSV des ventes grand compte."); return }
+    if (!params.startDate || !params.endDate) { setError('Sélectionnez la période.'); return }
+    setGcLoading(true)
+    try {
+      const data = await previewCommissionGCImport(gcCsvFile, params.startDate, params.endDate)
+      setGcPreview(data)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Erreur lors du calcul des commissions grand compte.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setGcLoading(false)
+    }
+  }
+
+  const handleSubmitCommissionGC = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (!gcPreview || !gcCsvFile) { setError("Calculez d'abord les commissions (aperçu)."); return }
+    setGcLoading(true)
+    try {
+      const result = await importCommissionGCBonuses(gcCsvFile, params.startDate, params.endDate)
+      if (result.count > 0) {
+        const totalAr = (result.total_amount ?? 0).toLocaleString('fr-FR')
+        const msg = `${result.count} prime(s) commission grand compte créée(s) pour un total de ${totalAr} Ar.`
+          + (result.skipped?.length ? ` ${result.skipped.length} déjà couvert(s).` : '')
+        navigate('/bonuses', { state: { success: msg } })
+      } else if (result.skipped?.length) {
+        toast.error(`Des primes commission grand compte pour ${result.skipped.length} employé(s) sont déjà créées pour cette période.`, { duration: 6000 })
+      } else {
+        toast.error('Aucune commission n\'a pu être créée.', { duration: 6000 })
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Erreur lors de la création des primes commission grand compte.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setGcLoading(false)
+    }
+  }
+
+  const handleSubmitCommissionEditGC = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      await updateBonus(id, {
+        start_date: params.startDate,
+        end_date: params.endDate,
+        bonus_type: 'commission_gc',
         total_amount: parseFloat(loadedBonus?.total_amount ?? 0),
         commission_amount: loadedBonus?.commission_amount != null
           ? parseFloat(loadedBonus.commission_amount)
@@ -864,9 +950,11 @@ export default function BonusForm() {
     </div>
   )
 
+  const isCommView = ['commission', 'commission_gc'].includes(editType)
+
   const sharedHeader = (
-    <div className={`grid gap-3 mb-2 ${editType === 'commission' ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
-      {editType !== 'commission' && (
+    <div className={`grid gap-3 mb-2 ${isCommView ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+      {!isCommView && (
         <div className="card-blueline p-3">
           <h2 className="font-semibold text-base-content mb-2 text-sm">{editType === 'astreinte' ? 'Responsable' : "Informations de l'employé"}</h2>
           <div className="space-y-1.5">
@@ -1058,7 +1146,7 @@ export default function BonusForm() {
                   className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
               </div>
             </div>
-          ) : editType !== 'commission' && (
+          ) : !isCommView && (
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime maximum ({formCurrency})</label>
               {showPrimeMax ? (
@@ -1076,11 +1164,130 @@ export default function BonusForm() {
     </div>
   )
 
-  if (editType === 'commission') {
+  if (editType === 'commission' || editType === 'commission_gc') {
     const fmtAr = (n) => seeAmounts ? (parseFloat(n) || 0).toLocaleString('fr-FR') : '••••••'
+    const fmtPct = (p) => `${((parseFloat(p) ?? 0) * 100).toFixed(2)} %`
+    const isGc = editType === 'commission_gc'
+    const gcDet = loadedBonus?.details || {}
 
-    // ----- Mode édition : consultation des détails, enregistrement tel quel -----
+    const commTypeSelector = (
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-sm text-base-content/60 font-medium">Type de prime commission :</span>
+        <div className="inline-flex rounded-lg border border-base-300 bg-base-100 p-0.5">
+          <button type="button" onClick={() => setCommSubType('gp')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${commSubType === 'gp' ? 'bg-brand-600 text-white' : 'text-base-content/70 hover:text-base-content'}`}>
+            Prime Commission GP
+          </button>
+          <button type="button" onClick={() => setCommSubType('gc')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${commSubType === 'gc' ? 'bg-brand-600 text-white' : 'text-base-content/70 hover:text-base-content'}`}>
+            Entreprise / Grand Compte
+          </button>
+        </div>
+      </div>
+    )
+
+    // ----- Mode édition : consultation des détails -----
     if (isEditing) {
+      // --- Grand compte : détail des commissions calculées sur objectifs ---
+      if (isGc) {
+        const editTotal = parseFloat(loadedBonus?.total_amount ?? 0)
+        const mrcPct = parseFloat(gcDet.mrc_pct ?? 0)
+        const fmsPct = parseFloat(gcDet.fms_pct ?? 0)
+        return (
+          <div className="page-container !px-2 max-w-full">
+            <div className="flex items-center gap-3 mb-6">
+              <Link to={`/bonuses/${id}`} className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
+              <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission Entreprise / Grand Compte</h1><p className="text-sm text-base-content/50">Prime commission (import CSV grand compte)</p></div></div>
+            </div>
+            {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+            <form onSubmit={handleSubmitCommissionEditGC} className="space-y-3">
+              {sharedHeader}
+              <div className="card-blueline p-4">
+                <h2 className="font-semibold text-base-content text-sm mb-3">Détail des commissions</h2>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                  <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2">
+                    <p className="text-xs text-base-content/50">MRC réalisé</p>
+                    <p className="text-lg font-bold text-base-content">{fmtAr(gcDet.mrc_actual)} Ar</p>
+                    <p className="text-[11px] text-base-content/40">Objectif {fmtAr(gcDet.mrc_objective)} Ar</p>
+                  </div>
+                  <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2">
+                    <p className="text-xs text-base-content/50">FMS réalisé</p>
+                    <p className="text-lg font-bold text-base-content">{fmtAr(gcDet.fms_actual)} Ar</p>
+                    <p className="text-[11px] text-base-content/40">Objectif {fmtAr(gcDet.fms_objective)} Ar (÷ 12)</p>
+                  </div>
+                  <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2">
+                    <p className="text-xs text-base-content/50">Total réalisé (MRC+FMS)</p>
+                    <p className="text-lg font-bold text-base-content">{fmtAr((parseFloat(gcDet.mrc_actual) || 0) + (parseFloat(gcDet.fms_actual) || 0))} Ar</p>
+                    <p className="text-[11px] text-base-content/40">Somme des ventes produits</p>
+                  </div>
+                  <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2">
+                    <p className="text-xs text-base-content/50">Atteinte objectif</p>
+                    <p className="text-lg font-bold text-base-content">MRC {fmtPct(mrcPct)}</p>
+                    <p className="text-[11px] text-base-content/40">FMS {fmtPct(fmsPct)}</p>
+                  </div>
+                  <div className="rounded-lg bg-base-100 border border-base-200 px-3 py-2">
+                    <p className="text-xs text-base-content/50">Commission brute</p>
+                    <p className="text-lg font-bold text-brand-600">{fmtAr(gcDet.mrc_commission + gcDet.fms_commission)} Ar</p>
+                    <p className="text-[11px] text-base-content/40">commission@100% : {fmtAr(gcDet.commission_at_100)} Ar</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                  <div className="rounded-lg border border-base-200 px-3 py-2">
+                    <p className="text-xs text-base-content/50 mb-1">Répartition de la commission</p>
+                    <div className="flex justify-between text-sm"><span className="text-base-content/70">Commission MRC</span><span className="font-medium text-base-content">{fmtAr(gcDet.mrc_commission)} Ar</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-base-content/70">Commission FMS</span><span className="font-medium text-base-content">{fmtAr(gcDet.fms_commission)} Ar</span></div>
+                    <div className="flex justify-between text-sm font-semibold border-t border-base-200 mt-1 pt-1"><span className="text-base-content/70">Total</span><span className="text-brand-600">{fmtAr(editTotal)} Ar</span></div>
+                  </div>
+                  <div className="rounded-lg border base-200 border-base-200 px-3 py-2">
+                    <p className="text-xs text-base-content/50 mb-1">Plafond</p>
+                    {gcDet.capped
+                      ? <p className="text-sm font-medium text-amber-700"><span className="badge badge-sm badge-warning text-amber-700">plafonnée</span> {fmtAr(gcDet.max_commission)} Ar</p>
+                      : <p className="text-sm text-base-content/70">Non atteint — plafond {fmtAr(gcDet.max_commission)} Ar</p>}
+                    <p className="text-[11px] text-base-content/40 mt-1">Montant : {fmtAr(editTotal)} Ar</p>
+                  </div>
+                </div>
+
+                <h3 className="font-medium text-base-content/80 text-sm mb-2">Produits</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-300">
+                        <th className="text-left py-2 px-2 font-medium text-gray-600 text-xs">Produit</th>
+                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">MRC (Ar)</th>
+                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">FMS (Ar)</th>
+                        <th className="text-right py-2 px-2 font-medium text-gray-600 text-xs">Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(gcDet.lines || []).map((line, i) => (
+                        <tr key={i} className="border-b border-gray-200">
+                          <td className="py-1.5 px-2 text-gray-900">{line.product}</td>
+                          <td className="py-1.5 px-2 text-right">{line.mrc > 0 ? `${fmtAr(line.mrc)} Ar` : '—'}</td>
+                          <td className="py-1.5 px-2 text-right">{line.fms > 0 ? `${fmtAr(line.fms)} Ar` : '—'}</td>
+                          <td className="py-1.5 px-2 text-right text-brand-600 font-medium">{line.total > 0 ? `${fmtAr(line.total)} Ar` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="font-semibold border-t-2 border-brand-200">
+                        <td colSpan={3} className="py-2 px-2 text-right">Total commission</td>
+                        <td className="py-2 px-2 text-right text-brand-600">{fmtAr(editTotal)} Ar</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <Link to={`/bonuses/${id}`} className="btn btn-ghost">Retour</Link>
+                <button type="submit" disabled={loading || isReadOnly} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+                  {loading ? <span className="loading loading-spinner" /> : 'Enregistrer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )
+      }
       const editTotal = parseFloat(loadedBonus?.total_amount ?? 0)
       return (
         <div className="page-container !px-2 max-w-full">
@@ -1133,6 +1340,229 @@ export default function BonusForm() {
       )
     }
 
+    // ----- Mode création : Commission Entreprise / Grand Compte -----
+    if (isGc || commSubType === 'gc') {
+      const previewCount = gcPreview?.count ?? 0
+      const totalAmount = gcPreview?.total_amount ?? 0
+      const config = gcPreview?.config
+      const cappedCount = gcPreview?.employees?.filter(e => e.capped).length ?? 0
+
+      return (
+        <>
+        <div className="page-container !px-2 max-w-full">
+          <div className="flex items-center gap-3 mb-6">
+            <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
+            <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Calcul à partir des ventes Entreprise / Grand Compte</p></div></div>
+          </div>
+          {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+          {commTypeSelector}
+          <form onSubmit={handleSubmitCommissionGC} className="space-y-3">
+            {sharedHeader}
+            <div className="card-blueline p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold">1</span>
+                <h2 className="font-semibold text-base-content text-sm">Importer le fichier CSV des ventes grand compte</h2>
+              </div>
+              <div className="flex flex-col md:flex-row gap-3">
+                <button type="button" onClick={() => setShowSftp(true)}
+                  className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-base-300 bg-base-50 hover:border-brand-500 hover:bg-brand-50/50 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30 text-left">
+                  <svg className="w-6 h-6 text-brand-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                  </svg>
+                  <span className="min-w-0">
+                    {gcCsvFile
+                      ? <>
+                          <span className="block text-base-content font-medium truncate">{gcCsvFile.name}</span>
+                          {commCsvPath && <span className="block text-[11px] text-base-content/40 truncate">SFTP : {commCsvPath}</span>}
+                        </>
+                      : <><span className="block text-base-content font-medium">Sélectionner le fichier CSV grand compte</span>
+                         <span className="block text-[11px] text-base-content/40">Serveur SFTP ou fichier local • séparateur « ; » • 2 lignes d'en-tête (produits puis RMS / FMS)</span></>}
+                  </span>
+                </button>
+                <div className="flex flex-col gap-1.5 shrink-0 justify-end">
+                  <button type="button" onClick={() => gcFileInputRef.current?.click()}
+                    className="text-[11px] text-brand-600 hover:text-brand-700 flex items-center gap-1 justify-center">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                    Choisir un fichier local…
+                  </button>
+                  <input ref={gcFileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleLocalFile} />
+                  <button type="button" onClick={handlePreviewCommissionGC} disabled={gcLoading || !gcCsvFile}
+                    className="btn bg-brand-600 hover:bg-brand-700 text-white border-0 disabled:opacity-50">
+                    {gcLoading ? <span className="loading loading-spinner loading-sm" /> : 'Calculer les commissions'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative inline-block mt-3 group/calcmode">
+                <button type="button" className="inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-600 hover:text-brand-700 rounded-md px-1.5 py-1 hover:bg-brand-50">
+                  <span className="flex items-center justify-center w-4 h-4 rounded-full border border-brand-600 text-[10px] font-semibold leading-none">i</span>
+                  Mode de calcul
+                </button>
+                <div className="pointer-events-none absolute left-0 top-7 z-30 w-96 max-w-[85vw] opacity-0 invisible group-hover/calcmode:opacity-100 group-hover/calcmode:visible transition-opacity">
+                  <div className="rounded-xl border border-base-300 bg-base-100 shadow-xl p-3.5 text-[11px] text-base-content/70 space-y-2">
+                    <p className="font-medium text-base-content/90">Commission par employé</p>
+                    <ul className="space-y-0.5 list-disc list-inside">
+                      <li>RMS des produits = MRC réalisé</li>
+                      <li>FMS des produits ramené % par 12 : <span className="font-medium">FMS% = (FMS réalisé ÷ 12) / objectif FMS</span></li>
+                      <li>MRC% = MRC réalisé / objectif MRC</li>
+                      <li>Commission = commission@100% × (MRC% + FMS%)</li>
+                      <li>Total plafonné à max_commission (arrondi à 2 déc.)</li>
+                      <li>Employés sans MRC ni FMS ignorés</li>
+                    </ul>
+                    {config && (
+                      <>
+                        <p className="font-medium text-base-content/90">Configuration appliquée</p>
+                        <ul className="space-y-0.5 list-disc list-inside">
+                          <li>Objectif MRC : {fmtAr(config.mrc_objective)} Ar</li>
+                          <li>Objectif FMS : {fmtAr(config.fms_objective)} Ar</li>
+                          <li>Commission à 100% : {fmtAr(config.commission_at_100)} Ar</li>
+                          <li>Plafond : {fmtAr(config.max_commission)} Ar</li>
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {gcPreview && (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="card-blueline p-3 border-l-4 border-l-brand-500">
+                    <p className="text-xs text-base-content/50">Primes à créer</p>
+                    <p className="text-xl font-bold text-base-content">{gcPreview.count}</p>
+                  </div>
+                  <div className="card-blueline p-3 border-l-4 border-l-emerald-500">
+                    <p className="text-xs text-base-content/50">Total commission</p>
+                    <p className="text-xl font-bold text-emerald-600">{fmtAr(totalAmount)} Ar</p>
+                  </div>
+                  <div className="card-blueline p-3 border-l-4 border-l-sky-500">
+                    <p className="text-xs text-base-content/50">Commission à 100%</p>
+                    <p className="text-base font-medium text-base-content">{config ? `${fmtAr(config.commission_at_100)} Ar` : '—'}</p>
+                    {config && <p className="text-[11px] text-base-content/40">Plafond {fmtAr(config.max_commission)} Ar</p>}
+                  </div>
+                  <div className="card-blueline p-3 border-l-4 border-l-amber-500">
+                    <p className="text-xs text-base-content/50">Commission plafonnée</p>
+                    <p className="text-base font-medium text-base-content">{cappedCount > 0 ? `${cappedCount} employé(s)` : 'Aucune'}</p>
+                    <p className="text-[11px] text-base-content/40">Produits reconnus : {gcPreview.matched_products?.length ?? 0}</p>
+                  </div>
+                </div>
+
+                <div className="card-blueline p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold">2</span>
+                    <h2 className="font-semibold text-base-content text-sm">Vérifier et créer les primes</h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-300 bg-base-100/60">
+                          <th className="text-left py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Matricule</th>
+                          <th className="text-left py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Employé</th>
+                          <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">MRC réalisé</th>
+                          <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">FMS réalisé</th>
+                          <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Total (MRC+FMS)</th>
+                          <th className="text-center py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">MRC %</th>
+                          <th className="text-center py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">FMS %</th>
+                          <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Commission</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gcPreview.employees.map((emp) => (
+                          <tr key={emp.employee_id} className={`border-b border-gray-100 ${emp.capped ? 'bg-amber-50/60' : ''}`}>
+                            <td className="py-2 px-3 text-gray-900 font-semibold">{emp.matricule}</td>
+                            <td className="py-2 px-3 text-gray-900">
+                              {emp.name}
+                              <span className="block text-[11px] text-gray-400">{emp.department}</span>
+                              {emp.lines.length > 0 && (
+                                <details className="mt-0.5">
+                                  <summary className="text-[11px] text-brand-600 cursor-pointer hover:text-brand-700 list-none">Détail produits ({emp.lines.length})</summary>
+                                  <ul className="mt-1 space-y-0.5 text-[11px] text-base-content/70">
+                                    {emp.lines.map((line, i) => (
+                                      <li key={i} className="flex justify-between gap-3 border-b border-base-100 pb-0.5">
+                                        <span>{line.product}</span>
+                                        <span className="font-medium">{fmtAr(line.total)} Ar</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </details>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <span className="block">{fmtAr(emp.mrc_actual)} <span className="text-[10px] text-base-content/40">/ {fmtAr(emp.mrc_objective)}</span></span>
+                              <span className="block text-[10px] text-base-content/50">
+                                {fmtAr(emp.mrc_actual)} ÷ {fmtAr(emp.mrc_objective)} = {fmtPct(emp.mrc_pct)}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <span className="block">{fmtAr(emp.fms_actual)} <span className="text-[10px] text-base-content/40">/ {fmtAr(emp.fms_objective)}</span></span>
+                              <span className="block text-[10px] text-base-content/50">
+                                ({fmtAr(emp.fms_actual)} ÷ 12) ÷ {fmtAr(emp.fms_objective)} = {fmtPct(emp.fms_pct)}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right font-semibold text-gray-900">{fmtAr(emp.total_actual)}</td>
+                            <td className="py-2 px-3 text-center">{fmtPct(emp.mrc_pct)}</td>
+                            <td className="py-2 px-3 text-center">{fmtPct(emp.fms_pct)}</td>
+                            <td className="py-2 px-3 text-right text-brand-600 font-semibold">
+                              <span className="block">{fmtAr(emp.total_commission)} Ar</span>
+                              {config && (
+                                <span className="block text-[10px] font-normal text-base-content/50 mt-0.5">
+                                  = {fmtAr(config.commission_at_100)} × ({fmtPct(emp.mrc_pct)} + {fmtPct(emp.fms_pct)})
+                                </span>
+                              )}
+                              {emp.capped && <span className="badge badge-sm badge-warning text-amber-700 mt-0.5">plafonné</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="font-semibold bg-brand-50/50">
+                          <td colSpan={7} className="py-3 px-3 text-right text-base-content/70">Total général</td>
+                          <td className="py-3 px-3 text-right text-brand-700">{fmtAr(totalAmount)} Ar</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {(gcPreview.ignored_employees?.length > 0 || gcPreview.ignored_columns?.length > 0) && (
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {gcPreview.ignored_employees?.length > 0 && (
+                        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                          <p className="font-medium text-amber-800 mb-1">Employés ignorés (matricule introuvable) : {gcPreview.ignored_employees.length}</p>
+                          <p className="text-amber-700 break-words">{gcPreview.ignored_employees.join(', ')}</p>
+                        </div>
+                      )}
+                      {gcPreview.ignored_columns?.length > 0 && (
+                        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                          <p className="font-medium text-amber-800 mb-1">Colonnes ignorées : {gcPreview.ignored_columns.length}</p>
+                          <p className="text-amber-700 break-words">{gcPreview.ignored_columns.join(', ')}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {!config && (
+                  <div className="rounded-lg bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-700">
+                    Aucune configuration grand compte affichée — vérifiez la configuration (Admin → Configuration → Commission Grand Compte).
+                  </div>
+                )}
+
+                <div className="flex gap-3 justify-end items-center">
+                  <Link to="/bonuses/new" className="btn btn-ghost">Annuler</Link>
+                  <button type="submit" disabled={gcLoading || previewCount === 0} className="btn bg-brand-600 hover:bg-brand-700 text-white border-0">
+                    {gcLoading ? <span className="loading loading-spinner" /> : `Créer ${previewCount} prime(s) commission grand compte`}
+                  </button>
+                </div>
+              </>
+            )}
+          </form>
+        </div>
+        <SftpFilePicker open={showSftp} onClose={() => setShowSftp(false)} onSelect={handleSftpSelect} />
+        </>
+      )
+    }
+
     // ----- Mode création : import CSV 4D + aperçu + validation -----
     const previewCount = commPreview?.count ?? 0
     const totalAmount = commPreview?.total_amount ?? 0
@@ -1145,6 +1575,7 @@ export default function BonusForm() {
           <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Calcul à partir du fichier CSV 4D des ventes</p></div></div>
         </div>
         {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
+        {commTypeSelector}
         <form onSubmit={handleSubmitCommission} className="space-y-3">
           {sharedHeader}
           <div className="card-blueline p-4">
