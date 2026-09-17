@@ -7,7 +7,7 @@ from tortoise.expressions import Q
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
 from app.permissions import n1_service_group_ids
-from app.email_service import send_bonus_notification_email
+from app.email_service import send_bonus_notification_email, send_bonus_batch_notification_email
 from app.schemas import *
 from fastapi import HTTPException
 import io
@@ -168,6 +168,15 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
     return await Bonus.get(id=obj.id).prefetch_related('employee')
 
 
+BATCH_TYPE_LABELS = {
+    "mensuel": "Mensuelle", "astreinte": "Astreinte", "commission": "Commission",
+    "commission_gc": "Commission Grand Compte", "commission_entreprise": "Commission Entreprise",
+    "intervention": "Intervention", "ponctuelle": "Ponctuelle", "exceptionnel": "Exceptionnelle",
+}
+
+STEP_LABELS = {"N1": "N+1", "N2": "N+2", "DIRECTEUR": "Directeur", "DG": "DG"}
+
+
 # Route POST pour validation par lot
 @router.post("/bonuses/batch/validate", response_model=BatchValidateResponse)
 async def batch_validate_bonuses(
@@ -175,6 +184,7 @@ async def batch_validate_bonuses(
     user: User = Depends(get_current_user)
 ):
     results = []
+    batch_notifs = {}
     for bonus_id in request.bonus_ids:
         try:
             bonus = await Bonus.get_or_none(id=bonus_id)
@@ -282,10 +292,12 @@ async def batch_validate_bonuses(
                             type=notif_type, message=notif_msg,
                         )
                         if r.email:
-                            asyncio.create_task(send_bonus_notification_email(
-                                r.email, r.name, user.name,
-                                employee.name, f"Prime validée (étape {request.step})", bonus_url,
-                            ))
+                            batch_notifs.setdefault(r.id, {"user": r, "items": []})["items"].append({
+                                "employee_name": employee.name,
+                                "type_label": BATCH_TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
+                                "amount": f"{int(bonus.total_amount):,}".replace(",", " ") + " Ar",
+                                "url": bonus_url,
+                            })
                 except Exception:
                     pass
 
@@ -298,6 +310,16 @@ async def batch_validate_bonuses(
 
         except Exception as e:
             results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error=str(e)))
+
+    step_label = STEP_LABELS.get(request.step, request.step)
+    for entry in batch_notifs.values():
+        r = entry["user"]
+        items = entry["items"]
+        if not items:
+            continue
+        asyncio.create_task(send_bonus_batch_notification_email(
+            r.email, r.name, user.name, step_label, items,
+        ))
 
     total_success = sum(1 for r in results if r.success)
     total_errors = len(results) - total_success

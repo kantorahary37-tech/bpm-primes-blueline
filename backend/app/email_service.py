@@ -26,6 +26,42 @@ def _resolve_email(to_email: str) -> str:
     return to_email
 
 
+def _env_label(cfg: dict) -> str:
+    return "Mode Test" if cfg["test_mode"] else "Production"
+
+
+def _test_banner_html(cfg: dict) -> str:
+    if not cfg["test_mode"]:
+        return ""
+    return (
+        '<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">'
+        '<tr><td style="background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:14px 18px;">'
+        '<p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">'
+        '<strong>[MODE TEST]</strong> Cet email est envoyé depuis un environnement de test. '
+        'Les données affichées ne reflètent pas la production.</p>'
+        '</td></tr></table>'
+    )
+
+
+def _test_footer_html(cfg: dict) -> str:
+    if not cfg["test_mode"]:
+        return (
+            '<p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">'
+            'Ceci est un email automatique envoyé par le système BPM | Gestion de Prime.<br>'
+            'Si vous pensez avoir reçu cet email par erreur, vous pouvez l\'ignorer.</p>'
+        )
+    return (
+        '<p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">'
+        'Ceci est un email automatique envoyé par le système BPM | Gestion de Prime.<br>'
+        '<strong style="color:#d97706;">Environnement : Test</strong><br>'
+        'Si vous pensez avoir reçu cet email par erreur, vous pouvez l\'ignorer.</p>'
+    )
+
+
+def _test_subject_prefix(cfg: dict) -> str:
+    return "[TEST] " if cfg["test_mode"] else ""
+
+
 async def send_reset_email(to_email: str, reset_link: str) -> bool:
     return await asyncio.to_thread(_send_reset_email_sync, to_email, reset_link)
 
@@ -33,11 +69,16 @@ async def send_reset_email(to_email: str, reset_link: str) -> bool:
 def _send_reset_email_sync(to_email: str, reset_link: str) -> bool:
     try:
         cfg = _smtp_config()
+        env_label = _env_label(cfg)
+        prefix = _test_subject_prefix(cfg)
         msg = EmailMessage()
-        msg["Subject"] = "Réinitialisation de votre mot de passe - BPM Primes"
+        msg["Subject"] = f"{prefix}Réinitialisation de votre mot de passe - BPM Primes"
         msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
         msg["To"] = _resolve_email(to_email)
+
+        plain_env = f"\n[{env_label}]\n" if cfg["test_mode"] else ""
         msg.set_content(
+            f"{plain_env}"
             f"Bonjour,\n\n"
             f"Vous avez demandé la réinitialisation de votre mot de passe.\n\n"
             f"Cliquez sur le lien ci-dessous pour choisir un nouveau mot de passe :\n"
@@ -46,6 +87,54 @@ def _send_reset_email_sync(to_email: str, reset_link: str) -> bool:
             f"Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.\n\n"
             f"---\n"
             f"BPM | Gestion de Prime"
+        )
+
+        banner = _test_banner_html(cfg)
+        footer = _test_footer_html(cfg)
+        env_badge = (
+            f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+            f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+            if cfg["test_mode"] else ""
+        )
+        msg.add_alternative(
+            f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#1e40af,#2563eb);padding:24px 32px;border-radius:16px 16px 0 0;">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td>
+              <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">BPM</div>
+              <div style="font-size:20px;color:#fff;font-weight:700;margin-top:2px;">Gestion de Prime</div>
+            </td>
+            <td align="right">{env_badge}</td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;">
+          {banner}
+          <p style="margin:0 0 20px;font-size:15px;color:#334155;">Bonjour,</p>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
+            Vous avez demandé la réinitialisation de votre mot de passe.<br>
+            Cliquez sur le lien ci-dessous pour choisir un nouveau mot de passe :
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:8px 0 24px;">
+            <a href="{reset_link}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;">
+              Réinitialiser mon mot de passe &rarr;
+            </a>
+          </td></tr></table>
+          <p style="margin:0 0 20px;font-size:13px;color:#94a3b8;">Ce lien est valable 15 minutes.</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
+          {footer}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>""",
+            subtype="html",
         )
 
         with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
@@ -71,11 +160,13 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
                                   bonus_url: str) -> bool:
     try:
         cfg = _smtp_config()
+        env_label = _env_label(cfg)
+        prefix = _test_subject_prefix(cfg)
         is_rejet = "rejetée" in changes_summary.lower() or "rejet" in changes_summary.lower()
         is_validation = "validée" in changes_summary.lower()
 
         if is_rejet:
-            subject = f"Prime rejetée — {employee_name} | BPM"
+            subject = f"{prefix}Prime rejetée — {employee_name} | BPM"
             accent_color = "#dc2626"
             accent_bg = "#fef2f2"
             icon_color = "#dc2626"
@@ -84,7 +175,7 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
             badge_color = "#dc2626"
             action_text = f"a rejeté la prime de"
         elif is_validation:
-            subject = f"Prime validée — {employee_name} | BPM"
+            subject = f"{prefix}Prime validée — {employee_name} | BPM"
             accent_color = "#16a34a"
             accent_bg = "#f0fdf4"
             icon_color = "#16a34a"
@@ -93,7 +184,7 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
             badge_color = "#16a34a"
             action_text = f"a validé la prime de"
         else:
-            subject = f"Prime modifiée — {employee_name} | BPM"
+            subject = f"{prefix}Prime modifiée — {employee_name} | BPM"
             accent_color = "#2563eb"
             accent_bg = "#eff6ff"
             icon_color = "#2563eb"
@@ -117,12 +208,22 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
         msg["Subject"] = subject
         msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
         msg["To"] = _resolve_email(to_email)
+        plain_env = "[" + env_label + "]\n" if cfg["test_mode"] else ""
         msg.set_content(
+            f"{plain_env}"
             f"Bonjour {to_name},\n\n"
             f"{sender_name} {action_text} {employee_name}.\n\n"
             f"{changes_summary}\n\n"
             f"Consultez la prime ici :\n{bonus_url}\n\n"
             f"---\nBPM | Gestion de Prime"
+        )
+
+        banner = _test_banner_html(cfg)
+        footer = _test_footer_html(cfg)
+        env_badge = (
+            f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+            f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+            if cfg["test_mode"] else ""
         )
         msg.add_alternative(
             f"""<!DOCTYPE html>
@@ -143,6 +244,7 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
             <td align="right" style="vertical-align:top;">
               <div style="background:rgba(255,255,255,0.15);border-radius:10px;padding:8px 14px;display:inline-block;">
                 <span style="font-size:12px;font-weight:600;color:{badge_color};background:{badge_bg};padding:4px 12px;border-radius:20px;">{badge_text}</span>
+                {' ' + env_badge if env_badge else ''}
               </div>
             </td>
           </tr></table>
@@ -150,6 +252,8 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
 
         <!-- Body -->
         <tr><td style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;">
+
+          {banner}
 
           <!-- Greeting -->
           <p style="margin:0 0 20px;font-size:15px;color:#334155;">Bonjour <strong style="color:#0f172a;">{to_name}</strong>,</p>
@@ -192,10 +296,7 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
           <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
 
           <!-- Footer -->
-          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">
-            Ceci est un email automatique envoyé par le système BPM | Gestion de Prime.<br>
-            Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.
-          </p>
+          {footer}
         </td></tr>
 
       </table>
@@ -217,6 +318,124 @@ def _send_bonus_notification_email_sync(to_email: str, to_name: str, sender_name
         return False
 
 
+async def send_bonus_batch_notification_email(
+    to_email: str,
+    to_name: str,
+    sender_name: str,
+    step_label: str,
+    items: list,
+) -> bool:
+    """
+    Notification groupée : plusieurs primes validées regroupées dans un seul email
+    (au lieu d'un email par prime lors d'une validation par lot).
+    items : liste de dicts {employee_name, type_label, amount, url}
+    """
+    return await asyncio.to_thread(
+        _send_bonus_batch_notification_email_sync,
+        to_email, to_name, sender_name, step_label, items,
+    )
+
+
+def _send_bonus_batch_notification_email_sync(
+    to_email: str,
+    to_name: str,
+    sender_name: str,
+    step_label: str,
+    items: list,
+) -> bool:
+    try:
+        cfg = _smtp_config()
+        env_label = _env_label(cfg)
+        prefix = _test_subject_prefix(cfg)
+        count = len(items)
+        plural = "s" if count > 1 else ""
+        msg = EmailMessage()
+        msg["Subject"] = f"{prefix}{count} prime{plural} validée{plural} par {sender_name} (étape {step_label}) | BPM"
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
+        msg["To"] = _resolve_email(to_email)
+
+        plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
+        items_text = "\n".join(
+            f"- {it['employee_name']} - {it['type_label']} - {it['amount']} : {it['url']}"
+            for it in items
+        )
+        msg.set_content(
+            f"{plain_env}"
+            f"Bonjour {to_name},\n\n"
+            f"{sender_name} a validé {count} prime{plural} au niveau {step_label}.\n\n"
+            f"{items_text}\n\n"
+            f"Consultez les primes via le lien BPM.\n\n"
+            f"---\nBPM | Gestion de Prime"
+        )
+
+        links = "".join(
+            f"<li style=\"margin:8px 0;\">"
+            f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
+            f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']}</span>"
+            f"</li>"
+            for it in items
+        )
+
+        banner = _test_banner_html(cfg)
+        footer = _test_footer_html(cfg)
+        env_badge = (
+            f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+            f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+            if cfg["test_mode"] else ""
+        )
+        msg.add_alternative(f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#1e40af,#2563eb);padding:24px 32px;border-radius:16px 16px 0 0;">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td>
+              <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">BPM</div>
+              <div style="font-size:20px;color:#fff;font-weight:700;margin-top:2px;">Gestion de Prime</div>
+            </td>
+            <td align="right">{env_badge}</td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;">
+          {banner}
+          <p style="margin:0 0 16px;font-size:15px;color:#334155;">Bonjour <strong style="color:#0f172a;">{to_name}</strong>,</p>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
+            <strong style="color:#0f172a;">{sender_name}</strong> a validé
+            <strong style="color:#0f172a;">{count} prime{plural}</strong> au niveau
+            <strong style="color:#0f172a;">{step_label}</strong>.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+            <tr><td style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:10px;padding:14px 20px;">
+              <span style="font-size:22px;font-weight:700;color:#15803d;">{count}</span>
+              <span style="font-size:13px;color:#334155;"> prime{plural} validée{plural}</span>
+            </td></tr>
+          </table>
+          <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#475569;line-height:1.6;">
+            {links}
+          </ul>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
+          {footer}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>""", subtype="html")
+
+        with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
+            server.starttls()
+            server.login(cfg["user"], cfg["password"])
+            server.send_message(msg)
+
+        return True
+    except Exception as e:
+        print(f"SMTP error (batch notification): {e}")
+        return False
+
+
 async def send_validation_reminder_email(to_email: str, to_name: str, items: list) -> bool:
     """
     Rappel quotidien : liste des primes en attente de validation pour un acteur.
@@ -228,14 +447,18 @@ async def send_validation_reminder_email(to_email: str, to_name: str, items: lis
 def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: list) -> bool:
     try:
         cfg = _smtp_config()
+        env_label = _env_label(cfg)
+        prefix = _test_subject_prefix(cfg)
         count = len(items)
         plural = "s" if count > 1 else ""
         msg = EmailMessage()
-        msg["Subject"] = f"Rappel : {count} prime{plural} en attente de votre validation | BPM"
+        msg["Subject"] = f"{prefix}Rappel : {count} prime{plural} en attente de votre validation | BPM"
         msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
         msg["To"] = _resolve_email(to_email)
 
+        plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
         msg.set_content(
+            f"{plain_env}"
             f"Bonjour {to_name},\n\n"
             f"Des processus sont en attente de votre intervention sur la plateforme BPM | Gestion de Prime.\n"
             f"Vous trouverez ci-dessous la liste des prime{plural} bloquée{plural} à votre étape de validation.\n\n"
@@ -251,6 +474,14 @@ def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: lis
             f"</li>"
             for it in items
         )
+
+        banner = _test_banner_html(cfg)
+        footer = _test_footer_html(cfg)
+        env_badge = (
+            f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+            f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+            if cfg["test_mode"] else ""
+        )
         msg.add_alternative(f"""<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
@@ -259,10 +490,16 @@ def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: lis
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
         <tr><td style="background:linear-gradient(135deg,#1e40af,#2563eb);padding:24px 32px;border-radius:16px 16px 0 0;">
-          <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">BPM</div>
-          <div style="font-size:20px;color:#fff;font-weight:700;margin-top:2px;">Gestion de Prime</div>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td>
+              <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">BPM</div>
+              <div style="font-size:20px;color:#fff;font-weight:700;margin-top:2px;">Gestion de Prime</div>
+            </td>
+            <td align="right">{env_badge}</td>
+          </tr></table>
         </td></tr>
         <tr><td style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;">
+          {banner}
           <p style="margin:0 0 16px;font-size:15px;color:#334155;">Bonjour <strong style="color:#0f172a;">{to_name}</strong>,</p>
           <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
             Des processus sont actuellement <strong style="color:#0f172a;">en attente de votre intervention</strong>.
@@ -278,10 +515,8 @@ def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: lis
           <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#475569;line-height:1.6;">
             {links}
           </ul>
-          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">
-            Ceci est un rappel automatique envoyé chaque jour à 08h30 par le système BPM | Gestion de Prime.<br>
-            Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.
-          </p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
+          {footer}
         </td></tr>
       </table>
     </td></tr>

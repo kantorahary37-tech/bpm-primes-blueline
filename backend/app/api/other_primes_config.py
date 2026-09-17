@@ -20,6 +20,11 @@ DEFAULT_OTHER_PRIMES = [
     {"id": 5, "libelle": "Prime de désinstallation", "category": "wireless", "amount": 5000, "active": True},
     {"id": 6, "libelle": "Prime d'éloignement", "category": "jour ouvrable", "amount": 5000, "active": True},
     {"id": 7, "libelle": "Prime d'éloignement", "category": "jour férié et week end", "amount": 7500, "active": True},
+    {"id": 8, "libelle": "Prime commission entreprise", "category": "commission grand compte", "amount": 0, "active": True},
+    {"id": 9, "libelle": "Prime de rendement", "category": "général", "amount": 0, "active": True},
+    {"id": 10, "libelle": "Prime de transport", "category": "transport", "amount": 0, "active": True},
+    {"id": 11, "libelle": "Prime de repas", "category": "alimentation", "amount": 0, "active": True},
+    {"id": 12, "libelle": "Prime de risque", "category": "sécurité", "amount": 0, "active": True},
 ]
 
 

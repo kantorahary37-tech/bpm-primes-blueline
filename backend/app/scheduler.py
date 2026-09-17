@@ -16,6 +16,7 @@ router = APIRouter()
 TYPE_LABELS = {
     "mensuel": "Prime mensuelle", "astreinte": "Astreinte", "commission": "Commission",
     "commission_gc": "Commission Grand Compte",
+    "commission_entreprise": "Commission Entreprise",
     "intervention": "Intervention", "ponctuelle": "Ponctuelle", "exceptionnel": "Exceptionnelle",
 }
 

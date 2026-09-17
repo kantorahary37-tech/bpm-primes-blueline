@@ -18,6 +18,7 @@ class BonusType(str, Enum):
     ASTREINTE = "astreinte"
     COMMISSION = "commission"
     COMMISSION_GC = "commission_gc"
+    COMMISSION_ENTREPRISE = "commission_entreprise"
     INTERVENTION = "intervention"
     PONCTUELLE = "ponctuelle"
     EXCEPTIONNEL = "exceptionnel"

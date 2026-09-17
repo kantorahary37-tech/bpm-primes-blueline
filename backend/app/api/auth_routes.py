@@ -8,6 +8,7 @@ from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, Forg
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.email_service import send_reset_email
 from app.rate_limit import check_rate_limit, record_failed_attempt, reset_attempts
+from app.config import get_config
 
 router = APIRouter()
 
@@ -41,7 +42,8 @@ async def forgot_password(data: ForgotPasswordRequest):
         user.reset_token = token
         user.reset_token_expires = datetime.utcnow() + timedelta(minutes=15)
         await user.save()
-        reset_link = f"http://localhost:3000/reset-password?token={token}"
+        frontend_url = get_config("FRONTEND_URL") or "http://localhost:5173"
+        reset_link = f"{frontend_url}/reset-password?token={token}"
         asyncio.create_task(send_reset_email(data.email, reset_link))
     return {"message": "Si cet email existe, un lien de réinitialisation a été envoyé."}
 

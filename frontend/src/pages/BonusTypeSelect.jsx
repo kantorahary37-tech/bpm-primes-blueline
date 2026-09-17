@@ -13,6 +13,7 @@ const BONUS_TYPE_DEPARTMENTS = {
               "Direction des Systemes d'Informations", 'Direction Technique'],
   commission: ['Direction Commerciale'],
   commission_gc: ['Direction Commerciale'],
+  commission_entreprise: ['Direction Commerciale', 'Direction Generale'],
 }
 
 const CalendarSvg = () => (

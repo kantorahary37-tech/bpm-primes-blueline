@@ -46,6 +46,7 @@ const TYPE_LABELS = {
   astreinte: 'Astreinte',
   commission: 'Commission',
   commission_gc: 'Commission GC',
+  commission_entreprise: 'Commission Entreprise',
 };
 
 const typeBadgeClass = (t) => {
@@ -54,6 +55,7 @@ const typeBadgeClass = (t) => {
     case 'astreinte': return 'bg-purple-100 text-purple-700';
     case 'commission': return 'bg-emerald-100 text-emerald-700';
     case 'commission_gc': return 'bg-amber-100 text-amber-700';
+    case 'commission_entreprise': return 'bg-indigo-100 text-indigo-700';
     default: return 'bg-gray-100 text-gray-600';
   }
 };
