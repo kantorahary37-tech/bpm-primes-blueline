@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import Modal from '../components/Modal';
 import { getServices, createService, renameService, deleteService, assignEmployees, unassignEmployee, getEmployees } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
@@ -24,6 +25,8 @@ const ServicesPage = () => {
   const [renaming, setRenaming] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [assignSearch, setAssignSearch] = useState({});
+  const [deleting, setDeleting] = useState(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
 
   const isFullScope = FULL_SCOPE.some(r => user?.[r]);
   const visibleDepts = useMemo(() =>
@@ -88,14 +91,19 @@ const ServicesPage = () => {
     }
   };
 
-  const handleDelete = async (group) => {
-    if (!confirm(`Supprimer le service « ${group.name} » ? Les employés affectés ne seront plus assignés.`)) return;
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setDeletingBusy(true);
     try {
-      await deleteService(group.id);
-      toast.success(`Service « ${group.name} » supprimé.`);
+      await deleteService(deleting.id);
+      toast.success(`Service « ${deleting.name} » supprimé.`);
+      setDeleting(null);
       load();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur lors de la suppression');
+      setDeleting(null);
+    } finally {
+      setDeletingBusy(false);
     }
   };
 
@@ -241,7 +249,7 @@ const ServicesPage = () => {
                               <EditIcon className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDelete(group)}
+                              onClick={() => setDeleting(group)}
                               className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" title="Supprimer"
                             >
                               <TrashIcon className="w-4 h-4" />
@@ -342,6 +350,36 @@ const ServicesPage = () => {
           ))}
         </div>
       )}
+
+      <Modal open={!!deleting} onClose={() => { if (!deletingBusy) setDeleting(null); }} title="Supprimer le service" size="sm">
+        {deleting && (
+          <>
+            <p className="text-sm text-gray-600">
+              Voulez-vous vraiment supprimer le service <span className="font-semibold text-gray-900">« {deleting.name} »</span> ({deleting.department}) ?
+            </p>
+            {(deleting.employee_count ?? 0) > 0 ? (
+              <div role="alert" className="alert alert-warning mt-3 py-2 text-sm">
+                <span>
+                  {deleting.employee_count} employé{deleting.employee_count > 1 ? 's' : ''} encore affecté{deleting.employee_count > 1 ? 's' : ''} — la suppression est impossible tant que le service n'est pas vide.
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 mt-2">Cette action est définitive.</p>
+            )}
+            <div className="modal-action mt-4">
+              <button className="btn btn-ghost btn-sm" disabled={deletingBusy} onClick={() => setDeleting(null)}>Annuler</button>
+              <button
+                className={`btn btn-sm border-0 text-white ${deletingBusy || (deleting.employee_count ?? 0) > 0 ? 'btn-disabled' : 'bg-red-500 hover:bg-red-600'}`}
+                disabled={deletingBusy || (deleting.employee_count ?? 0) > 0}
+                onClick={handleDelete}
+              >
+                {deletingBusy && <span className="loading loading-spinner loading-xs" />}
+                {deletingBusy ? 'Suppression…' : 'Supprimer'}
+            </button>
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 };

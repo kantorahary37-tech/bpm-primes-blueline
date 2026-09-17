@@ -155,7 +155,16 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
             detail=f"Une prime de type '{bonus.bonus_type.value}' existe déjà sur cette période pour cet employé."
         )
     initial_status = ValidationStatus.EN_ATTENTE_DIRECTEUR if user.is_directeur else ValidationStatus.INITIALISE
-    obj = await Bonus.create(**bonus.dict(), created_by_id=user.id, status=initial_status)
+    create_data = bonus.dict()
+    n2_user_id = create_data.pop('n2_user_id', None)
+    pass_to_n2 = create_data.pop('pass_to_n2', False)
+    n2_user_obj = None
+    if pass_to_n2 and n2_user_id:
+        n2_user_obj = await User.get_or_none(id=n2_user_id)
+        if not n2_user_obj or not n2_user_obj.is_validator_n2:
+            raise HTTPException(status_code=400, detail="L'utilisateur N+2 sélectionné est invalide.")
+    obj = await Bonus.create(**create_data, created_by_id=user.id, status=initial_status,
+                             pass_to_n2=pass_to_n2, n2_user=n2_user_obj)
     return await Bonus.get(id=obj.id).prefetch_related('employee')
 
 
@@ -183,22 +192,32 @@ async def batch_validate_bonuses(
                 results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Déjà validée"))
                 continue
 
-            expected_status = {
-                "N1": ValidationStatus.INITIALISE,
-                "DIRECTEUR": ValidationStatus.EN_ATTENTE_DIRECTEUR,
-                "DG": ValidationStatus.EN_ATTENTE_DG,
-            }.get(request.step)
+            if request.step == "N2":
+                # N+2 peut valider les primes INITIALISE ou EN_ATTENTE_N2
+                allowed_n2 = {ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2}
+                if bonus.status not in allowed_n2:
+                    results.append(BatchValidateResult(
+                        bonus_id=bonus_id, success=False,
+                        error=f"Statut actuel '{bonus.status}', attendait Initialisé ou En attente N+2"
+                    ))
+                    continue
+            else:
+                expected_status = {
+                    "N1": ValidationStatus.INITIALISE,
+                    "DIRECTEUR": ValidationStatus.EN_ATTENTE_DIRECTEUR,
+                    "DG": ValidationStatus.EN_ATTENTE_DG,
+                }.get(request.step)
 
-            if not expected_status:
-                results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Étape invalide"))
-                continue
+                if not expected_status:
+                    results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Étape invalide"))
+                    continue
 
-            if bonus.status != expected_status:
-                results.append(BatchValidateResult(
-                    bonus_id=bonus_id, success=False,
-                    error=f"Statut actuel '{bonus.status}', attendait '{expected_status}'"
-                ))
-                continue
+                if bonus.status != expected_status:
+                    results.append(BatchValidateResult(
+                        bonus_id=bonus_id, success=False,
+                        error=f"Statut actuel '{bonus.status}', attendait '{expected_status}'"
+                    ))
+                    continue
 
             await Validation.create(
                 bonus_id=bonus.id,
@@ -211,7 +230,8 @@ async def batch_validate_bonuses(
 
             if request.action == "VALIDER":
                 bonus.status = {
-                    "N1": ValidationStatus.EN_ATTENTE_DIRECTEUR,
+                    "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
+                    "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
                     "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
                     "DG": ValidationStatus.VALIDE
                 }[request.step]
@@ -235,6 +255,15 @@ async def batch_validate_bonuses(
                     bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
 
                     if request.step == "N1":
+                        if bonus.pass_to_n2 and bonus.n2_user_id:
+                            n2_user = await User.get_or_none(id=bonus.n2_user_id)
+                            if n2_user and n2_user.id != user.id:
+                                notif_recipients.append(n2_user)
+                        else:
+                            directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
+                            if directeur and directeur.id != user.id:
+                                notif_recipients.append(directeur)
+                    elif request.step == "N2":
                         directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                         if directeur and directeur.id != user.id:
                             notif_recipients.append(directeur)
@@ -305,6 +334,20 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
             raise HTTPException(400, f"Le montant de l'évaluation dépasse le plafond autorisé ({primemax.amount} {emp_symbol})")
     if 'employee_id' in update_data:
         del update_data['employee_id']
+
+    # Handle pass_to_n2 and n2_user_id
+    pass_to_n2 = update_data.pop('pass_to_n2', None)
+    n2_user_id = update_data.pop('n2_user_id', None)
+    if pass_to_n2 is not None:
+        bonus.pass_to_n2 = pass_to_n2
+    if n2_user_id is not None:
+        if n2_user_id:
+            n2_user_obj = await User.get_or_none(id=n2_user_id)
+            if not n2_user_obj or not n2_user_obj.is_validator_n2:
+                raise HTTPException(status_code=400, detail="L'utilisateur N+2 sélectionné est invalide.")
+            bonus.n2_user = n2_user_obj
+        else:
+            bonus.n2_user = None
 
     old_status = bonus.status
 
@@ -459,6 +502,7 @@ async def list_bonuses(
     show_paid: Optional[bool] = False,
     all_statuses: Optional[bool] = False,
     archive_mode: Optional[bool] = False,
+    include_paid: Optional[bool] = False,
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'employee__service_group')
@@ -490,6 +534,8 @@ async def list_bonuses(
             default_statuses = [ValidationStatus.VALIDE]
         elif user.is_directeur:
             default_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+        elif user.is_validator_n2:
+            default_statuses = [ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2]
         elif user.is_validator_n1:
             default_statuses = [ValidationStatus.INITIALISE]
         else:
@@ -512,7 +558,9 @@ async def list_bonuses(
 
     if show_paid:
         query = query.filter(paid_at__isnull=False)
-    else:
+    elif not include_paid:
+        # Par défaut on masque les primes déjà traitées (payées) ;
+        # include_paid=True les réintègre (ex: dashboard, statistiques complètes)
         query = query.filter(paid_at__isnull=True)
     if employee_id: query = query.filter(employee_id=employee_id)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
@@ -597,6 +645,8 @@ async def export_bonuses(
         allowed_statuses = [ValidationStatus.VALIDE]
     elif user.is_directeur:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+    elif user.is_validator_n2:
+        allowed_statuses = [ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2]
     elif user.is_validator_n1:
         allowed_statuses = [ValidationStatus.INITIALISE]
     else:
@@ -706,6 +756,8 @@ async def export_bonuses_xlsx(
         allowed_statuses = [ValidationStatus.VALIDE]
     elif user.is_directeur:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+    elif user.is_validator_n2:
+        allowed_statuses = [ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2]
     elif user.is_validator_n1:
         allowed_statuses = [ValidationStatus.INITIALISE]
     else:
@@ -942,6 +994,8 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
         allowed = {ValidationStatus.VALIDE}
     elif user.is_directeur:
         allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
+    elif user.is_validator_n2:
+        allowed = {ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2}
     elif user.is_validator_n1:
         allowed = {ValidationStatus.INITIALISE}
     else:
@@ -991,27 +1045,41 @@ async def validate_bonus(
         group_ids = await n1_service_group_ids(user)
         if group_ids is not None and bonus.employee.service_group_id not in group_ids:
             raise HTTPException(status_code=403, detail="Vous ne pouvez valider que les primes des employés de vos services affectés.")
+
+    # Un N+2 ne peut valider que les primes qui lui sont assignées (ou toutes si admin/DG/DRH)
+    if step == "N2" and user.is_validator_n2 and not (user.is_admin or user.is_dg or user.is_drh or user.is_directeur):
+        if bonus.n2_user_id and bonus.n2_user_id != user.id:
+            raise HTTPException(status_code=403, detail="Cette prime n'est pas assignée à votre validation.")
     
     # Vérification : si déjà validé, ON BLOQUE
     if bonus.status == ValidationStatus.VALIDE:
         raise HTTPException(status_code=400, detail="Bonus déjà validé - aucune action possible")
     
     # Validation du workflow : chaque étape n'est possible que si le statut actuel correspond
-    expected_status = {
+    expected_status_map = {
         "N1": ValidationStatus.INITIALISE,
         "DIRECTEUR": ValidationStatus.EN_ATTENTE_DIRECTEUR,
         "DG": ValidationStatus.EN_ATTENTE_DG,
-    }.get(step)
-    
-    if not expected_status:
-        raise HTTPException(400, "Étape de validation invalide")
-    
-    if bonus.status != expected_status:
-        raise HTTPException(
-            400,
-            f"Action impossible : la prime est au statut '{bonus.status}', "
-            f"attendait '{expected_status}' pour l'étape {step}."
-        )
+    }
+    # N+2 peut valider les primes INITIALISE (comme N+1) OU EN_ATTENTE_N2
+    if step == "N2":
+        allowed_n2_statuses = {ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2}
+        if bonus.status not in allowed_n2_statuses:
+            raise HTTPException(
+                400,
+                f"Action impossible : la prime est au statut '{bonus.status}', "
+                f"attendait 'Initialisé' ou 'En attente N+2' pour l'étape N+2."
+            )
+    else:
+        expected_status = expected_status_map.get(step)
+        if not expected_status:
+            raise HTTPException(400, "Étape de validation invalide")
+        if bonus.status != expected_status:
+            raise HTTPException(
+                400,
+                f"Action impossible : la prime est au statut '{bonus.status}', "
+                f"attendait '{expected_status}' pour l'étape {step}."
+            )
     
     # Création de l'enregistrement de validation (validator_id depuis le JWT)
     await Validation.create(
@@ -1026,7 +1094,8 @@ async def validate_bonus(
     # Mise à jour du statut selon l'étape et l'action
     if validation.action == "VALIDER":
         bonus.status = {
-            "N1": ValidationStatus.EN_ATTENTE_DIRECTEUR,
+            "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
+            "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
             "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
             "DG": ValidationStatus.VALIDE
         }[step]
@@ -1052,6 +1121,15 @@ async def validate_bonus(
             bonus_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/bonuses/{bonus.id}"
 
             if step == "N1":
+                if bonus.pass_to_n2 and bonus.n2_user_id:
+                    n2_user = await User.get_or_none(id=bonus.n2_user_id)
+                    if n2_user and n2_user.id != user.id:
+                        notif_recipients.append(n2_user)
+                else:
+                    directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
+                    if directeur and directeur.id != user.id:
+                        notif_recipients.append(directeur)
+            elif step == "N2":
                 directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                 if directeur and directeur.id != user.id:
                     notif_recipients.append(directeur)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses, previewCommissionGCImport, importCommissionGCBonuses, getMyServiceAssignments, getOtherPrimesTypes } from '../services/api'
+import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFile, openFile, getEvaluationTemplates, saveEvaluationTemplates, previewCommissionImport, importCommissionBonuses, previewCommissionGCImport, importCommissionGCBonuses, getMyServiceAssignments, getOtherPrimesTypes, getUsers } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'
@@ -63,7 +63,7 @@ export default function BonusForm() {
   const { canSeeAmounts } = useSystemConfig()
   const { symbolFor } = useCurrencies()
   const seeAmounts = canSeeAmounts(connectedUser)
-  const showPrimeMax = seeAmounts && !connectedUser?.is_validator_n1
+  const showPrimeMax = seeAmounts && !connectedUser?.is_validator_n1 && !connectedUser?.is_validator_n2
   const { type, id } = useParams()
   const navigate = useNavigate()
   const isEditing = !!id
@@ -166,6 +166,11 @@ export default function BonusForm() {
   const [others, setOthers] = useState([])
   const [otherPrimesTypes, setOtherPrimesTypes] = useState([])
   const otherTypes = ['temporaire', 'periodique', 'autres']
+
+  // N+2 (sous-directeur) states
+  const [passToN2, setPassToN2] = useState(false)
+  const [n2UserId, setN2UserId] = useState('')
+  const [n2Users, setN2Users] = useState([])
 
   const OTHER_TYPE_DESCRIPTIONS = {
     temporaire: {
@@ -368,13 +373,20 @@ export default function BonusForm() {
 
     getMyServiceAssignments().then(setServiceAssignments).catch(() => {})
     getOtherPrimesTypes().then(setOtherPrimesTypes).catch(() => {})
+
+    // Fetch N+2 users for the current user's department
+    getUsers().then(allUsers => {
+      const dept = connectedUser?.department
+      const n2 = allUsers.filter(u => u.is_validator_n2 && (!dept || u.department === dept))
+      setN2Users(n2)
+    }).catch(() => {})
   }, [])
 
   // Pour une prime MENSELLE, un N+1 avec des services affectés ne sélectionne
   // que les employés de ses services. (Prime ASTREINTE : inchangée.)
   const restrictedToAssignedServices =
     editType === 'mensuel' &&
-    connectedUser?.is_validator_n1 &&
+    (connectedUser?.is_validator_n1 || connectedUser?.is_validator_n2) &&
     !(connectedUser?.is_admin || connectedUser?.is_dg || connectedUser?.is_drh || connectedUser?.is_directeur) &&
     serviceAssignments.length > 0
 
@@ -472,6 +484,9 @@ export default function BonusForm() {
           montant: o.montant || 0,
         })));
       }
+      // Load N+2 data
+      if (b.pass_to_n2) setPassToN2(true)
+      if (b.n2_user_id) setN2UserId(String(b.n2_user_id))
       setEditLoaded(true);
     });
   }, [id]);
@@ -886,6 +901,8 @@ export default function BonusForm() {
             bonus_type: 'mensuel',
             performance_score: totalCoeff,
             total_amount: amount + othersTotal,
+            pass_to_n2: passToN2 && n2UserId ? true : false,
+            n2_user_id: passToN2 && n2UserId ? parseInt(n2UserId) : null,
             details: {
               prime_max: maxPrime,
               quantitative: quantitative.map((c) => ({
@@ -1073,7 +1090,7 @@ export default function BonusForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-base-content/70 mb-0.5">Rôle</label>
-              <input type="text" value={connectedUser?.is_admin ? 'Admin' : connectedUser?.is_dg ? 'Directeur Général' : connectedUser?.is_drh ? 'DRH' : connectedUser?.is_directeur ? 'Directeur' : connectedUser?.is_validator_n1 ? 'Validateur N+1' : 'Utilisateur'} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+              <input type="text" value={connectedUser?.is_admin ? 'Admin' : connectedUser?.is_dg ? 'Directeur Général' : connectedUser?.is_drh ? 'DRH' : connectedUser?.is_directeur ? 'Directeur' : connectedUser?.is_validator_n2 ? 'Validateur N+2' : connectedUser?.is_validator_n1 ? 'Validateur N+1' : 'Utilisateur'} readOnly className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
             </div>
           </div>
           <div>
@@ -2026,6 +2043,42 @@ export default function BonusForm() {
 
       <form onSubmit={handleSubmitMensuel}>
         {sharedHeader}
+
+        {/* Passer à un N+2 — seulement pour N+1 (pas admin/DG/DRH/Directeur) */}
+        {connectedUser?.is_validator_n1 && !connectedUser?.is_admin && !connectedUser?.is_dg && !connectedUser?.is_drh && !connectedUser?.is_directeur && (
+          <div className="card-blueline p-3 mb-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm border-blue-300 checked:bg-blue-500"
+                checked={passToN2}
+                onChange={(e) => {
+                  setPassToN2(e.target.checked)
+                  if (!e.target.checked) setN2UserId('')
+                }}
+              />
+              <span className="text-sm font-medium text-base-content">Passer à un N+2 (sous-directeur)</span>
+            </label>
+            {passToN2 && (
+              <div className="mt-2 ml-6">
+                <label className="block text-xs font-medium text-base-content/70 mb-1">Sélectionner le N+2</label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm"
+                  value={n2UserId}
+                  onChange={(e) => setN2UserId(e.target.value)}
+                >
+                  <option value="">— Choisir un N+2 —</option>
+                  {n2Users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.department || '—'})</option>
+                  ))}
+                </select>
+                {n2Users.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">Aucun utilisateur N+2 trouvé dans votre département</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {totalCoeff > 0 && totalCoeff !== 10 && (
           <div className="mb-4 bg-amber-50 text-amber-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">

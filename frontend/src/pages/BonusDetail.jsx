@@ -130,6 +130,7 @@ const BonusDetail = () => {
 
   const getValidStep = (status) => {
     if (!user) return null;
+    if (user.is_validator_n2 && (status === 'Initialisé' || status === 'En attente N+2')) return 'N2';
     if (user.is_validator_n1 && status === 'Initialisé') return 'N1';
     if (user.is_directeur && status === 'En attente Directeur') return 'DIRECTEUR';
     if (user.is_dg && status === 'En attente DG') return 'DG';
@@ -145,6 +146,7 @@ const BonusDetail = () => {
     const getBadgeClass = (status) => {
       const map = {
         'Initialisé': 'bg-orange-100 text-orange-700',
+        'En attente N+2': 'bg-teal-100 text-teal-700',
         'En attente Directeur': 'bg-purple-100 text-purple-700',
         'En attente DG': 'bg-amber-100 text-amber-700',
         'Prime validée': 'bg-emerald-100 text-emerald-700',

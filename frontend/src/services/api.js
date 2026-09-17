@@ -133,6 +133,7 @@ export const getBonuses = async (status = null, employeeId = null, bonusType = n
   if (showPaid) params.show_paid = true;
   if (allStatuses) params.all_statuses = true;
   if (archiveMode) params.archive_mode = true;
+  if (options.includePaid) params.include_paid = true;
   if (options.search) params.search = options.search;
   if (options.department) params.department = options.department;
   if (options.wasRejected !== undefined) params.was_rejected = options.wasRejected;

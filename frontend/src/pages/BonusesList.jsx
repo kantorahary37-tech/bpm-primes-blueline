@@ -24,16 +24,17 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
-const ALL_STATUSES = ['Initialisé', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
+const ALL_STATUSES = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
 
 // Statuts proposés dans le filtre : chaque rôle ne filtre que sur son flux :
-// Directeur : En attente Directeur · DRH : Prime validée · N+1 : Initialisé · DG : En attente DG · Admin : tous
+// Directeur : En attente Directeur · DRH : Prime validée · N+1 : Initialisé · N+2 : Initialisé / En attente N+2 · DG : En attente DG · Admin : tous
 const roleStatuses = (user) => {
   if (!user) return [];
   if (user.is_admin) return ALL_STATUSES;
   if (user.is_dg) return ['En attente DG'];
   if (user.is_drh) return ['Prime validée'];
   if (user.is_directeur) return ['En attente Directeur'];
+  if (user.is_validator_n2) return ['Initialisé', 'En attente N+2'];
   if (user.is_validator_n1) return ['Initialisé'];
   return [];
 };
@@ -44,6 +45,7 @@ const defaultStatusFor = (user) => {
   if (user.is_dg) return 'En attente DG';
   if (user.is_drh) return 'Prime validée';
   if (user.is_directeur) return 'En attente Directeur';
+  if (user.is_validator_n2) return 'En attente N+2';
   if (user.is_validator_n1) return 'Initialisé';
   return '';
 };
@@ -92,7 +94,7 @@ const [filterMonth, setFilterMonth] = useState('');
     if (!new URLSearchParams(window.location.search).get('status')) {
       setStatusFilter(defaultStatusFor(user));
     }
-  }, [user?.is_admin, user?.is_dg, user?.is_drh, user?.is_directeur, user?.is_validator_n1]);
+  }, [user?.is_admin, user?.is_dg, user?.is_drh, user?.is_directeur, user?.is_validator_n1, user?.is_validator_n2]);
 
   // Paramètres de filtrage/tri/recherche envoyés au backend
   const queryParams = useMemo(() => {
@@ -239,6 +241,7 @@ const [filterMonth, setFilterMonth] = useState('');
 
   const getValidStep = (bonus) => {
     if (!user) return null;
+    if (user.is_validator_n2 && (bonus.status === 'Initialisé' || bonus.status === 'En attente N+2')) return 'N2';
     if (user.is_validator_n1 && bonus.status === 'Initialisé') return 'N1';
     if (user.is_directeur && bonus.status === 'En attente Directeur') return 'DIRECTEUR';
     if (user.is_dg && bonus.status === 'En attente DG') return 'DG';
@@ -253,6 +256,7 @@ const [filterMonth, setFilterMonth] = useState('');
   const getBadgeClass = (status) => {
     const map = {
       'Initialisé': 'bg-orange-100 text-orange-700',
+      'En attente N+2': 'bg-teal-100 text-teal-700',
       'En attente Directeur': 'bg-purple-100 text-purple-700',
       'En attente DG': 'bg-amber-100 text-amber-700',
       'Prime validée': 'bg-emerald-100 text-emerald-700',
@@ -272,17 +276,19 @@ const [filterMonth, setFilterMonth] = useState('');
 
     const myStatuses = [];
     if (user.is_validator_n1) myStatuses.push('Initialisé');
+    if (user.is_validator_n2) myStatuses.push('Initialisé', 'En attente N+2');
     if (user.is_directeur) myStatuses.push('En attente Directeur');
     if (user.is_dg) myStatuses.push('En attente DG');
 
     const base = [
       { key: 'initialised', title: 'Initialisées', highlight: false, filter: (b) => b.status === 'Initialisé' },
+      { key: 'pendingN2', title: 'En attente N+2', highlight: false, filter: (b) => b.status === 'En attente N+2' },
       { key: 'pendingDirector', title: 'En attente Directeur', highlight: false, filter: (b) => b.status === 'En attente Directeur' },
       { key: 'pendingDG', title: 'En attente DG', highlight: false, filter: (b) => b.status === 'En attente DG' },
       { key: 'validated', title: 'Validées', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
     ];
 
-    const order = ['initialised', 'pendingDirector', 'pendingDG', 'validated'];
+    const order = ['initialised', 'pendingN2', 'pendingDirector', 'pendingDG', 'validated'];
 
     const map = new Map(base.map((s) => [s.key, s]));
     return order.map((key) => map.get(key)).filter(Boolean);

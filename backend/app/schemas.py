@@ -46,6 +46,7 @@ class UserBase(BaseModel):
     poste: Optional[str] = None
     department: Optional[str] = None
     is_validator_n1: Optional[bool] = False
+    is_validator_n2: Optional[bool] = False
     is_directeur: Optional[bool] = False
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
@@ -163,6 +164,8 @@ class BonusBase(BaseModel):
     details: Optional[Dict[str, Any]] = None
     was_rejected: Optional[bool] = False
     total_amount: float
+    pass_to_n2: Optional[bool] = False
+    n2_user_id: Optional[int] = None
 
 # Schéma de création de prime
 class BonusCreate(BonusBase): pass
@@ -172,6 +175,8 @@ class BonusResponse(BonusBase):
     id: int
     status: ValidationStatus
     paid_at: Optional[datetime] = None
+    pass_to_n2: Optional[bool] = False
+    n2_user_id: Optional[int] = None
     created_by_id: int
     created_at: datetime
     updated_at: datetime

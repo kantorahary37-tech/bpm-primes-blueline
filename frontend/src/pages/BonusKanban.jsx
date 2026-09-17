@@ -6,7 +6,7 @@ import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
 import { ArrowLeftIcon } from '../components/Icons';
 
-const STATUS_COLUMNS = ['Initialisé', 'En attente Directeur', 'En attente DG', 'Prime validée'];
+const STATUS_COLUMNS = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DG', 'Prime validée'];
 
 const typeLabels = {
   mensuel: 'Mensuelle',
@@ -23,6 +23,7 @@ const statusLabel = (bonus) => {
 const getBadgeClass = (status) => {
   const map = {
     'Initialisé': 'bg-orange-100 text-orange-700',
+    'En attente N+2': 'bg-teal-100 text-teal-700',
     'En attente Directeur': 'bg-purple-100 text-purple-700',
     'En attente DG': 'bg-amber-100 text-amber-700',
     'Prime validée': 'bg-emerald-100 text-emerald-700',
@@ -32,6 +33,7 @@ const getBadgeClass = (status) => {
 
 const columnColor = {
   'Initialisé': 'border-t-orange-400',
+  'En attente N+2': 'border-t-teal-400',
   'En attente Directeur': 'border-t-purple-400',
   'En attente DG': 'border-t-amber-400',
   'Prime validée': 'border-t-emerald-400',
@@ -53,11 +55,12 @@ const BonusKanban = () => {
       .finally(() => setLoading(false));
   }, [type]);
 
-  const myStatus = user?.is_admin ? null
-    : user?.is_dg ? 'En attente DG'
-    : user?.is_directeur ? 'En attente Directeur'
-    : user?.is_validator_n1 ? 'Initialisé'
-    : null;
+  const myStatuses = user?.is_admin ? []
+    : user?.is_dg ? ['En attente DG']
+    : user?.is_directeur ? ['En attente Directeur']
+    : user?.is_validator_n2 ? ['Initialisé', 'En attente N+2']
+    : user?.is_validator_n1 ? ['Initialisé']
+    : [];
 
   const columns = STATUS_COLUMNS.map(status => ({
     status,
@@ -76,9 +79,9 @@ const BonusKanban = () => {
         <Link to="/" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></Link>
         <h1 className="text-2xl font-bold text-gray-900">{typeLabels[type] || type}</h1>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {columns.map(col => {
-          const isMyColumn = col.status === myStatus;
+          const isMyColumn = myStatuses.includes(col.status);
           return (
             <div key={col.status} className={`bg-gray-50 rounded-xl border border-gray-200 border-t-4 ${columnColor[col.status]} flex flex-col`}>
               <div className="px-4 py-3 border-b border-gray-200">

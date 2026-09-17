@@ -39,6 +39,7 @@ function userRole(user) {
   if (user?.is_dg) return 'DG'
   if (user?.is_drh) return 'DRH'
   if (user?.is_directeur) return 'Directeur'
+  if (user?.is_validator_n2) return 'Validateur N+2'
   if (user?.is_validator_n1) return 'Validateur N+1'
   return 'Collaborateur'
 }

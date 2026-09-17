@@ -89,7 +89,8 @@ export default function UsersPage() {
         if (roleFilter === 'drh' && !u.is_drh) return false
         if (roleFilter === 'directeur' && !u.is_directeur) return false
         if (roleFilter === 'n1' && !u.is_validator_n1) return false
-        if (roleFilter === 'collab' && (u.is_admin || u.is_dg || u.is_drh || u.is_directeur || u.is_validator_n1)) return false
+        if (roleFilter === 'n2' && !u.is_validator_n2) return false
+        if (roleFilter === 'collab' && (u.is_admin || u.is_dg || u.is_drh || u.is_directeur || u.is_validator_n1 || u.is_validator_n2)) return false
       }
       const userAss = assignmentsByUser[u.id] || []
       // Filtre département : match le département utilisateur OU le département d'un service assigné
@@ -246,6 +247,7 @@ export default function UsersPage() {
     if (u.is_drh) badges.push(<span key="drh" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">DRH</span>)
     if (u.is_directeur) badges.push(<span key="dir" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">Directeur</span>)
     if (u.is_validator_n1) badges.push(<span key="n1" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">N+1</span>)
+    if (u.is_validator_n2) badges.push(<span key="n2" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-700 border border-teal-200">N+2</span>)
     if (!badges.length) badges.push(<span key="collab" className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">Collaborateur</span>)
     return badges
   }
@@ -257,7 +259,8 @@ export default function UsersPage() {
     drh: visibleUsers.filter(u => u.is_drh).length,
     directeur: visibleUsers.filter(u => u.is_directeur).length,
     n1: visibleUsers.filter(u => u.is_validator_n1).length,
-    collab: visibleUsers.filter(u => !u.is_admin && !u.is_dg && !u.is_drh && !u.is_directeur && !u.is_validator_n1).length,
+    n2: visibleUsers.filter(u => u.is_validator_n2).length,
+    collab: visibleUsers.filter(u => !u.is_admin && !u.is_dg && !u.is_drh && !u.is_directeur && !u.is_validator_n1 && !u.is_validator_n2).length,
   }), [visibleUsers])
 
   if (loading) return <div className="flex justify-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
@@ -341,6 +344,7 @@ export default function UsersPage() {
           { key: 'drh', label: 'DRH', count: roleCounts.drh, color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
           { key: 'directeur', label: 'Directeur', count: roleCounts.directeur, color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
           { key: 'n1', label: 'Valid. N+1', count: roleCounts.n1, color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
+          { key: 'n2', label: 'Valid. N+2', count: roleCounts.n2, color: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100' },
           { key: 'collab', label: 'Collab.', count: roleCounts.collab, color: 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100' },
         ].filter(t => !isScopedDirector || !['', 'admin', 'dg', 'drh'].includes(t.key)).map(tab => (
           <button
@@ -633,6 +637,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
     poste: '',
     department: '',
     is_validator_n1: false,
+    is_validator_n2: false,
     is_directeur: false,
     is_drh: false,
     is_dg: false,
@@ -651,6 +656,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
         poste: user.poste || '',
         department: user.department || '',
         is_validator_n1: user.is_validator_n1 || false,
+        is_validator_n2: user.is_validator_n2 || false,
         is_directeur: user.is_directeur || false,
         is_drh: user.is_drh || false,
         is_dg: user.is_dg || false,
@@ -686,6 +692,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
       poste: form.poste,
       department: form.department,
       is_validator_n1: form.is_validator_n1,
+      is_validator_n2: form.is_validator_n2,
       is_directeur: form.is_directeur,
       is_drh: form.is_drh,
       is_dg: form.is_dg,
@@ -840,6 +847,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
             <div className="grid grid-cols-2 gap-2">
               {[
                 { key: 'is_validator_n1', label: 'Validateur N+1', color: 'border-blue-300 checked:bg-blue-500' },
+                { key: 'is_validator_n2', label: 'Validateur N+2', color: 'border-teal-300 checked:bg-teal-500' },
                 { key: 'is_directeur', label: 'Directeur', color: 'border-purple-300 checked:bg-purple-500' },
                 { key: 'is_drh', label: 'DRH', color: 'border-emerald-300 checked:bg-emerald-500', adminOnly: true },
                 { key: 'is_dg', label: 'Directeur Général', color: 'border-amber-300 checked:bg-amber-500', adminOnly: true },

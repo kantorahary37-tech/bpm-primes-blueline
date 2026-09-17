@@ -99,8 +99,16 @@ async def delete_service(
         raise HTTPException(status_code=404, detail="Service introuvable.")
     if not can_manage(user, group.department.name):
         raise HTTPException(status_code=403, detail="Vous ne pouvez supprimer que les services de votre département.")
-    # Désassigner puis supprimer
-    await Employee.filter(service_group=group).update(service_group=None)
+    # Interdire la suppression si des employés sont encore affectés au service
+    employee_count = await Employee.filter(service_group=group).count()
+    if employee_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Impossible de supprimer le service « {group.name} » : "
+                f"{employee_count} employé(s) y sont encore affecté(s). Retirez-les d'abord du service."
+            ),
+        )
     await group.delete()
     return {"message": "Service supprimé."}
 

@@ -54,6 +54,7 @@ class UserUpdateRequest(BaseModel):
     poste: Optional[str] = None
     department: Optional[str] = None
     is_validator_n1: Optional[bool] = None
+    is_validator_n2: Optional[bool] = None
     is_directeur: Optional[bool] = None
     is_drh: Optional[bool] = None
     is_dg: Optional[bool] = None
@@ -79,6 +80,8 @@ async def admin_update_user(user_id: int, data: UserUpdateRequest, admin: User =
         user.dept = dept_obj
     if data.is_validator_n1 is not None:
         user.is_validator_n1 = data.is_validator_n1
+    if data.is_validator_n2 is not None:
+        user.is_validator_n2 = data.is_validator_n2
     if data.is_directeur is not None:
         user.is_directeur = data.is_directeur
     if data.is_drh is not None:
@@ -116,6 +119,7 @@ class CreateUserRequest(BaseModel):
     poste: Optional[str] = None
     department: Optional[str] = None
     is_validator_n1: Optional[bool] = False
+    is_validator_n2: Optional[bool] = False
     is_directeur: Optional[bool] = False
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
@@ -143,6 +147,7 @@ async def admin_create_user(data: CreateUserRequest, admin: User = Depends(requi
         dept_str=data.department,
         dept=dept_obj,
         is_validator_n1=data.is_validator_n1,
+        is_validator_n2=data.is_validator_n2,
         is_directeur=data.is_directeur,
         is_drh=data.is_drh,
         is_dg=data.is_dg,

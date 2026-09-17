@@ -359,4 +359,29 @@ try:
 except Exception as e:
     print(f"configsnapshot table check skipped: {e}")
 
+print("Ensuring N+2 role columns exist...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    # user.is_validator_n2
+    cur.execute("""
+        ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "is_validator_n2" BOOLEAN NOT NULL DEFAULT FALSE;
+    """)
+    # bonus.pass_to_n2
+    cur.execute("""
+        ALTER TABLE bonus ADD COLUMN IF NOT EXISTS "pass_to_n2" BOOLEAN NOT NULL DEFAULT FALSE;
+    """)
+    # bonus.n2_user_id FK
+    cur.execute("""
+        ALTER TABLE bonus ADD COLUMN IF NOT EXISTS "n2_user_id" INT REFERENCES "user" ("id") ON DELETE SET NULL;
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("N+2 role columns OK")
+except Exception as e:
+    print(f"N+2 role columns check skipped: {e}")
+
 print("Starting application...")

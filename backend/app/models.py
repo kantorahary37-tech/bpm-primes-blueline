@@ -25,6 +25,7 @@ class BonusType(str, Enum):
 # Enumération des statuts de validation
 class ValidationStatus(str, Enum):
     INITIALISE = "Initialisé"
+    EN_ATTENTE_N2 = "En attente N+2"
     EN_ATTENTE_DIRECTEUR = "En attente Directeur"
     EN_ATTENTE_DG = "En attente DG"
     VALIDE = "Prime validée"
@@ -70,6 +71,8 @@ class User(models.Model):
     dept = fields.ForeignKeyField('models.Department', related_name='users', null=True, source_field='department_id')
     # Boolean : est validateur N+1 ?
     is_validator_n1 = fields.BooleanField(default=False)
+    # Boolean : est validateur N+2 (sous-directeur) ?
+    is_validator_n2 = fields.BooleanField(default=False)
     # Boolean : est directeur ?
     is_directeur = fields.BooleanField(default=False)
     # Boolean : est DRH ?
@@ -212,6 +215,10 @@ class Bonus(models.Model):
     was_rejected = fields.BooleanField(default=False)
     # Date de paiement (null = pas encore payée)
     paid_at = fields.DatetimeField(null=True)
+    # Passer à un N+2 pour validation intermédiaire (mensuel uniquement)
+    pass_to_n2 = fields.BooleanField(default=False)
+    # Utilisateur N+2 sélectionné pour valider cette prime
+    n2_user = fields.ForeignKeyField('models.User', related_name='n2_bonuses', null=True)
     # Statut de validation de la prime
     status = fields.CharEnumField(ValidationStatus, default=ValidationStatus.INITIALISE)
     # Créateur de la prime (relation vers User)
