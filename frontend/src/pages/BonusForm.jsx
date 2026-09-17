@@ -158,6 +158,7 @@ export default function BonusForm() {
   const [additionalPrimes, setAdditionalPrimes] = useState({ exceptionnelle: 0, ponctuelle: 0 })
   const [perEmployeeAdditional, setPerEmployeeAdditional] = useState({})
   const importFileRef = useRef(null)
+  const otherFileRefs = useRef({})
   const [importedFileName, setImportedFileName] = useState('')
   const [importFeedback, setImportFeedback] = useState('')
   const [importError, setImportError] = useState('')
@@ -165,7 +166,7 @@ export default function BonusForm() {
   const [editLoaded, setEditLoaded] = useState(!isEditing)
   const [others, setOthers] = useState([])
   const [otherPrimesTypes, setOtherPrimesTypes] = useState([])
-  const otherTypes = ['temporaire', 'periodique', 'autres']
+  const otherTypes = ['periodique', 'temporaire', 'autres']
 
   // N+2 (sous-directeur) states
   const [passToN2, setPassToN2] = useState(false)
@@ -199,7 +200,7 @@ export default function BonusForm() {
   }
 
   const addOther = () => {
-    setOthers(prev => [...prev, { key: Date.now() + Math.random(), libelle: '', selectedTypeId: '', type: 'temporaire', typeCustom: '', file: null, fileData: null, debut_mois: '', debut_annee: '', fin_mois: '', fin_annee: '', montant: 0 }])
+    setOthers(prev => [...prev, { key: Date.now() + Math.random(), libelle: '', selectedTypeId: '', type: 'temporaire', typeCustom: '', file: null, fileData: null, debut_mois: '', debut_annee: '', fin_mois: '', fin_annee: '', montant: 0, nbr_jour: '1' }])
   }
   const removeOther = (key) => setOthers(prev => prev.filter(o => o.key !== key))
   const updateOther = (key, field, value) => setOthers(prev => prev.map(o => o.key === key ? { ...o, [field]: value } : o))
@@ -217,7 +218,12 @@ export default function BonusForm() {
     updateOther(key, 'fileData', null)
   }
 
-  const othersTotal = others.reduce((sum, o) => sum + (parseFloat(o.montant) || 0), 0)
+  // « Autres primes » : montant de base (type de prime ou libre) × nombre de jours
+  // o.montant = montant de base ; o.nbr_jour = multiplicateur (défaut 1)
+  const otherJour = (o) => Math.max(1, parseInt(o.nbr_jour) || 1)
+  const otherBase = (o) => parseFloat(o.montant) || 0
+  const otherTotal = (o) => otherBase(o) * otherJour(o)
+  const othersTotal = others.reduce((sum, o) => sum + otherTotal(o), 0)
 
   const handleImportExcel = async (e) => {
     const file = e.target.files?.[0]
@@ -473,15 +479,16 @@ export default function BonusForm() {
           key: Date.now() + Math.random() + i,
           libelle: o.libelle || '',
           selectedTypeId: o.selectedTypeId || '',
-          type: o.type || 'temporaire',
-          typeCustom: o.type === 'autres' ? '' : '',
+          type: otherTypes.includes(o.type) ? o.type : (o.type ? 'autres' : 'temporaire'),
+          typeCustom: otherTypes.includes(o.type) ? '' : (o.type || ''),
           file: o.file && o.file.url ? o.file : null,
           fileData: null,
           debut_mois: o.debut_mois ? String(o.debut_mois) : '',
           debut_annee: o.debut_annee ? String(o.debut_annee) : '',
           fin_mois: o.fin_mois ? String(o.fin_mois) : '',
           fin_annee: o.fin_annee ? String(o.fin_annee) : '',
-          montant: o.montant || 0,
+          montant: o.montant_base ?? (o.montant || 0),
+          nbr_jour: o.nbr_jour != null ? String(o.nbr_jour) : '1',
         })));
       }
       // Load N+2 data
@@ -503,7 +510,7 @@ export default function BonusForm() {
     return d > f
   })
   const otherInvalid = others.some(o =>
-    !o.libelle?.trim() ||
+    (!o.selectedTypeId && !o.libelle?.trim()) ||
     !o.type ||
     (o.type === 'autres' && !o.typeCustom?.trim()) ||
     !(parseFloat(o.montant) > 0) ||
@@ -920,7 +927,8 @@ export default function BonusForm() {
                 libelle: o.libelle, type: o.type === 'autres' ? o.typeCustom : o.type,
                 selectedTypeId: o.selectedTypeId || null,
                 file: o.file ? { filename: o.file.filename, original_name: o.file.original_name, url: o.file.url } : null,
-                debut_mois: o.debut_mois, debut_annee: o.debut_annee, fin_mois: o.fin_mois, fin_annee: o.fin_annee, montant: parseFloat(o.montant) || 0,
+                debut_mois: o.debut_mois, debut_annee: o.debut_annee, fin_mois: o.fin_mois, fin_annee: o.fin_annee,
+                montant: otherTotal(o), montant_base: otherBase(o), nbr_jour: otherJour(o),
               })),
             },
           })
@@ -2346,7 +2354,7 @@ export default function BonusForm() {
         <div className="card-blueline p-4 mt-3 border-l-4 border-l-amber-500 bg-amber-50/30">
           {others.length > 0 && otherInvalid && (
             <div className="mb-3 bg-red-50 text-red-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">
-              <ExclamationIcon className="w-4 h-4" /> Chaque « Autre prime » doit avoir un libellé, un type, un montant supérieur à 0, une période (début et fin) et une pièce jointe.
+              <ExclamationIcon className="w-4 h-4" /> Chaque « Autre prime » doit avoir un type de prime, un type de versement, un montant supérieur à 0, une période (début et fin) et une pièce jointe.
             </div>
           )}
           <div className="flex items-center justify-between mb-4">
@@ -2371,8 +2379,9 @@ export default function BonusForm() {
                 <span className="text-[11px] font-medium text-amber-700">Autre prime #{idx + 1}</span>
                 <button type="button" onClick={() => removeOther(o.key)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                <div className="lg:col-span-2">
+              {/* --- Ligne 1 : type de prime (long) + mode de calcul compact (nbr jour × montant) --- */}
+              <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+                <div className="w-full sm:flex-1 min-w-0">
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Type de prime *</label>
                   <select
                     value={o.selectedTypeId || ''}
@@ -2396,16 +2405,49 @@ export default function BonusForm() {
                     ))}
                   </select>
                 </div>
-                <div className="lg:col-span-2">
-                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Libellé</label>
-                  <input type="text" value={o.libelle} readOnly
-                    className="w-full px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-600 text-sm cursor-not-allowed"
-                    placeholder="Rempli automatiquement" />
+                <div className="w-16 shrink-0">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Nbr jour</label>
+                  <input type="number" min="1" value={o.nbr_jour ?? 1} onChange={(e) => updateOther(o.key, 'nbr_jour', e.target.value)}
+                    title="Le montant est multiplié par ce nombre de jours"
+                    className="w-full px-2 py-1 rounded border border-gray-400 text-center focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
                 </div>
-                <div className="lg:col-span-3">
+                <div className="w-full sm:w-40 shrink-0">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant ({formCurrency})</label>
+                  {o.selectedTypeId ? (
+                    <input type="text" value={`${otherTotal(o).toLocaleString('fr-FR')} ${formCurrency}`} readOnly
+                      title={`Montant de base × ${otherJour(o)} jour(s)`}
+                      className="w-full px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-600 text-sm font-medium cursor-not-allowed" />
+                  ) : (
+                    <input type="number" min="0" value={otherTotal(o)} onChange={(e) => updateOther(o.key, 'montant', (parseFloat(e.target.value) || 0) / otherJour(o))}
+                      title={`Montant total = montant de base × ${otherJour(o)} jour(s)`}
+                      className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                  )}
+                </div>
+              </div>
+              {/* --- Ligne 2 : type de versement + dates + pièce jointe, tout sur une ligne --- */}
+              <div className="flex flex-wrap items-end gap-x-2 gap-y-2 mt-2">
+                <div className="min-w-0">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Type de versement *</label>
+                  <div className="flex items-center gap-1.5">
+                    <select value={o.type}
+                      onChange={(e) => {
+                        updateOther(o.key, 'type', e.target.value)
+                        if (e.target.value !== 'autres') updateOther(o.key, 'typeCustom', '')
+                      }}
+                      className="px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
+                      {otherTypes.map(t => <option key={t} value={t}>{OTHER_TYPE_LABELS[t]}</option>)}
+                    </select>
+                    {o.type === 'autres' && (
+                      <input type="text" value={o.typeCustom}
+                        onChange={(e) => updateOther(o.key, 'typeCustom', e.target.value)}
+                        placeholder="Précisez le type..."
+                        className="w-32 sm:w-40 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                    )}
+                  </div>
+                </div>
+                <div className="min-w-0">
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Période (optionnel)</label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] text-gray-500">Début</span>
+                  <div className="flex items-center gap-1 flex-wrap">
                     <select value={o.debut_mois} onChange={(e) => updateOther(o.key, 'debut_mois', e.target.value)}
                       className="px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
                       <option value="">Mois</option>
@@ -2416,7 +2458,7 @@ export default function BonusForm() {
                       <option value="">Année</option>
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
-                    <span className="text-[11px] text-gray-500 ml-2">Fin</span>
+                    <span className="text-[11px] text-gray-400">→</span>
                     <select value={o.fin_mois} onChange={(e) => updateOther(o.key, 'fin_mois', e.target.value)}
                       className="px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm">
                       <option value="">Mois</option>
@@ -2432,29 +2474,27 @@ export default function BonusForm() {
                     <p className="text-[11px] text-red-600 mt-1">La date de début doit être antérieure ou égale à la date de fin.</p>
                   )}
                 </div>
-                <div className="lg:col-span-1">
-                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant ({formCurrency})</label>
-                  {o.selectedTypeId ? (
-                    <input type="text" value={`${parseFloat(o.montant || 0).toLocaleString('fr-FR')} ${formCurrency}`} readOnly
-                      className="w-full px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-600 text-sm font-medium cursor-not-allowed" />
+                <div className="flex-1 min-w-[220px]">
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Pièce jointe (obligatoire)</label>
+                  {o.file ? (
+                    <div className="flex items-center gap-2 text-sm h-[30px]">
+                      <button type="button" onClick={() => openFile(o.file.url)} className="text-blue-600 hover:underline truncate text-left">{o.file.original_name}</button>
+                      <button type="button" onClick={() => removeOtherFile(o.key)} className="text-red-400 hover:text-red-600">&times;</button>
+                    </div>
                   ) : (
-                    <input type="number" min="0" value={o.montant} onChange={(e) => updateOther(o.key, 'montant', e.target.value)}
-                      className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
+                    <div className="flex items-center gap-1.5">
+                      <input ref={(el) => { otherFileRefs.current[o.key] = el }} type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.xls,.xlsx"
+                        onChange={(e) => handleOtherFile(o.key, e.target.files?.[0])}
+                        className="hidden" />
+                      <input type="text" readOnly value=""
+                        placeholder="Aucun fichier choisi"
+                        className="flex-1 min-w-0 px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-400 text-sm cursor-not-allowed" />
+                      <button type="button" onClick={() => otherFileRefs.current[o.key]?.click()}
+                        className="btn btn-xs bg-amber-600 hover:bg-amber-700 text-white border-0 whitespace-nowrap">Choisir un fichier</button>
+                    </div>
                   )}
                 </div>
-              </div>
-              <div className="mt-2">
-                <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Piece jointe (obligatoire)</label>
-                {o.file ? (
-                  <div className="flex items-center gap-2 text-sm">
-                    <button type="button" onClick={() => openFile(o.file.url)} className="text-blue-600 hover:underline truncate text-left">{o.file.original_name}</button>
-                    <button type="button" onClick={() => removeOtherFile(o.key)} className="text-red-400 hover:text-red-600">&times;</button>
-                  </div>
-                ) : (
-                  <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.xls,.xlsx"
-                    onChange={(e) => handleOtherFile(o.key, e.target.files?.[0])}
-                    className="file-input file-input-bordered file-input-xs w-full text-sm" />
-                )}
               </div>
             </div>
           ))}

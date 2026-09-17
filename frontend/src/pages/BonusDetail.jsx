@@ -393,6 +393,7 @@ const BonusDetail = () => {
                       <p className="text-sm font-medium text-gray-900">{o.libelle || 'Prime sans libellé'}</p>
                       <p className="text-[11px] text-gray-500 mt-0.5">
                         {o.type}
+                        {o.nbr_jour != null && parseInt(o.nbr_jour) > 1 ? ` · ${o.nbr_jour} jours` : ''}
                         {o.debut_mois || o.debut_annee || o.fin_mois || o.fin_annee ? (
                           ` · ${o.debut_mois || '?'}/${o.debut_annee || '?'} → ${o.fin_mois || '?'}/${o.fin_annee || '?'}`
                         ) : ''}
