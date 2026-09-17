@@ -78,6 +78,12 @@ export default function BonusForm() {
     const days = Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1
     return Math.max(1, Math.ceil(days / 7))
   }
+  // Mode Jour : nombre de jours entre date début et fin (ex : 17/09 -> 30/09 = 13 jours)
+  const calcDays = (start, end) => {
+    if (!start || !end) return 1
+    const s = new Date(start), e = new Date(end)
+    return Math.max(1, Math.floor((e - s) / (1000 * 60 * 60 * 24)))
+  }
   const getRate = (empId) => {
     const emp = employees.find(e => e.id === empId)
     return emp?.astreinte_rate ?? astreinteConfig.weeklyMax
@@ -150,7 +156,7 @@ export default function BonusForm() {
     periodStart: monthStart, periodEnd: monthEnd, weeklyMax: 70000, interventionRate: 9000,
   })
   const [disponibilites, setDisponibilites] = useState([
-    { key: 1, employee_id: '', nombre: 1 },
+    { key: 1, employee_id: '', nombre: 1, mode: 'semaine' },
   ])
   const [interventions, setInterventions] = useState([
     { key: 2, employee_id: '', date: '', heure: '', motif: '', ticket: '', type: 'intervention', demandeur: '', service: '' },
@@ -470,7 +476,7 @@ export default function BonusForm() {
         if (d.quantitative) setQuantitative(d.quantitative);
         if (d.qualitative) setQualitative(d.qualitative);
         if (d.sales) setSales(d.sales.map((s, i) => ({ ...s, key: i + 1 })));
-        if (d.disponibilites) setDisponibilites(d.disponibilites.map((s, i) => ({ ...s, key: i + 1 })));
+        if (d.disponibilites) setDisponibilites(d.disponibilites.map((s, i) => ({ ...s, mode: s.mode || 'semaine', key: i + 1 })));
         if (d.interventions) setInterventions(d.interventions.map((s, i) => ({ ...s, key: i + 1 })));
         if (d.weekly_max) setAstreinteConfig((c) => ({ ...c, weeklyMax: d.weekly_max, interventionRate: d.intervention_rate }));
         if (d.exceptionnelle !== undefined) setAdditionalPrimes((p) => ({ ...p, exceptionnelle: d.exceptionnelle }));
@@ -610,7 +616,7 @@ export default function BonusForm() {
   }
 
   const addDispoRow = () => {
-    setDisponibilites([...disponibilites, { key: Date.now(), employee_id: '', nombre: 1 }])
+    setDisponibilites([...disponibilites, { key: Date.now(), employee_id: '', nombre: 1, mode: 'semaine' }])
   }
 
   const removeDispoRow = (index) => {
@@ -620,6 +626,15 @@ export default function BonusForm() {
   const handleDispoChange = (index, field, value) => {
     const newData = [...disponibilites]
     newData[index][field] = value
+    setDisponibilites(newData)
+  }
+
+  const handleDispoMode = (index, mode) => {
+    const newData = [...disponibilites]
+    newData[index].mode = mode
+    // Ajuste le nombre si le changement de mode dépasse le nouveau max (semaines vs jours)
+    const max = mode === 'jour' ? calcDays(params.startDate, params.endDate) : calcWeeks(params.startDate, params.endDate)
+    if ((parseFloat(newData[index].nombre) || 0) > max) newData[index].nombre = max
     setDisponibilites(newData)
   }
 
@@ -642,6 +657,7 @@ export default function BonusForm() {
     setError('')
     setLoading(true)
     const weeks = calcWeeks(params.startDate, params.endDate)
+    const days = calcDays(params.startDate, params.endDate)
     const empName = (id) => employees.find((e) => e.id === id)?.name || `#${id}`
 
     const allEmpIds = [...new Set([
@@ -664,11 +680,24 @@ export default function BonusForm() {
       setLoading(false); return
     }
 
+    // Max selon le mode de chaque ligne : Semaine -> nb semaines, Jour -> nb jours de la période
+    const badNombre = disponibilites.some(d => {
+      const max = d.mode === 'jour' ? days : weeks
+      return (parseFloat(d.nombre) > max)
+    })
+    if (badNombre) {
+      setError(`Nombre hors limite en Disponibilité : max ${weeks} semaine(s) en mode Semaine, ${days} jour(s) en mode Jour pour la période sélectionnée.`)
+      setLoading(false); return
+    }
+
     try {
       await Promise.all(allEmpIds.map(employee_id => {
         const empDispos = disponibilites.filter(d => d.employee_id === employee_id)
         const empIntervs = interventions.filter(i => i.employee_id === employee_id)
-        const totalDispo = empDispos.reduce((s, d) => s + (parseFloat(d.nombre) || 0) * getRate(d.employee_id), 0)
+        const totalDispo = empDispos.reduce((s, d) => {
+          const tauxHebdo = d.mode === 'jour' ? astreinteConfig.weeklyMax / 7 : getRate(d.employee_id)
+          return s + (parseFloat(d.nombre) || 0) * tauxHebdo
+        }, 0)
         const totalInterv = empIntervs.length * astreinteConfig.interventionRate
         const empAdd = perEmployeeAdditional[employee_id] || {}
         const amount = totalDispo + totalInterv + (empAdd.exceptionnelle || 0) + (empAdd.ponctuelle || 0)
@@ -687,7 +716,7 @@ export default function BonusForm() {
             weekly_max: astreinteConfig.weeklyMax,
             intervention_rate: astreinteConfig.interventionRate,
             disponibilites: empDispos.map(d => ({
-              employee_id: d.employee_id, employee_name: empName(d.employee_id), nombre: d.nombre,
+              employee_id: d.employee_id, employee_name: empName(d.employee_id), nombre: d.nombre, mode: d.mode,
             })),
             interventions: empIntervs.map(i => ({
               employee_id: i.employee_id, employee_name: empName(i.employee_id),
@@ -1173,6 +1202,7 @@ export default function BonusForm() {
                 <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nombre de semaines</label>
                 <input type="number" value={calcWeeks(params.startDate, params.endDate)} readOnly
                   className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60" />
+                <p className="text-[11px] text-base-content/40 mt-0.5">soit {calcDays(params.startDate, params.endDate)} jours (max en mode Jour)</p>
               </div>
             </div>
           ) : !isCommView && (
@@ -1790,7 +1820,11 @@ export default function BonusForm() {
 
   if (editType === 'astreinte') {
     const weeks = calcWeeks(params.startDate, params.endDate)
-    const totalDispo = disponibilites.reduce((s, d) => s + (parseFloat(d.nombre) || 0) * getRate(d.employee_id), 0)
+    const days = calcDays(params.startDate, params.endDate)
+    const totalDispo = disponibilites.reduce((s, d) => {
+      const tauxHebdo = d.mode === 'jour' ? astreinteConfig.weeklyMax / 7 : getRate(d.employee_id)
+      return s + (parseFloat(d.nombre) || 0) * tauxHebdo
+    }, 0)
     const totalInterv = interventions.filter(i => i.employee_id).length * astreinteConfig.interventionRate
     const totalGeneral = totalDispo + totalInterv + Object.values(perEmployeeAdditional).reduce((s, v) => s + (v.exceptionnelle || 0) + (v.ponctuelle || 0), 0)
     const primeCount = [...new Set([...disponibilites.map(d => d.employee_id), ...interventions.map(i => i.employee_id)])].filter(Boolean).length
@@ -1799,7 +1833,7 @@ export default function BonusForm() {
       if (!d.employee_id) return
       const emp = employees.find(e => e.id === d.employee_id)
       if (!employeeTotals[d.employee_id]) employeeTotals[d.employee_id] = { name: emp ? emp.name : `#${d.employee_id}`, dispo: 0, interv: 0, exceptionnelle: 0, ponctuelle: 0 }
-      employeeTotals[d.employee_id].dispo += (parseFloat(d.nombre) || 0) * getRate(d.employee_id)
+      employeeTotals[d.employee_id].dispo += (parseFloat(d.nombre) || 0) * (d.mode === 'jour' ? astreinteConfig.weeklyMax / 7 : getRate(d.employee_id))
     })
     interventions.forEach(iv => {
       if (!iv.employee_id) return
@@ -1841,13 +1875,16 @@ export default function BonusForm() {
                 <thead>
                   <tr className="border-b border-gray-300">
                     <th className="text-left py-2 px-2 font-medium text-gray-700">Employé</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-700 w-24">Nombre</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700 w-24">Mode</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-700 w-32">Nombre</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 w-36">Montant (Ar)</th>
                     <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {disponibilites.map((d, i) => (
+                  {disponibilites.map((d, i) => {
+                    const rowMax = d.mode === 'jour' ? days : weeks
+                    return (
                     <tr key={d.key} className="border-b border-gray-200">
                       <td className="py-1 px-2">
                         <select value={d.employee_id} onChange={(e) => handleDispoChange(i, 'employee_id', parseInt(e.target.value))}
@@ -1861,18 +1898,26 @@ export default function BonusForm() {
                         </select>
                       </td>
                       <td className="py-1 px-2 text-center">
-                        <input type="number" value={d.nombre} min="0" max={weeks} onChange={(e) => handleDispoChange(i, 'nombre', e.target.value)}
-                          className={`w-16 px-2 py-1 rounded border text-sm text-center focus:outline-none focus:ring-2 focus:ring-brand-500/30 ${(parseFloat(d.nombre) || 0) > weeks ? 'border-red-400 bg-red-50' : 'border-gray-400'}`} />
-                        {(parseFloat(d.nombre) || 0) > weeks && <span className="text-red-500 text-xs block">max {weeks}</span>}
+                        <select value={d.mode || 'semaine'} onChange={(e) => handleDispoMode(i, e.target.value)}
+                          className="w-full px-2 py-1 rounded border border-gray-300 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs">
+                          <option value="semaine">Semaine</option>
+                          <option value="jour">Jour</option>
+                        </select>
+                      </td>
+                      <td className="py-1 px-2 text-center">
+                        <input type="number" value={d.nombre} min="0" max={rowMax} onChange={(e) => handleDispoChange(i, 'nombre', e.target.value)}
+                          className={`w-16 px-2 py-1 rounded border text-sm text-center focus:outline-none focus:ring-2 focus:ring-brand-500/30 ${(parseFloat(d.nombre) || 0) > rowMax ? 'border-red-400 bg-red-50' : 'border-gray-400'}`} />
+                        {(parseFloat(d.nombre) || 0) > rowMax && <span className="text-red-500 text-xs block">max {rowMax}{d.mode === 'jour' ? ' j' : ' sem'}</span>}
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
-                        {seeAmounts ? ((parseFloat(d.nombre) || 0) * getRate(d.employee_id)).toLocaleString('fr-FR') : '••••••'}
+                        {seeAmounts ? ((parseFloat(d.nombre) || 0) * (d.mode === 'jour' ? astreinteConfig.weeklyMax / 7 : getRate(d.employee_id))).toLocaleString('fr-FR') : '••••••'}
                       </td>
                       <td className="py-1 px-2 text-center">
                         <button type="button" onClick={() => removeDispoRow(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold border-t-2 border-gray-400">

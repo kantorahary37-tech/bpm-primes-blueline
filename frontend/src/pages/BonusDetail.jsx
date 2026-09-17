@@ -446,7 +446,12 @@ const BonusDetail = () => {
                 <div className="flex items-center justify-between py-1 px-3 rounded-lg bg-blue-50/50">
                   <span className="text-gray-600">
                     Disponibilité <span className="text-gray-400 font-medium">
-                      {bonus.details.disponibilites?.reduce((s, d) => s + (parseInt(d.nombre) || 0), 0)} sem
+                      {(() => {
+                        const dispo = bonus.details.disponibilites || []
+                        const sem = dispo.filter(d => d.mode !== 'jour').reduce((s, d) => s + (parseInt(d.nombre) || 0), 0)
+                        const jrs = dispo.filter(d => d.mode === 'jour').reduce((s, d) => s + (parseInt(d.nombre) || 0), 0)
+                        return [sem > 0 ? `${sem} sem` : null, jrs > 0 ? `${jrs} j` : null].filter(Boolean).join(' · ') || '0'
+                      })()}
                     </span>
                   </span>
                   <span className="font-semibold text-gray-900">{formatAr(bonus.details.total_dispo)} {currency}</span>
