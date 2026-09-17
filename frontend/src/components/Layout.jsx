@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getMyServiceAssignments } from '../services/api'
-import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon, FolderIcon } from './Icons'
+import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMarkIcon, LogoutIcon, LockIcon, ChevronDownIcon, ArchiveIcon, UsersIcon, ClipboardIcon, FolderIcon, ChartIcon } from './Icons'
 
 const mainNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: DashboardIcon, desc: 'Vue d\'ensemble et statistiques' },
   { path: '/employees', label: 'Employés', icon: EmployeesIcon, desc: 'Gestion du personnel et LDAP' },
   { path: '/services', label: 'Services', icon: FolderIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1'], desc: 'Services des employés par département' },
   { path: '/bonuses', label: 'Primes', icon: BonusesIcon, desc: 'Suivi et validation des primes' },
+  { path: '/bonuses/flows', label: 'Flux', icon: ChartIcon, desc: 'Flux de validation des primes' },
   { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true, desc: 'Configuration des plafonds' },
 ]
 

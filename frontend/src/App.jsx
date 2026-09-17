@@ -7,6 +7,7 @@ import { CurrenciesProvider } from './contexts/CurrenciesContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import BonusesList from './pages/BonusesList'
+import BonusFlowsPage from './pages/BonusFlowsPage'
 import BonusKanban from './pages/BonusKanban'
 import BonusForm from './pages/BonusForm'
 import BonusTypeSelect from './pages/BonusTypeSelect'
@@ -51,6 +52,7 @@ function AppContent() {
       <Route path="/" element={<ProtectedRoute><Navigate to="/bonuses" replace /></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/bonuses" element={<ProtectedRoute><BonusesList /></ProtectedRoute>} />
+      <Route path="/bonuses/flows" element={<ProtectedRoute><BonusFlowsPage /></ProtectedRoute>} />
       <Route path="/bonuses/new" element={<ProtectedRoute><BonusTypeSelect /></ProtectedRoute>} />
       <Route path="/bonuses/new/:type" element={<ProtectedRoute><BonusForm /></ProtectedRoute>} />
       <Route path="/bonuses/:id" element={<ProtectedRoute><BonusDetail /></ProtectedRoute>} />

@@ -36,4 +36,5 @@ Thumbs.db
 *.env.bak
 backups/
 snapshots/
+dumps/
 uploads/

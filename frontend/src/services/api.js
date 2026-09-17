@@ -529,6 +529,32 @@ export const restoreFromSqlFile = async (filename) => {
   return data;
 };
 
+// --- Sauvegarde complète de la base de données ---
+export const createDatabaseDump = async (label = 'backup') => {
+  const { data } = await api.post('/admin/database/dumps', { label });
+  return data;
+};
+
+export const getDatabaseDumps = async () => {
+  const { data } = await api.get('/admin/database/dumps');
+  return data;
+};
+
+export const downloadDatabaseDump = async (filename) => {
+  const { data } = await api.get(`/admin/database/dumps/${encodeURIComponent(filename)}`, { responseType: 'blob' });
+  return data;
+};
+
+export const restoreDatabaseDump = async (filename) => {
+  const { data } = await api.post(`/admin/database/dumps/${encodeURIComponent(filename)}/restore`);
+  return data;
+};
+
+export const deleteDatabaseDump = async (filename) => {
+  const { data } = await api.delete(`/admin/database/dumps/${encodeURIComponent(filename)}`);
+  return data;
+};
+
 // --- Autres primes types ---
 export const getOtherPrimesTypes = async () => {
   const { data } = await api.get('/admin/other-primes-types');
