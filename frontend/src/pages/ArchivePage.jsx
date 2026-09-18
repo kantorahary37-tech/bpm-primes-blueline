@@ -1,59 +1,111 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
-import { useCurrencies } from '../contexts/CurrenciesContext';
-import { getBonuses } from '../services/api';
-import { ArrowLeftIcon, ChevronLeftIcon, DownloadIcon } from '../components/Icons';
-
-const PAGE_SIZE = 8;
-
-const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', {
-  day: '2-digit', month: 'short', year: 'numeric',
-});
-
-const typeLetter = (t) => t === 'mensuel' ? 'M' : t === 'astreinte' ? 'A' : t === 'commission' ? 'C' : t === 'commission_gc' ? 'G' : '?';
-
-const typeColor = (t) => {
-  if (t === 'mensuel') return 'bg-blue-50 text-blue-600';
-  if (t === 'astreinte') return 'bg-violet-50 text-violet-600';
-  if (t === 'commission') return 'bg-amber-50 text-amber-600';
-  if (t === 'commission_gc') return 'bg-amber-50 text-amber-700';
-  return 'bg-gray-50 text-gray-600';
-};
+import { getBonuses, getUsers } from '../services/api';
+import { ArrowLeftIcon, DownloadIcon, ChevronLeftIcon } from '../components/Icons';
+import BonusTable from '../components/BonusTable';
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
-function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPages, seeAmounts, symbolFor }) {
-  const deptGroups = (() => {
-    const groups = {};
-    items.forEach(b => {
-      const dept = b.employee?.department || 'Sans département';
-      if (!groups[dept]) groups[dept] = [];
-      groups[dept].push(b);
-    });
-    return Object.keys(groups).sort().map(dept => {
-      const deptItems = groups[dept];
-      const monthMap = {};
-      deptItems.forEach(b => {
-        const ym = b.start_date ? b.start_date.slice(0, 7) : 'inconnu';
-        if (!monthMap[ym]) monthMap[ym] = [];
-        monthMap[ym].push(b);
-      });
-      const months = Object.keys(monthMap).sort().reverse().map(ym => {
-        const [y, m] = ym.split('-');
-        const monthName = new Date(parseInt(y), parseInt(m) - 1)
-          .toLocaleDateString('fr-FF', { month: 'long', year: 'numeric' });
-        return { ym, monthName, items: monthMap[ym] };
-      });
-      return { dept, months };
-    });
-  })();
+const statusLabel = (bonus) => (bonus ? bonus.status : '');
 
-  const PAGE_SIZE_DEPT = 5;
-  const visibleDepts = deptGroups.slice((page - 1) * PAGE_SIZE_DEPT, page * PAGE_SIZE_DEPT);
+const getBadgeClass = (status) => {
+  const map = {
+    'Initialisé': 'bg-orange-100 text-orange-700',
+    'En attente N+2': 'bg-teal-100 text-teal-700',
+    'En attente Directeur': 'bg-purple-100 text-purple-700',
+    'En attente DG': 'bg-amber-100 text-amber-700',
+    'Prime validée': 'bg-emerald-100 text-emerald-700',
+    'Prime rejetée': 'bg-red-100 text-red-700',
+  };
+  return map[status] || 'bg-gray-100 text-gray-600';
+};
 
-  return (
+// Regroupement par mois (même logique que la vue Primes en vue « Date »)
+const groupByMonth = (bonuses) => {
+  const groups = {};
+  bonuses.forEach(b => {
+    const ym = b.start_date ? b.start_date.slice(0, 7) : 'inconnu';
+    if (!groups[ym]) groups[ym] = [];
+    groups[ym].push(b);
+  });
+  return Object.keys(groups).sort().reverse().map(ym => {
+    const [y, m] = ym.split('-');
+    const monthName = ym === 'inconnu'
+      ? 'Inconnu'
+      : new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    return { ym, monthName, items: groups[ym] };
+  });
+};
+
+// Pagination : 2 mois par page, 10 primes affichées par mois (extensible via « Afficher tout »)
+const PAGE_SIZE = 2;
+const PRIMES_PER_MONTH = 10;
+
+const ArchivePage = () => {
+  const { user } = useAuth();
+  const { canSeeAmounts } = useSystemConfig();
+  const seeAmounts = canSeeAmounts(user);
+  const navigate = useNavigate();
+  const [validatedPaid, setValidatedPaid] = useState([]);
+  const [validatedUnpaid, setValidatedUnpaid] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [initiatorMap, setInitiatorMap] = useState(new Map());
+  const [sortBy, setSortBy] = useState('start_date');
+  const [sortDir, setSortDir] = useState('desc');
+  const [pageUnpaid, setPageUnpaid] = useState(1);
+  const [pagePaid, setPagePaid] = useState(1);
+  const [expandedMonths, setExpandedMonths] = useState({});
+
+  const isDG = user?.is_dg && !user?.is_admin && !user?.is_drh;
+
+  useEffect(() => {
+    getUsers()
+      .then((users) => setInitiatorMap(new Map((Array.isArray(users) ? users : []).map((u) => [u.id, u.name]))))
+      .catch(() => setInitiatorMap(new Map()));
+  }, []);
+
+  useEffect(() => {
+    const fetches = [
+      getBonuses(null, null, null, null, null, false, false, true, { sortBy, sortDir }).then(setValidatedUnpaid),
+    ];
+    if (!isDG) {
+      fetches.push(
+        getBonuses(null, null, null, null, null, true, false, true, { sortBy, sortDir }).then(setValidatedPaid)
+      );
+    }
+    Promise.all(fetches)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [isDG, sortBy, sortDir]);
+
+  useEffect(() => { setPageUnpaid(1); }, [sortBy, sortDir, validatedUnpaid.length]);
+  useEffect(() => { setPagePaid(1); }, [sortBy, sortDir, validatedPaid.length]);
+
+  // Mise à jour du tri côté backend (même mécanisme que la vue Primes)
+  const handleTableSort = useCallback((key) => {
+    setSortBy((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDir('asc');
+      return key;
+    });
+  }, []);
+
+  const monthGroupsUnpaid = useMemo(() => groupByMonth(validatedUnpaid), [validatedUnpaid]);
+  const monthGroupsPaid = useMemo(() => groupByMonth(validatedPaid), [validatedPaid]);
+
+  const totalPagesUnpaid = Math.max(1, Math.ceil(monthGroupsUnpaid.length / PAGE_SIZE));
+  const totalPagesPaid = Math.max(1, Math.ceil(monthGroupsPaid.length / PAGE_SIZE));
+  const safePageUnpaid = Math.min(pageUnpaid, totalPagesUnpaid);
+  const safePagePaid = Math.min(pagePaid, totalPagesPaid);
+  const visibleGroupsUnpaid = monthGroupsUnpaid.slice((safePageUnpaid - 1) * PAGE_SIZE, safePageUnpaid * PAGE_SIZE);
+  const visibleGroupsPaid = monthGroupsPaid.slice((safePagePaid - 1) * PAGE_SIZE, safePagePaid * PAGE_SIZE);
+
+  const renderSection = ({ sectionKey, label, badge, badgeColor, groups, safePage, totalPages, setPage, items }) => (
     <div>
       <div className="flex items-center gap-3 mb-3">
         <h2 className="text-lg font-bold text-gray-900">{items.length} {items.length > 1 ? 'primes' : 'prime'} {label}</h2>
@@ -66,52 +118,60 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
         </div>
       ) : (
         <>
-          <div className="space-y-4">
-            {visibleDepts.map(({ dept, months }) => (
-              <div key={dept} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border-b border-gray-200">
-                  <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                  <h3 className="font-semibold text-sm text-blue-800">{dept}</h3>
-                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-blue-200 text-blue-700">{items.filter(b => (b.employee?.department || 'Sans département') === dept).length}</span>
-                </div>
-                <div className="p-2 space-y-2">
-                  {months.map(({ ym, monthName, items: groupItems }) => (
-                    <div key={ym}>
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t-lg bg-gray-50 text-gray-700">
-                        <h4 className="font-medium text-xs">{monthName}</h4>
-                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">{groupItems.length}</span>
-                      </div>
-                      <div className="p-1.5 bg-white rounded-b-lg border border-t-0 border-gray-100">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1">
-                          {groupItems.map(b => (
-                            <Link key={b.id} to={`/bonuses/${b.id}`}
-                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-emerald-300 hover:shadow-sm transition-all group">
-                              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${typeColor(b.bonus_type)}`}>
-                                {typeLetter(b.bonus_type)}
-                              </div>
-                              <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
-                                <span className="font-medium">{b.employee?.name || 'N/A'}</span>
-                              </span>
-                              <span className="text-[10px] font-semibold text-blue-600 shrink-0">{seeAmounts ? `${b.total_amount.toLocaleString('fr-FR')} ${symbolFor(b.employee?.currency)}` : '••••••'}</span>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {groups.map(({ ym, monthName, items: groupItems }) => {
+            const expandKey = `${sectionKey}-${ym}`;
+            const showAll = expandedMonths[expandKey];
+            const visibleItems = showAll ? groupItems : groupItems.slice(0, PRIMES_PER_MONTH);
+            const remaining = groupItems.length - PRIMES_PER_MONTH;
+            return (
+            <div key={ym} className="mb-6">
+              <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
+                <h3 className="font-semibold text-sm">{monthName}</h3>
+                <span className="text-sm font-bold text-blue-600">
+                  {seeAmounts ? `${groupItems.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+                </span>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{groupItems.length}</span>
               </div>
-            ))}
-          </div>
+              <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
+                <BonusTable
+                  bonuses={visibleItems}
+                  getValidStep={() => null}
+                  canSelect={() => false}
+                  selectedBonuses={new Set()}
+                  onToggleSelect={() => {}}
+                  onSelectAll={() => {}}
+                  onClearSelection={() => {}}
+                  seeAmounts={seeAmounts}
+                  initiatorMap={initiatorMap}
+                  onView={(id) => navigate(`/bonuses/${id}`)}
+                  onValidate={() => {}}
+                  onEdit={() => {}}
+                  badgeClass={getBadgeClass}
+                  statusLabel={statusLabel}
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onSort={handleTableSort}
+                  showSelect={false}
+                />
+                {remaining > 0 && (
+                  <button onClick={() => setExpandedMonths(prev => ({ ...prev, [expandKey]: !prev[expandKey] }))}
+                    className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">
+                    {showAll ? 'Réduire' : `Afficher tout (${groupItems.length})`}
+                  </button>
+                )}
+              </div>
+            </div>
+            );
+          })}
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 mt-4">
-              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+              <button disabled={safePage <= 1} onClick={() => setPage(p => p - 1)}
                 className="btn btn-sm btn-ghost text-gray-500 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed">
                 <ChevronLeftIcon className="w-4 h-4" /> Précédent
               </button>
-              <span className="text-xs text-gray-400 font-medium">Page {page} / {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+              <span className="text-xs text-gray-400 font-medium">Page {safePage} / {totalPages}</span>
+              <button disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}
                 className="btn btn-sm btn-ghost text-gray-500 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed">
                 Suivant <ChevronRightIcon />
               </button>
@@ -121,43 +181,6 @@ function BonusSection({ label, badge, badgeColor, items, page, setPage, totalPag
       )}
     </div>
   );
-}
-
-const ArchivePage = () => {
-  const { user } = useAuth();
-  const { canSeeAmounts } = useSystemConfig();
-  const { symbolFor } = useCurrencies();
-  const seeAmounts = canSeeAmounts(user);
-  const [validatedPaid, setValidatedPaid] = useState([]);
-  const [validatedUnpaid, setValidatedUnpaid] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [pagePaid, setPagePaid] = useState(1);
-  const [pageUnpaid, setPageUnpaid] = useState(1);
-
-  const isDG = user?.is_dg && !user?.is_admin && !user?.is_drh;
-  const isDRHOrAdmin = user?.is_admin || user?.is_drh || user?.is_dg;
-
-  useEffect(() => {
-    const fetches = [
-      getBonuses(null, null, null, null, null, false, false, true).then(setValidatedUnpaid),
-    ];
-    if (!isDG) {
-      fetches.push(
-        getBonuses(null, null, null, null, null, true, false, true).then(setValidatedPaid)
-      );
-    }
-    Promise.all(fetches)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [isDG]);
-
-  useEffect(() => { setPageUnpaid(1); }, [validatedUnpaid.length]);
-  useEffect(() => { setPagePaid(1); }, [validatedPaid.length]);
-
-  const deptCountUnpaid = new Set(validatedUnpaid.map(b => b.employee?.department || 'Sans département')).size;
-  const deptCountPaid = new Set(validatedPaid.map(b => b.employee?.department || 'Sans département')).size;
-  const totalUnpaidPages = Math.max(1, Math.ceil(deptCountUnpaid / 5));
-  const totalPaidPages = Math.max(1, Math.ceil(deptCountPaid / 5));
 
   if (loading) {
     return <div className="flex justify-center items-center h-64"><span className="loading loading-spinner loading-lg" /></div>;
@@ -188,31 +211,29 @@ const ArchivePage = () => {
       </div>
 
       <div className={isDG ? '' : 'space-y-8'}>
-        <BonusSection
-          label="en attente de traitement"
-          badge="Validees"
-          badgeColor="bg-green-100 text-green-700"
-          items={validatedUnpaid}
-          page={pageUnpaid}
-          setPage={setPageUnpaid}
-          totalPages={totalUnpaidPages}
-          seeAmounts={seeAmounts}
-          symbolFor={symbolFor}
-        />
+        {renderSection({
+          sectionKey: 'unpaid',
+          label: 'en attente de traitement',
+          badge: 'Validees',
+          badgeColor: 'bg-green-100 text-green-700',
+          groups: visibleGroupsUnpaid,
+          safePage: safePageUnpaid,
+          totalPages: totalPagesUnpaid,
+          setPage: setPageUnpaid,
+          items: validatedUnpaid,
+        })}
 
-        {!isDG && (
-          <BonusSection
-            label="traitées"
-            badge="Traitées"
-            badgeColor="bg-emerald-100 text-emerald-700"
-            items={validatedPaid}
-            page={pagePaid}
-            setPage={setPagePaid}
-            totalPages={totalPaidPages}
-            seeAmounts={seeAmounts}
-            symbolFor={symbolFor}
-          />
-        )}
+        {!isDG && renderSection({
+          sectionKey: 'paid',
+          label: 'traitées',
+          badge: 'Traitées',
+          badgeColor: 'bg-emerald-100 text-emerald-700',
+          groups: visibleGroupsPaid,
+          safePage: safePagePaid,
+          totalPages: totalPagesPaid,
+          setPage: setPagePaid,
+          items: validatedPaid,
+        })}
       </div>
     </div>
   );
