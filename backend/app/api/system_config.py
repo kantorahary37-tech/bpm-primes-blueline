@@ -3,7 +3,7 @@ from tortoise.exceptions import DoesNotExist
 
 from app.auth import get_current_user
 from app.models import User, SystemConfig
-from app.config import get_config, set_config, invalidate_cache, CATEGORY_LABELS
+from app.config import get_config, set_config, invalidate_cache, CATEGORY_LABELS, CONFIG_DEFINITIONS
 from app.schemas import SystemConfigResponse, SystemConfigItem, SystemConfigUpdate, SystemConfigBulkUpdate
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -20,6 +20,12 @@ async def get_system_config(user: User = Depends(get_current_user)):
     rows = await SystemConfig.all()
     categories: dict[str, list[SystemConfigItem]] = {}
     for row in rows:
+        # N'exposer que les paramètres définis dans CONFIG_DEFINITIONS.
+        # Les clés internes de stockage (ex: other_primes_types, géré par
+        # l'onglet « Autres primes ») ne doivent pas apparaître comme menu
+        # dans les Paramètres système.
+        if row.key not in CONFIG_DEFINITIONS:
+            continue
         cat = row.category
         if cat not in categories:
             categories[cat] = []
@@ -50,6 +56,9 @@ async def bulk_update_system_config(body: SystemConfigBulkUpdate, user: User = D
     _require_admin(user)
     updated = []
     for key, value in body.settings.items():
+        # Refuser les clés internes non définies (ex: other_primes_types)
+        if key not in CONFIG_DEFINITIONS:
+            continue
         try:
             row = await SystemConfig.get(key=key)
         except DoesNotExist:
