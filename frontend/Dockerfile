@@ -1,5 +1,5 @@
 # Frontend Dockerfile with Node 22
-FROM node:22-alpine
+FROM node:22.23-alpine
 
 WORKDIR /app
 

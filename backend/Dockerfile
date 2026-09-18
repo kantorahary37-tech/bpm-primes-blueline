@@ -1,5 +1,5 @@
 # Backend Dockerfile (stable)
-FROM python:3.10-bookworm
+FROM python:3.10.18-slim
 
 WORKDIR /app/
 
