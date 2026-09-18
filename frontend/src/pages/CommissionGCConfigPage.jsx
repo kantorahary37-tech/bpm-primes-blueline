@@ -36,7 +36,10 @@ const CommissionGCConfigPage = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const canEdit = user?.is_admin || user?.is_dg || user?.is_drh;
+  // Édition permise pour Admin, DG, DRH et Directeur de la Direction Commerciale
+  const canEdit = user?.is_admin || user?.is_dg || user?.is_drh || (
+    user?.is_directeur && user?.department === 'Direction Commerciale'
+  );
   const fmtAr = (n) => (parseFloat(n) || 0).toLocaleString('fr-FR');
 
   const fetchConfigs = async () => {

@@ -14,19 +14,22 @@ import { adminLdapSyncDepartments } from '../services/api';
 import { SettingsIcon, ChartIcon, ArchiveIcon } from '../components/Icons';
 
 const TABS_ALL = [
-  { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon },
-  { key: 'bareme', label: 'Barème commission', Icon: ChartIcon },
-  { key: 'otherPrimes', label: 'Autres primes', Icon: SettingsIcon },
+  { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { key: 'bareme', label: 'Barème commission', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { key: 'otherPrimes', label: 'Autres primes', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { key: 'affectations', label: 'Affectations', Icon: ArchiveIcon, adminOnly: true },
   { key: 'databaseBackup', label: 'Sauvegardes DB', Icon: ArchiveIcon, adminOnly: true },
-  { key: 'commissionGC', label: 'Commission Grand Compte', Icon: ChartIcon },
+  { key: 'commissionGC', label: 'Commission Grand Compte', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur'] },
   { key: 'system', label: 'Paramètres système', Icon: SettingsIcon, adminOnly: true },
 ];
 
 export default function AdminConfigPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const TABS = TABS_ALL.filter(t => !t.adminOnly || user?.is_admin);
+  const TABS = TABS_ALL.filter(t =>
+    (!t.adminOnly || user?.is_admin) &&
+    (!t.roles || t.roles.some(r => user?.[r]))
+  );
   const initialTab = searchParams.get('tab') || TABS[0]?.key || 'plafonds';
   const [activeTab, setActiveTab] = useState(
     TABS.some(t => t.key === initialTab) ? initialTab : TABS[0]?.key || 'plafonds'

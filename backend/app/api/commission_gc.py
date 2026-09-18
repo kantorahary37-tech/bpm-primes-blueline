@@ -274,6 +274,23 @@ async def get_gc_config() -> Optional[CommissionGCConfig]:
     return await CommissionGCConfig.filter(active=True).order_by('-id').first()
 
 
+# Département dont le Directeur peut gérer la configuration Commission Grand Compte
+COMMISSION_GC_DEPARTMENT = "Direction Commerciale"
+
+
+def can_manage_gc_config(user: User) -> bool:
+    """
+    Droits de modification de la configuration Commission Grand Compte :
+    Admin, DG, DRH, ou Directeur du département Direction Commerciale.
+    """
+    if user.is_admin or user.is_dg or user.is_drh:
+        return True
+    return bool(
+        user.is_directeur
+        and (user.dept_str or '') == COMMISSION_GC_DEPARTMENT
+    )
+
+
 def _build_lines(entry):
     lines = []
     for line in entry['lines'].values():
@@ -433,8 +450,8 @@ async def create_gc_config(
     data: CommissionGCConfigCreate,
     user: User = Depends(get_current_user),
 ):
-    if not (user.is_admin or user.is_dg or user.is_drh):
-        raise HTTPException(403, "Accès réservé aux administrateurs, DG et DRH.")
+    if not can_manage_gc_config(user):
+        raise HTTPException(403, "Accès réservé aux administrateurs, DG, DRH et Directeur Direction Commerciale.")
 
     obj = await CommissionGCConfig.create(**data.dict())
     return obj
@@ -446,8 +463,8 @@ async def update_gc_config(
     data: CommissionGCConfigUpdate,
     user: User = Depends(get_current_user),
 ):
-    if not (user.is_admin or user.is_dg or user.is_drh):
-        raise HTTPException(403, "Accès réservé aux administrateurs, DG et DRH.")
+    if not can_manage_gc_config(user):
+        raise HTTPException(403, "Accès réservé aux administrateurs, DG, DRH et Directeur Direction Commerciale.")
 
     obj = await CommissionGCConfig.get_or_none(id=config_id)
     if not obj:
@@ -462,8 +479,8 @@ async def update_gc_config(
 
 @router.delete("/commission-gc-config/{config_id}")
 async def delete_gc_config(config_id: int, user: User = Depends(get_current_user)):
-    if not (user.is_admin or user.is_dg or user.is_drh):
-        raise HTTPException(403, "Accès réservé aux administrateurs, DG et DRH.")
+    if not can_manage_gc_config(user):
+        raise HTTPException(403, "Accès réservé aux administrateurs, DG, DRH et Directeur Direction Commerciale.")
 
     obj = await CommissionGCConfig.get_or_none(id=config_id)
     if not obj:

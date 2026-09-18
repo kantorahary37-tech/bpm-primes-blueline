@@ -64,7 +64,7 @@ function AppContent() {
       <Route path="/services" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1']}><ServicesPage /></RestrictedRoute>} />
       <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><UsersPage /></RestrictedRoute>} />
       <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><EvaluationTemplatesPage /></RestrictedRoute>} />
-      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh']}><AdminConfigPage /></RestrictedRoute>} />
+      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur']}><AdminConfigPage /></RestrictedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>
   )
