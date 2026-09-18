@@ -16,7 +16,7 @@ export default function OtherPrimesConfigPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ libelle: '', category: '', amount: '', active: true })
+  const [form, setForm] = useState({ libelle: '', category: '', amount: '', active: true, free_amount: false })
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
@@ -37,7 +37,7 @@ export default function OtherPrimesConfigPage() {
   }
 
   const resetForm = () => {
-    setForm({ libelle: '', category: '', amount: '', active: true })
+    setForm({ libelle: '', category: '', amount: '', active: true, free_amount: false })
     setEditingId(null)
     setShowForm(false)
   }
@@ -48,6 +48,7 @@ export default function OtherPrimesConfigPage() {
       category: type.category,
       amount: type.amount,
       active: type.active,
+      free_amount: type.free_amount || false,
     })
     setEditingId(type.id)
     setShowForm(true)
@@ -55,7 +56,7 @@ export default function OtherPrimesConfigPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.libelle.trim() || !form.category.trim() || !form.amount) {
+    if (!form.libelle.trim() || !form.category.trim() || (!form.free_amount && !form.amount)) {
       toast.error('Veuillez remplir tous les champs obligatoires')
       return
     }
@@ -64,8 +65,9 @@ export default function OtherPrimesConfigPage() {
       const payload = {
         libelle: form.libelle.trim(),
         category: form.category.trim(),
-        amount: parseFloat(form.amount),
+        amount: parseFloat(form.amount) || 0,
         active: form.active,
+        free_amount: form.free_amount,
       }
       if (editingId) {
         await updateOtherPrimeType(editingId, payload)
@@ -136,7 +138,7 @@ export default function OtherPrimesConfigPage() {
             <button onClick={resetForm} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
               <div>
                 <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Libellé *</label>
                 <input
@@ -158,15 +160,29 @@ export default function OtherPrimesConfigPage() {
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Montant fixe ({formCurrency}) *</label>
+                <label className="block text-[11px] font-medium text-gray-600 mb-0.5">
+                  {form.free_amount ? `Montant fixe (${formCurrency})` : `Montant fixe (${formCurrency}) *`}
+                </label>
                 <input
                   type="number"
                   min="0"
                   value={form.amount}
+                  disabled={form.free_amount}
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                  placeholder="ex: 10000"
-                  className="w-full px-2 py-1.5 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm"
+                  placeholder={form.free_amount ? 'Saisi librement au formulaire' : 'ex: 10000'}
+                  className="w-full px-2 py-1.5 rounded border border-gray-400 disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm"
                 />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer" title="Si coché, le montant est saisi librement dans le formulaire mensuel au lieu d'être fixé ici">
+                  <input
+                    type="checkbox"
+                    checked={form.free_amount}
+                    onChange={(e) => setForm({ ...form, free_amount: e.target.checked })}
+                    className="checkbox checkbox-sm checkbox-amber"
+                  />
+                  <span className="text-sm text-gray-700">Montant libre</span>
+                </label>
               </div>
               <div className="flex items-end gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -220,7 +236,11 @@ export default function OtherPrimesConfigPage() {
                     </span>
                   </td>
                   <td className="py-2 px-3 text-right font-medium text-brand-600">
-                    {seeAmounts ? `${parseFloat(type.amount).toLocaleString('fr-FR')} ${formCurrency}` : '••••••'}
+                    {type.free_amount ? (
+                      <span className="text-xs text-amber-600 italic">Montant libre</span>
+                    ) : (
+                      seeAmounts ? `${parseFloat(type.amount).toLocaleString('fr-FR')} ${formCurrency}` : '••••••'
+                    )}
                   </td>
                   <td className="py-2 px-3 text-center">
                     <button

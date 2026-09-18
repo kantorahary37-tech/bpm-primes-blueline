@@ -141,6 +141,7 @@ const BonusTable = ({
   sortBy,
   sortDir,
   onSort,
+  showSelect = true,
 }) => {
   const { symbolFor } = useCurrencies();
 
@@ -152,7 +153,7 @@ const BonusTable = ({
 
   const columns = useMemo(() => {
     const columns = [
-      { key: 'select', label: '', sortable: false, align: 'center' },
+      ...(showSelect ? [{ key: 'select', label: '', sortable: false, align: 'center' }] : []),
       { key: 'matricule', label: 'Matricule', sortable: true, sortValue: (b) => b.employee?.matricule ?? '' },
       { key: 'name', label: 'Nom et Prénom', sortable: true, sortValue: (b) => b.employee?.name ?? '' },
       { key: 'note', label: 'Moyenne note', sortable: true, align: 'center', sortValue: (b) => { const n = formatNote(b); return n === '—' ? null : parseFloat(n); } },
@@ -166,7 +167,7 @@ const BonusTable = ({
     ];
 
     return columns;
-  }, [typeCols, initiatorMap]);
+  }, [typeCols, initiatorMap, showSelect]);
 
   const handleSort = (key) => {
     if (!key || !onSort) return;
@@ -240,16 +241,18 @@ const BonusTable = ({
                   selected ? 'bg-blue-50/40' : 'hover:bg-gray-50'
                 }`}
               >
-                <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600"
-                    checked={selected}
-                    disabled={!selectable}
-                    onChange={() => onToggleSelect(bonus.id)}
-                    title={!selectable ? "Seules les primes validées peuvent être sélectionnées" : ''}
-                  />
-                </td>
+                {showSelect && (
+                  <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600"
+                      checked={selected}
+                      disabled={!selectable}
+                      onChange={() => onToggleSelect(bonus.id)}
+                      title={!selectable ? "Seules les primes validées peuvent être sélectionnées" : ''}
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-3 whitespace-nowrap font-mono text-gray-700">{bonus.employee?.matricule || 'N/A'}</td>
                 <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">
                   {bonus.employee?.name || 'N/A'}

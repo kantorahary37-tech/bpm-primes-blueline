@@ -11,6 +11,12 @@ from app.config import get_config, set_config
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 CONFIG_KEY = "other_primes_types"
+SEED_VERSION_KEY = "other_primes_types_seed_version"
+SEED_VERSION = 2
+
+# Types ajoutés après la version 1 (première installation) — version → ids
+# v2 : ajout de la « Prime intérimaire » (montant libre) pour les installations existantes
+NEW_DEFAULTS_BY_VERSION = {2: [13]}
 
 DEFAULT_OTHER_PRIMES = [
     {"id": 1, "libelle": "Prime d'installation", "category": "wireless", "amount": 10000, "active": True},
@@ -25,15 +31,59 @@ DEFAULT_OTHER_PRIMES = [
     {"id": 10, "libelle": "Prime de transport", "category": "transport", "amount": 0, "active": True},
     {"id": 11, "libelle": "Prime de repas", "category": "alimentation", "amount": 0, "active": True},
     {"id": 12, "libelle": "Prime de risque", "category": "sécurité", "amount": 0, "active": True},
+    {"id": 13, "libelle": "Prime intérimaire", "category": "intérim", "amount": 0, "active": True, "free_amount": True},
 ]
 
 
-def _load_types() -> list:
+async def _save_seed_version():
+    """Persiste la version de seed dans SystemConfig (cache + DB)."""
+    value = str(SEED_VERSION)
+    set_config(SEED_VERSION_KEY, value)
+    try:
+        row = await SystemConfig.get_or_none(key=SEED_VERSION_KEY)
+        if row:
+            row.value = value
+            await row.save()
+        else:
+            await SystemConfig.create(
+                key=SEED_VERSION_KEY,
+                value=value,
+                category="primes",
+                description="Version de seed des types d'autres primes",
+            )
+    except Exception:
+        pass
+
+
+async def _ensure_new_defaults(types: list) -> list:
+    """Ajoute une seule fois (et PERSISTE) les nouveaux types par défaut
+    introduits après la première installation (ex : Prime intérimaire).
+    Une suppression manuelle ultérieure par l'admin reste définitive
+    (version de seed mémorisée en DB)."""
+    try:
+        version = int(get_config(SEED_VERSION_KEY) or 1)
+    except (TypeError, ValueError):
+        version = 1
+    if version >= SEED_VERSION:
+        return types
+    existing_ids = {t.get("id") for t in types}
+    # On n'ajoute que les types introduits par les versions supérieures à la
+    # version courante, pour ne pas ressusciter d'anciens types supprimés.
+    new_ids = {tid for v, ids in NEW_DEFAULTS_BY_VERSION.items() if v > version for tid in ids}
+    to_add = [t for t in DEFAULT_OTHER_PRIMES if t["id"] in new_ids and t["id"] not in existing_ids]
+    if to_add:
+        types = types + to_add
+        await _save_types(types)  # persistance immédiate
+    await _save_seed_version()
+    return types
+
+
+async def _load_types() -> list:
     """Load other primes types from SystemConfig."""
     raw = get_config(CONFIG_KEY)
     if raw:
         try:
-            return json.loads(raw)
+            return await _ensure_new_defaults(json.loads(raw))
         except (json.JSONDecodeError, TypeError):
             pass
     return []
@@ -67,6 +117,9 @@ class OtherPrimeTypeCreate(BaseModel):
     category: str
     amount: float
     active: bool = True
+    # Montant libre : le montant n'est pas défini en config, l'utilisateur saisit
+    # librement la valeur dans le formulaire mensuel.
+    free_amount: bool = False
 
 
 class OtherPrimeTypeUpdate(BaseModel):
@@ -74,6 +127,7 @@ class OtherPrimeTypeUpdate(BaseModel):
     category: Optional[str] = None
     amount: Optional[float] = None
     active: Optional[bool] = None
+    free_amount: Optional[bool] = None
 
 
 def _require_admin(user: User):
@@ -84,7 +138,7 @@ def _require_admin(user: User):
 @router.get("/other-primes-types")
 async def get_other_primes_types(user: User = Depends(get_current_user)):
     """Get all other primes types (active only for non-admin users)."""
-    types = _load_types()
+    types = await _load_types()
     if not types:
         # Seed defaults if empty
         types = DEFAULT_OTHER_PRIMES.copy()
@@ -98,7 +152,7 @@ async def get_other_primes_types(user: User = Depends(get_current_user)):
 async def get_all_other_primes_types(user: User = Depends(get_current_user)):
     """Get all other primes types including inactive ones (admin only)."""
     _require_admin(user)
-    types = _load_types()
+    types = await _load_types()
     if not types:
         types = DEFAULT_OTHER_PRIMES.copy()
         await _save_types(types)
@@ -109,7 +163,7 @@ async def get_all_other_primes_types(user: User = Depends(get_current_user)):
 async def create_other_prime_type(data: OtherPrimeTypeCreate, user: User = Depends(get_current_user)):
     """Create a new other primes type (admin only)."""
     _require_admin(user)
-    types = _load_types()
+    types = await _load_types()
     if not types:
         types = DEFAULT_OTHER_PRIMES.copy()
 
@@ -121,6 +175,7 @@ async def create_other_prime_type(data: OtherPrimeTypeCreate, user: User = Depen
         "category": data.category.strip(),
         "amount": data.amount,
         "active": data.active,
+        "free_amount": data.free_amount,
     }
     types.append(new_type)
     await _save_types(types)
@@ -131,7 +186,7 @@ async def create_other_prime_type(data: OtherPrimeTypeCreate, user: User = Depen
 async def update_other_prime_type(type_id: int, data: OtherPrimeTypeUpdate, user: User = Depends(get_current_user)):
     """Update an other primes type (admin only)."""
     _require_admin(user)
-    types = _load_types()
+    types = await _load_types()
     if not types:
         raise HTTPException(404, "Aucun type configuré.")
 
@@ -146,6 +201,8 @@ async def update_other_prime_type(type_id: int, data: OtherPrimeTypeUpdate, user
                 t["amount"] = data.amount
             if data.active is not None:
                 t["active"] = data.active
+            if data.free_amount is not None:
+                t["free_amount"] = data.free_amount
             found = True
             break
 
@@ -160,7 +217,7 @@ async def update_other_prime_type(type_id: int, data: OtherPrimeTypeUpdate, user
 async def delete_other_prime_type(type_id: int, user: User = Depends(get_current_user)):
     """Delete an other primes type (admin only)."""
     _require_admin(user)
-    types = _load_types()
+    types = await _load_types()
     if not types:
         raise HTTPException(404, "Aucun type configuré.")
 

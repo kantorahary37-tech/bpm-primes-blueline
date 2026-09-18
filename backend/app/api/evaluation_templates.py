@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.models import User, Employee, EvaluationTemplate, ServiceGroup
 from app.auth import get_current_user
+from app.permissions import n1_service_group_ids
 from app.schemas import (
     EvaluationTemplateSaveRequest,
     EvaluationTemplateResponse,
@@ -49,6 +50,34 @@ def _scoped_director(user: User) -> bool:
     return bool(user.is_directeur) and not (user.is_admin or user.is_dg or user.is_drh)
 
 
+def _is_broad(user: User) -> bool:
+    """Rôle à portée globale : voit tous les employés/services."""
+    return user.is_admin or user.is_dg or user.is_drh
+
+
+def _can_view_evaluation(user: User) -> bool:
+    """Rôles autorisés à consulter la page Évaluation."""
+    return _is_broad(user) or user.is_directeur or user.is_validator_n1 or user.is_validator_n2
+
+
+async def _can_edit_employee_evaluation(user: User, emp: Employee) -> bool:
+    """Périmètre d'édition d'un employé : comme la consultation des primes.
+    - admin/DG/DRH : tous ;
+    - directeur/N2 : son département ;
+    - N1 : ses services affectés dans son département (fallback : tout son
+      département s'il n'a aucune affectation, comme pour les primes)."""
+    if _is_broad(user):
+        return True
+    if user.is_directeur or user.is_validator_n2:
+        return emp.department == user.department
+    if user.is_validator_n1:
+        if emp.department != user.department:
+            return False
+        sg_ids = await n1_service_group_ids(user)
+        return sg_ids is None or emp.service_group_id in sg_ids
+    return False
+
+
 @router.get("/evaluation-templates", response_model=EvaluationTemplateResponse)
 async def get_evaluation_templates(employee_id: int, user: User = Depends(get_current_user)):
     emp = await Employee.filter(id=employee_id).first()
@@ -91,8 +120,8 @@ async def save_evaluation_templates(
     if not emp:
         raise HTTPException(404, "Employe introuvable")
 
-    if _scoped_director(user) and emp.department != user.department:
-        raise HTTPException(403, "Ce directeur ne peut évaluer que les employés de son département")
+    if not await _can_edit_employee_evaluation(user, emp):
+        raise HTTPException(403, "Vous ne pouvez modifier que les evaluations de votre périmètre (département/service)")
 
     await EvaluationTemplate.filter(employee_id=emp.id).delete()
 
@@ -127,10 +156,13 @@ async def apply_service_group_evaluation(
     data: ServiceGroupEvaluationRequest,
     user: User = Depends(get_current_user),
 ):
-    if not (user.is_admin or user.is_directeur):
-        raise HTTPException(403, "Acces reserve aux administrateurs ou directeurs")
+    if not _can_view_evaluation(user):
+        raise HTTPException(403, "Acces reserve aux administrateurs et validateurs")
 
     if data.service_group_id is None:
+        # « Sans service » : réservé aux rôles globaux et directeurs (périmètre département)
+        if not (_is_broad(user) or user.is_directeur):
+            raise HTTPException(403, "Acces non autorise pour ce role")
         query = Employee.filter(is_active=True, service_group_id__isnull=True)
         if _scoped_director(user):
             query = query.filter(dept_str=user.dept_str)
@@ -140,8 +172,19 @@ async def apply_service_group_evaluation(
         group = await ServiceGroup.filter(id=data.service_group_id).prefetch_related("department").first()
         if not group:
             raise HTTPException(404, "Service introuvable")
-        if _scoped_director(user) and group.department.name != user.department:
+
+        # Périmètre : N1 limité à ses services affectés, N2/directeur à leur département
+        if user.is_validator_n1 and not _is_broad(user):
+            sg_ids = await n1_service_group_ids(user)
+            if sg_ids is not None and group.id not in sg_ids:
+                raise HTTPException(403, "Vous ne pouvez évaluer que vos services affectés")
+            if not sg_ids and group.department.name != user.department:
+                raise HTTPException(403, "Vous ne pouvez évaluer que les services de votre département")
+        elif user.is_validator_n2 and not _is_broad(user) and group.department.name != user.department:
+            raise HTTPException(403, "Vous ne pouvez évaluer que les services de votre département")
+        elif _scoped_director(user) and group.department.name != user.department:
             raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations des services de son département")
+
         employees = await Employee.filter(is_active=True, service_group=group)
         group_name = group.name
 
@@ -182,13 +225,28 @@ async def apply_service_group_evaluation(
 
 @router.get("/evaluation-templates/all")
 async def get_all_templates(user: User = Depends(get_current_user)):
-    if not (user.is_admin or user.is_directeur):
-        raise HTTPException(403, "Acces reserve aux administrateurs")
+    if not _can_view_evaluation(user):
+        raise HTTPException(403, "Acces reserve aux administrateurs et validateurs")
 
-    employees = await Employee.filter(is_active=True).prefetch_related("service_group").order_by("name")
-    if _scoped_director(user):
+    if _is_broad(user):
+        employees = await Employee.filter(is_active=True).prefetch_related("service_group").order_by("name")
+    elif user.is_directeur or user.is_validator_n2:
         employees = await Employee.filter(is_active=True, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
+    else:
+        # N1 : ses services affectés ; fallback département si aucune affectation
+        sg_ids = await n1_service_group_ids(user)
+        if sg_ids:
+            employees = await Employee.filter(is_active=True, service_group_id__in=sg_ids).prefetch_related("service_group").order_by("name")
+        else:
+            employees = await Employee.filter(is_active=True, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
     result = []
+
+    # Cache service_group_id → nom pour éviter une requête par employé
+    all_sg_ids = {e.service_group_id for e in employees if e.service_group_id}
+    sg_names = {
+        sg.id: sg.name
+        for sg in await ServiceGroup.filter(id__in=list(all_sg_ids))
+    } if all_sg_ids else {}
 
     for emp in employees:
         rows = await EvaluationTemplate.filter(employee_id=emp.id).order_by("sort_order")
@@ -205,7 +263,8 @@ async def get_all_templates(user: User = Depends(get_current_user)):
             "employee_name": emp.name,
             "matricule": emp.matricule,
             "department": emp.department or "",
-            "service_group": emp.service_group.name if emp.service_group else "",
+            "service_group": sg_names.get(emp.service_group_id, ""),
+            "service_group_id": emp.service_group_id,
             "quantitative": quanti if quanti else [DEFAULT_QUANTI[i] | {"id": None} for i in range(len(DEFAULT_QUANTI))],
             "qualitative": quali if quali else [DEFAULT_QUALI[i] | {"id": None} for i in range(len(DEFAULT_QUALI))],
             "is_default": not rows,
@@ -216,17 +275,16 @@ async def get_all_templates(user: User = Depends(get_current_user)):
 
 @router.delete("/evaluation-templates/{template_id}")
 async def delete_template(template_id: int, user: User = Depends(get_current_user)):
-    if not (user.is_admin or user.is_directeur):
-        raise HTTPException(403, "Acces reserve aux administrateurs ou directeurs")
+    if not _can_view_evaluation(user):
+        raise HTTPException(403, "Acces reserve aux administrateurs et validateurs")
 
     tpl = await EvaluationTemplate.filter(id=template_id).first()
     if not tpl:
         raise HTTPException(404, "Critere introuvable")
 
-    if _scoped_director(user):
-        emp = await Employee.filter(id=tpl.employee_id).first()
-        if not emp or emp.department != user.department:
-            raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations de son département")
+    emp = await Employee.filter(id=tpl.employee_id).first()
+    if not await _can_edit_employee_evaluation(user, emp):
+        raise HTTPException(403, "Vous ne pouvez modifier que les evaluations de votre périmètre (département/service)")
 
     await tpl.delete()
     return {"message": "Critere supprime"}
@@ -234,15 +292,15 @@ async def delete_template(template_id: int, user: User = Depends(get_current_use
 
 @router.delete("/evaluation-templates/employee/{employee_id}")
 async def delete_all_employee_templates(employee_id: int, user: User = Depends(get_current_user)):
-    if not (user.is_admin or user.is_directeur):
-        raise HTTPException(403, "Acces reserve aux administrateurs ou directeurs")
+    if not _can_view_evaluation(user):
+        raise HTTPException(403, "Acces reserve aux administrateurs et validateurs")
 
     emp = await Employee.filter(id=employee_id).first()
     if not emp:
         raise HTTPException(404, "Employe introuvable")
 
-    if _scoped_director(user) and emp.department != user.department:
-        raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations de son département")
+    if not await _can_edit_employee_evaluation(user, emp):
+        raise HTTPException(403, "Vous ne pouvez modifier que les evaluations de votre périmètre (département/service)")
 
     count = await EvaluationTemplate.filter(employee_id=emp.id).delete()
     return {"message": f"{count} critere(s) supprime(s)"}

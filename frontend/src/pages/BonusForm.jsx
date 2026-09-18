@@ -230,6 +230,13 @@ export default function BonusForm() {
   const otherBase = (o) => parseFloat(o.montant) || 0
   const otherTotal = (o) => otherBase(o) * otherJour(o)
   const othersTotal = others.reduce((sum, o) => sum + otherTotal(o), 0)
+  // Prime intérimaire (type à montant libre) : elle ne concerne QUE l'employé
+  // sélectionné en haut — on masque « Appliquer ce modèle à » dans ce cas.
+  const hasFreeAmountType = others.some(o => otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount)
+
+  useEffect(() => {
+    if (hasFreeAmountType && teamSelections.length > 0) setTeamSelections([])
+  }, [hasFreeAmountType])
 
   const handleImportExcel = async (e) => {
     const file = e.target.files?.[0]
@@ -912,7 +919,7 @@ export default function BonusForm() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const allEmpIds = [selectedEmp?.id, ...teamSelections].filter(Boolean)
+    const allEmpIds = [selectedEmp?.id, ...(hasFreeAmountType ? [] : teamSelections)].filter(Boolean)
     const badDept = allEmpIds.some(id => {
       const e = employees.find(x => x.id === id)
       return e && !BONUS_TYPE_DEPARTMENTS.mensuel.includes(e.department)
@@ -2426,6 +2433,7 @@ export default function BonusForm() {
                 <div className="w-full sm:flex-1 min-w-0">
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Type de prime *</label>
                   <select
+                    title={otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount ? 'Type à montant libre : saisissez le montant' : ''}
                     value={o.selectedTypeId || ''}
                     onChange={(e) => {
                       const typeId = e.target.value
@@ -2433,7 +2441,8 @@ export default function BonusForm() {
                       if (selected) {
                         updateOther(o.key, 'selectedTypeId', selected.id)
                         updateOther(o.key, 'libelle', `${selected.libelle} - ${selected.category}`)
-                        updateOther(o.key, 'montant', selected.amount)
+                        // Type à montant libre : on ne pré-remplit pas, l'utilisateur saisit son montant
+                        updateOther(o.key, 'montant', selected.free_amount ? 0 : selected.amount)
                       } else {
                         updateOther(o.key, 'selectedTypeId', '')
                         updateOther(o.key, 'libelle', '')
@@ -2454,16 +2463,16 @@ export default function BonusForm() {
                     className="w-full px-2 py-1 rounded border border-gray-400 text-center focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
                 </div>
                 <div className="w-full sm:w-40 shrink-0">
-                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant ({formCurrency})</label>
-                  {o.selectedTypeId ? (
-                    <input type="text" value={`${otherTotal(o).toLocaleString('fr-FR')} ${formCurrency}`} readOnly
-                      title={`Montant de base × ${otherJour(o)} jour(s)`}
-                      className="w-full px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-600 text-sm font-medium cursor-not-allowed" />
-                  ) : (
-                    <input type="number" min="0" value={otherTotal(o)} onChange={(e) => updateOther(o.key, 'montant', (parseFloat(e.target.value) || 0) / otherJour(o))}
-                      title={`Montant total = montant de base × ${otherJour(o)} jour(s)`}
-                      className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
-                  )}
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">
+                    Montant ({formCurrency}){o.selectedTypeId && !otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount ? '' : ' (libre)'}
+                  </label>
+                  <input type="number" min="0" value={otherTotal(o)} onChange={(e) => updateOther(o.key, 'montant', (parseFloat(e.target.value) || 0) / otherJour(o))}
+                    title={o.selectedTypeId
+                      ? (otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount
+                        ? `Montant libre — total = montant saisi × ${otherJour(o)} jour(s)`
+                        : `Montant pré-rempli depuis la config, modifiable — total = montant × ${otherJour(o)} jour(s)`)
+                      : `Montant total = montant de base × ${otherJour(o)} jour(s)`}
+                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
                 </div>
               </div>
               {/* --- Ligne 2 : type de versement + dates + pièce jointe, tout sur une ligne --- */}
@@ -2565,30 +2574,32 @@ export default function BonusForm() {
 
         <div className="card-blueline p-4 mt-5 border-l-4 border-l-blue-500 bg-blue-50/40">
           <div className="space-y-2">
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-1">Appliquer ce modèle à :</label>
-              {!selectedEmp ? (
-                <p className="text-xs text-base-content/40">Sélectionnez d'abord un employé.</p>
-              ) : sameDeptEmployees.length === 0 ? (
-                <p className="text-xs text-base-content/40">Aucun autre employé dans le même département.</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {sameDeptEmployees.map(e => (
-                    <button key={e.id} type="button" onClick={() => toggleTeamMember(e.id)}
-                      className={`px-2.5 py-1 rounded-lg border text-xs transition-all ${
-                        teamSelections.includes(e.id)
-                          ? 'bg-brand-600 text-white border-brand-600'
-                          : 'bg-white text-base-content/70 border-base-300 hover:border-brand-300'
-                      }`}>
-                      {e.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {teamSelections.length > 0 && (
-                <p className="text-xs text-brand-600 mt-1">{teamSelections.length} employé(s) sélectionné(s)</p>
-              )}
-            </div>
+            {!hasFreeAmountType && (
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Appliquer ce modèle à :</label>
+                {!selectedEmp ? (
+                  <p className="text-xs text-base-content/40">Sélectionnez d'abord un employé.</p>
+                ) : sameDeptEmployees.length === 0 ? (
+                  <p className="text-xs text-base-content/40">Aucun autre employé dans le même département.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {sameDeptEmployees.map(e => (
+                      <button key={e.id} type="button" onClick={() => toggleTeamMember(e.id)}
+                        className={`px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                          teamSelections.includes(e.id)
+                            ? 'bg-brand-600 text-white border-brand-600'
+                            : 'bg-white text-base-content/70 border-base-300 hover:border-brand-300'
+                        }`}>
+                        {e.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {teamSelections.length > 0 && (
+                  <p className="text-xs text-brand-600 mt-1">{teamSelections.length} employé(s) sélectionné(s)</p>
+                )}
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-base-content/70 mb-0.5">Observations générales</label>
               <textarea value={observation} onChange={(e) => setObservation(e.target.value)} rows={2}
