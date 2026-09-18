@@ -584,10 +584,6 @@ export default function BonusForm() {
     setter([...list, { criteria, description: '', coeff: 0, note: 0, value: 0 }])
   }
 
-  const handleConfigChange = (field, value) => {
-    setAstreinteConfig({ ...astreinteConfig, [field]: value })
-  }
-
   const handleSaveTemplate = async () => {
     if (!selectedEmp?.id) return
     setSavingTemplate(true)
@@ -1195,8 +1191,9 @@ export default function BonusForm() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime max / semaine (Ar)</label>
-                <input type="number" value={astreinteConfig.weeklyMax} onChange={(e) => handleConfigChange('weeklyMax', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-base-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+                <input type="number" value={astreinteConfig.weeklyMax} readOnly
+                  className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60 cursor-not-allowed" />
+                <p className="text-[11px] text-base-content/40 mt-0.5">Modifiable dans la page Plafonds</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-base-content/70 mb-0.5">Nombre de semaines</label>
