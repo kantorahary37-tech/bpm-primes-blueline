@@ -169,7 +169,7 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
 
 
 BATCH_TYPE_LABELS = {
-    "mensuel": "Mensuelle", "astreinte": "Astreinte", "commission": "Commission",
+    "mensuel": "Mensuelle", "astreinte": "Astreinte", "commission": "Commission GP",
     "commission_gc": "Commission Grand Compte", "commission_entreprise": "Commission Entreprise",
     "intervention": "Intervention", "ponctuelle": "Ponctuelle", "exceptionnel": "Exceptionnelle",
 }

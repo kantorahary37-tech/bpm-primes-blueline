@@ -463,7 +463,7 @@ const [filterMonth, setFilterMonth] = useState('');
           <option value="">Tous types</option>
           <option value="mensuel">Mensuelle</option>
           <option value="astreinte">Astreinte</option>
-          <option value="commission">Commission</option>
+          <option value="commission">Commission GP</option>
           <option value="commission_gc">Commission GC</option>
         </select>
         {/* Filtre statut : limité aux statuts autorisés du rôle */}

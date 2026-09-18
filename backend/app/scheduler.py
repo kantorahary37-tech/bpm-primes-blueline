@@ -14,7 +14,7 @@ from app.config import get_config
 router = APIRouter()
 
 TYPE_LABELS = {
-    "mensuel": "Prime mensuelle", "astreinte": "Astreinte", "commission": "Commission",
+    "mensuel": "Prime mensuelle", "astreinte": "Astreinte", "commission": "Commission GP",
     "commission_gc": "Commission Grand Compte",
     "commission_entreprise": "Commission Entreprise",
     "intervention": "Intervention", "ponctuelle": "Ponctuelle", "exceptionnel": "Exceptionnelle",

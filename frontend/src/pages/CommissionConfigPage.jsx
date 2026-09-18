@@ -125,7 +125,7 @@ const CommissionConfigPage = () => {
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Barème des Commissions</h1>
+          <h1 className="text-xl font-bold text-gray-900">Barème des Commissions GP</h1>
           <p className="text-sm text-gray-400">
             Produits, taux (Ar/vente) et objectifs utilisés pour le calcul des primes commission (import CSV 4D)
           </p>

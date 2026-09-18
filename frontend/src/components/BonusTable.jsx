@@ -44,7 +44,7 @@ const noteColor = (v) => {
 const TYPE_LABELS = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
-  commission: 'Commission',
+  commission: 'Commission GP',
   commission_gc: 'Commission GC',
   commission_entreprise: 'Commission Entreprise',
 };

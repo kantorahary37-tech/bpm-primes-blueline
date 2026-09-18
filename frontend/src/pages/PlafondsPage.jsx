@@ -9,7 +9,7 @@ import Modal from '../components/Modal';
 const ALL_TYPES = [
   { value: 'mensuel', label: 'Mensuel' },
   { value: 'astreinte', label: 'Astreinte' },
-  { value: 'commission', label: 'Commission' },
+  { value: 'commission', label: 'Commission GP' },
   { value: 'intervention', label: 'Intervention' },
   { value: 'ponctuelle', label: 'Ponctuelle' },
   { value: 'exceptionnel', label: 'Exceptionnelle' },

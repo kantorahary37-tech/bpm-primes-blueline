@@ -25,8 +25,8 @@ const typeColors = {
 }
 
 const typeLabel = (t) => t === 'commission_gc'
-  ? 'Commission Grand Compte'
-  : (typeIcons[t] ? ['Mensuelle', 'Astreinte', 'Commission'][['mensuel', 'astreinte', 'commission'].indexOf(t)] : t)
+  ? 'Commission GC'
+  : (typeIcons[t] ? ['Mensuelle', 'Astreinte', 'Commission GP'][['mensuel', 'astreinte', 'commission'].indexOf(t)] : t)
 
 const EXPORT_COLUMNS = {
   common: [
@@ -776,7 +776,7 @@ const BonusDetail = () => {
           {(EXPORT_COLUMNS[bonus?.bonus_type] || []).length > 0 && (
             <div className="space-y-1">
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1">
-                {bonus?.bonus_type === 'mensuel' ? 'Mensuel' : bonus?.bonus_type === 'astreinte' ? 'Astreinte' : 'Commission'}
+                {bonus?.bonus_type === 'mensuel' ? 'Mensuel' : bonus?.bonus_type === 'astreinte' ? 'Astreinte' : 'Commission GP'}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {EXPORT_COLUMNS[bonus?.bonus_type].map(col => {

@@ -15,11 +15,11 @@ import { SettingsIcon, ChartIcon, ArchiveIcon } from '../components/Icons';
 
 const TABS_ALL = [
   { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
-  { key: 'bareme', label: 'Barème commission', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
+  { key: 'bareme', label: 'Barème Commission GP', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { key: 'otherPrimes', label: 'Autres primes', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { key: 'affectations', label: 'Affectations', Icon: ArchiveIcon, adminOnly: true },
   { key: 'databaseBackup', label: 'Sauvegardes DB', Icon: ArchiveIcon, adminOnly: true },
-  { key: 'commissionGC', label: 'Commission Grand Compte', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur'] },
+  { key: 'commissionGC', label: 'Commission GC', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur'] },
   { key: 'system', label: 'Paramètres système', Icon: SettingsIcon, adminOnly: true },
 ];
 

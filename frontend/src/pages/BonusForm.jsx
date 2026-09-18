@@ -1236,7 +1236,7 @@ export default function BonusForm() {
           </button>
           <button type="button" onClick={() => setCommSubType('gc')}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${commSubType === 'gc' ? 'bg-brand-600 text-white' : 'text-base-content/70 hover:text-base-content'}`}>
-            Entreprise / Grand Compte
+            Prime Commission GC
           </button>
         </div>
       </div>
@@ -1253,7 +1253,7 @@ export default function BonusForm() {
           <div className="page-container !px-2 max-w-full">
             <div className="flex items-center gap-3 mb-6">
               <Link to={`/bonuses/${id}`} className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-              <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission Entreprise / Grand Compte</h1><p className="text-sm text-base-content/50">Prime commission (import CSV grand compte)</p></div></div>
+              <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission GC</h1><p className="text-sm text-base-content/50">Prime commission GC (import CSV grand compte)</p></div></div>
             </div>
             {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
             <form onSubmit={handleSubmitCommissionEditGC} className="space-y-3">
@@ -1349,7 +1349,7 @@ export default function BonusForm() {
         <div className="page-container !px-2 max-w-full">
           <div className="flex items-center gap-3 mb-6">
             <Link to={`/bonuses/${id}`} className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-            <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Prime commission (import CSV 4D)</p></div></div>
+            <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission GP</h1><p className="text-sm text-base-content/50">Prime commission GP (import CSV 4D)</p></div></div>
           </div>
           {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
           <form onSubmit={handleSubmitCommissionEdit} className="space-y-3">
@@ -1408,7 +1408,7 @@ export default function BonusForm() {
         <div className="page-container !px-2 max-w-full">
           <div className="flex items-center gap-3 mb-6">
             <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-            <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Calcul à partir des ventes Entreprise / Grand Compte</p></div></div>
+            <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission GC</h1><p className="text-sm text-base-content/50">Calcul à partir des ventes Entreprise / Grand Compte</p></div></div>
           </div>
           {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
           {commTypeSelector}
@@ -1520,7 +1520,7 @@ export default function BonusForm() {
                           <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Total (MRC+FMS)</th>
                           <th className="text-center py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">MRC %</th>
                           <th className="text-center py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">FMS %</th>
-                          <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Commission</th>
+                          <th className="text-right py-2 px-3 font-medium text-gray-600 text-xs uppercase tracking-wider">Commission GC</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1628,7 +1628,7 @@ export default function BonusForm() {
       <div className="page-container !px-2 max-w-full">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/bonuses/new" className="p-2 rounded-lg hover:bg-base-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></Link>
-          <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission</h1><p className="text-sm text-base-content/50">Calcul à partir du fichier CSV 4D des ventes</p></div></div>
+          <div className="flex items-center gap-2"><ChartIcon className="w-6 h-6 text-blue-600" /><div><h1 className="page-title">Prime Commission GP</h1><p className="text-sm text-base-content/50">Calcul à partir du fichier CSV 4D des ventes</p></div></div>
         </div>
         {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-3 flex items-center gap-2"><ExclamationIcon className="w-4 h-4" />{error}</div>}
         {commTypeSelector}

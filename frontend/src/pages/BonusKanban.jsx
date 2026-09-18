@@ -11,7 +11,7 @@ const STATUS_COLUMNS = ['Initialisé', 'En attente N+2', 'En attente Directeur',
 const typeLabels = {
   mensuel: 'Mensuelle',
   astreinte: 'Astreinte',
-  commission: 'Commission',
+  commission: 'Commission GP',
   commission_gc: 'Commission GC',
 };
 

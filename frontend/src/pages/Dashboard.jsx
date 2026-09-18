@@ -86,7 +86,7 @@ const Dashboard = () => {
 
   const { monthlyData, donutData, monthLabels } = useMemo(() => {
     const colors = { mensuel: '#2563eb', astreinte: '#7c3aed', commission: '#d97706', commission_gc: '#b45309', inconnu: '#9ca3af' };
-    const labels = { mensuel: 'Mensuel', astreinte: 'Astreinte', commission: 'Commission', commission_gc: 'Commission GC', inconnu: '?' };
+    const labels = { mensuel: 'Mensuel', astreinte: 'Astreinte', commission: 'Commission GP', commission_gc: 'Commission GC', inconnu: '?' };
 
     const now = new Date();
     const months = [];
@@ -111,7 +111,7 @@ const Dashboard = () => {
       name: m.label,
       Mensuel: m.count.mensuel,
       Astreinte: m.count.astreinte,
-      Commission: m.count.commission,
+      'Commission GP': m.count.commission,
       'Commission GC': m.count.commission_gc,
     }));
 
@@ -218,7 +218,7 @@ const Dashboard = () => {
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="Mensuel" stackId="a" fill="#2563eb" />
                 <Bar dataKey="Astreinte" stackId="a" fill="#7c3aed" />
-                <Bar dataKey="Commission" stackId="a" fill="#d97706" />
+                <Bar dataKey="Commission GP" stackId="a" fill="#d97706" />
                 <Bar dataKey="Commission GC" stackId="a" fill="#b45309" />
               </BarChart>
             </ResponsiveContainer>
