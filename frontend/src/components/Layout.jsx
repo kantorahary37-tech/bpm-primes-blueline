@@ -7,8 +7,12 @@ import { DashboardIcon, EmployeesIcon, BonusesIcon, SettingsIcon, MenuIcon, XMar
 const mainNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: DashboardIcon, desc: 'Vue d\'ensemble et statistiques' },
   { path: '/employees', label: 'Employés', icon: EmployeesIcon, desc: 'Gestion du personnel et LDAP' },
-  { path: '/services', label: 'Services', icon: FolderIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1'], desc: 'Services des employés par département' },
   { path: '/bonuses', label: 'Primes', icon: BonusesIcon, desc: 'Suivi et validation des primes' },
+]
+
+// Menu déroulant regroupant Services, Flux et Plafonds pour alléger la barre de navigation
+const serviceNavItems = [
+  { path: '/services', label: 'Services', icon: FolderIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1'], desc: 'Services des employés par département' },
   { path: '/bonuses/flows', label: 'Flux', icon: ChartIcon, desc: 'Flux de validation des primes' },
   { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true, desc: 'Configuration des plafonds' },
 ]
@@ -20,11 +24,19 @@ const adminNavItems = [
   { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin', 'is_directeur'], desc: 'Gestion des comptes utilisateurs' },
 ]
 
-function visibleMainItems(user) {
-  return mainNavItems.filter(item =>
+function filterNavItems(items, user) {
+  return items.filter(item =>
     !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_validator_n1)) &&
     (!item.roles || item.roles.some(r => user?.[r]))
   )
+}
+
+function visibleMainItems(user) {
+  return filterNavItems(mainNavItems, user)
+}
+
+function visibleServiceItems(user) {
+  return filterNavItems(serviceNavItems, user)
 }
 
 function visibleAdminItems(user) {
@@ -64,12 +76,16 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [serviceOpen, setServiceOpen] = useState(false)
   const [serviceAssignments, setServiceAssignments] = useState([])
   const menuRef = useRef(null)
   const adminRef = useRef(null)
+  const serviceRef = useRef(null)
 
   const adminItems = visibleAdminItems(user)
   const adminActive = adminItems.some(item => isActive(pathname, item.path))
+  const serviceItems = visibleServiceItems(user)
+  const serviceActive = serviceItems.some(item => isActive(pathname, item.path))
 
   useEffect(() => {
     if (user?.is_validator_n1) {
@@ -81,6 +97,7 @@ export default function Layout({ children }) {
     const handleClick = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setUserMenuOpen(false)
       if (adminRef.current && !adminRef.current.contains(e.target)) setAdminOpen(false)
+      if (serviceRef.current && !serviceRef.current.contains(e.target)) setServiceOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -121,6 +138,47 @@ export default function Layout({ children }) {
                     </Link>
                   )
                 })}
+                {serviceItems.length > 0 && (
+                  <div className="relative" ref={serviceRef}>
+                    <button
+                      onClick={() => setServiceOpen(!serviceOpen)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        serviceActive ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                      }`}
+                    >
+                      <FolderIcon className="w-4 h-4" />
+                      Gestion
+                      <ChevronDownIcon className={`w-3.5 h-3.5 shrink-0 transition-transform ${serviceOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {serviceOpen && (
+                      <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 animate-scaleIn">
+                        <p className="px-4 pt-1.5 pb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Gestion</p>
+                        {serviceItems.map((item) => {
+                          const active = isActive(pathname, item.path)
+                          const Icon = item.icon
+                          return (
+                            <Link
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setServiceOpen(false)}
+                              className={`flex flex-col px-4 py-2 transition-colors ${
+                                active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2.5 text-sm">
+                                <Icon className="w-4 h-4" />
+                                {item.label}
+                              </span>
+                              {item.desc && (
+                                <span className="text-[11px] text-gray-400 ml-6.5 mt-0.5 leading-tight">{item.desc}</span>
+                              )}
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {adminItems.length > 0 && (
                   <div className="relative" ref={adminRef}>
                     <button
@@ -257,6 +315,31 @@ export default function Layout({ children }) {
                   </Link>
                 )
               })}
+              {serviceItems.length > 0 && (
+                <>
+                  <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Gestion</p>
+                  {serviceItems.map((item) => {
+                    const active = isActive(pathname, item.path)
+                    const Icon = item.icon
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                          active ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5 shrink-0" />
+                        <span className="flex flex-col">
+                          {item.label}
+                          {item.desc && <span className="text-[11px] font-normal text-gray-400 leading-tight">{item.desc}</span>}
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </>
+              )}
               {adminItems.length > 0 && (
                 <>
                   <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Administration</p>
