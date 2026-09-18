@@ -2463,16 +2463,16 @@ export default function BonusForm() {
                     className="w-full px-2 py-1 rounded border border-gray-400 text-center focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
                 </div>
                 <div className="w-full sm:w-40 shrink-0">
-                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">Montant ({formCurrency})</label>
-                  {o.selectedTypeId && !otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount ? (
-                    <input type="text" value={`${otherTotal(o).toLocaleString('fr-FR')} ${formCurrency}`} readOnly
-                      title={`Montant de base × ${otherJour(o)} jour(s)`}
-                      className="w-full px-2 py-1 rounded border border-gray-300 bg-gray-50 text-gray-600 text-sm font-medium cursor-not-allowed" />
-                  ) : (
-                    <input type="number" min="0" value={otherTotal(o)} onChange={(e) => updateOther(o.key, 'montant', (parseFloat(e.target.value) || 0) / otherJour(o))}
-                      title={o.selectedTypeId ? `Montant libre — total = montant saisi × ${otherJour(o)} jour(s)` : `Montant total = montant de base × ${otherJour(o)} jour(s)`}
-                      className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
-                  )}
+                  <label className="block text-[10px] font-medium text-gray-600 mb-0.5">
+                    Montant ({formCurrency}){o.selectedTypeId && !otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount ? '' : ' (libre)'}
+                  </label>
+                  <input type="number" min="0" value={otherTotal(o)} onChange={(e) => updateOther(o.key, 'montant', (parseFloat(e.target.value) || 0) / otherJour(o))}
+                    title={o.selectedTypeId
+                      ? (otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount
+                        ? `Montant libre — total = montant saisi × ${otherJour(o)} jour(s)`
+                        : `Montant pré-rempli depuis la config, modifiable — total = montant × ${otherJour(o)} jour(s)`)
+                      : `Montant total = montant de base × ${otherJour(o)} jour(s)`}
+                    className="w-full px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-sm" />
                 </div>
               </div>
               {/* --- Ligne 2 : type de versement + dates + pièce jointe, tout sur une ligne --- */}
