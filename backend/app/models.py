@@ -129,7 +129,7 @@ class UserServiceAssignment(models.Model):
     # N+1 (responsable hiérarchique) pour ce service (optionnel)
     n1 = fields.ForeignKeyField('models.User', related_name='subordinates', null=True)
     # Date de création
-    created_at = fields.DateTimeField(auto_now_add=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         # Un utilisateur ne peut être assigné qu'une fois au même service

@@ -33,7 +33,13 @@ export default function EvaluationTemplatesPage() {
 
   useEffect(() => { load() }, [load])
 
-  const isScopedDirector = currentUser?.is_directeur && !currentUser?.is_admin && !currentUser?.is_dg && !currentUser?.is_drh
+  // Rôles à portée globale : voit tout, regroupement par département
+  const isBroad = currentUser?.is_admin || currentUser?.is_dg || currentUser?.is_drh
+  // Directeur et N2 : périmètre département, regroupement par service
+  const isScopedDept = !isBroad && (currentUser?.is_directeur || currentUser?.is_validator_n2)
+  // N1 : périmètre services affectés (ou département), regroupement par service
+  const isScopedN1 = !isBroad && !currentUser?.is_directeur && currentUser?.is_validator_n1
+  const isScopedDirector = isScopedDept || isScopedN1
 
   const filteredTemplates = templates.filter(t =>
     t.employee_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -138,8 +144,8 @@ export default function EvaluationTemplatesPage() {
 
   const totalCoeff = (list) => list.reduce((s, c) => s + (parseFloat(c.coeff) || 0), 0)
 
-  if (!currentUser?.is_admin && !currentUser?.is_directeur) {
-    return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs et directeurs.</p></div></div>
+  if (!currentUser?.is_admin && !currentUser?.is_directeur && !currentUser?.is_validator_n1 && !currentUser?.is_validator_n2 && !currentUser?.is_dg && !currentUser?.is_drh) {
+    return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs, directeurs et validateurs.</p></div></div>
   }
 
   const selectedTemplate = selectedEmp ? templates.find(t => t.employee_id === selectedEmp) : null

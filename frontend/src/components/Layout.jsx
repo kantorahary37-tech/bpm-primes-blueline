@@ -16,7 +16,7 @@ const mainNavItems = [
 const adminNavItems = [
   { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Paramètres généraux du système' },
   { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Consultation des archives' },
-  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin', 'is_directeur'], desc: 'Modèles d\'évaluation' },
+  { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2'], desc: 'Modèles d\'évaluation' },
   { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin', 'is_directeur'], desc: 'Gestion des comptes utilisateurs' },
 ]
 
