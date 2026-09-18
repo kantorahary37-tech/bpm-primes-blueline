@@ -324,7 +324,14 @@ async def build_preview(employees, ignored_employees, ignored_columns, matched_p
 
 
 async def create_commission_bonuses(employees, start_date, end_date, user):
-    """Crée une prime commission par employé (statut Initialisé). Les conflits sont signalés."""
+    """
+    Crée une prime commission par employé. Les conflits sont signalés.
+    Statut : En attente Directeur si c'est le Directeur lui-même qui importe le CSV,
+    sinon Initialisé (flux standard N+1 → Directeur → DG).
+    """
+    initial_status = (
+        ValidationStatus.EN_ATTENTE_DIRECTEUR if user.is_directeur else ValidationStatus.INITIALISE
+    )
     created = []
     skipped = []
 
@@ -363,7 +370,7 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
             start_date=start_date,
             end_date=end_date,
             bonus_type=BonusType.COMMISSION,
-            status=ValidationStatus.INITIALISE,
+            status=initial_status,
             total_amount=total,
             commission_amount=total,
             created_by_id=user.id,

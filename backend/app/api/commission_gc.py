@@ -352,7 +352,14 @@ async def build_preview(employees, ignored_employees, ignored_columns, matched_p
 
 
 async def create_gc_bonuses(employees, config, start_date, end_date, user):
-    """Crée une prime commission grand compte par employé (statut Initialisé)."""
+    """
+    Crée une prime commission grand compte par employé.
+    Statut : En attente Directeur si c'est le Directeur lui-même qui importe le CSV,
+    sinon Initialisé (flux standard N+1 → Directeur → DG).
+    """
+    initial_status = (
+        ValidationStatus.EN_ATTENTE_DIRECTEUR if user.is_directeur else ValidationStatus.INITIALISE
+    )
     created = []
     skipped = []
     period_key = f"{start_date.year:04d}-{start_date.month:02d}"
@@ -383,7 +390,7 @@ async def create_gc_bonuses(employees, config, start_date, end_date, user):
             start_date=start_date,
             end_date=end_date,
             bonus_type=BonusType.COMMISSION_GC,
-            status=ValidationStatus.INITIALISE,
+            status=initial_status,
             total_amount=total,
             commission_amount=total,
             ca_realise=calc['mrc'] if calc['mrc'] > 0 else None,
