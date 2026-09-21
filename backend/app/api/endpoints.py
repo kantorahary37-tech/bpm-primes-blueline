@@ -187,7 +187,7 @@ async def batch_validate_bonuses(
     batch_notifs = {}
     for bonus_id in request.bonus_ids:
         try:
-            bonus = await Bonus.get_or_none(id=bonus_id)
+            bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee', 'employee__service_group')
             if not bonus:
                 results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Prime introuvable"))
                 continue
@@ -536,6 +536,13 @@ async def list_bonuses(
         if not (user.is_admin or user.is_dg or user.is_drh):
             if user.department:
                 query = query.filter(employee__dept_str=user.department)
+
+        # Un N+1 restreint (avec des services affectés) ne voit que les primes
+        # des employés de ses services : cohérent avec la restriction appliquée
+        # à la validation, sinon il sélectionne des primes qu'il ne peut pas valider.
+        n1_group_ids = await n1_service_group_ids(user)
+        if n1_group_ids is not None:
+            query = query.filter(employee__service_group_id__in=n1_group_ids)
 
         # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
         # Chaque rôle ne voit que les primes au statut qu'il doit traiter :

@@ -213,7 +213,14 @@ const [filterMonth, setFilterMonth] = useState('');
     const ids = [...selectedBonuses];
     try {
       const res = await batchValidateBonuses(ids, 'VALIDER', step);
-      toast.success(`${res.total_success} prime(s) validée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
+      const errors = (res.results || []).filter((r) => !r.success);
+      if (res.total_success === 0 && errors.length > 0) {
+        toast.error(`Aucune prime validée : ${errors[0].error}`);
+      } else if (errors.length > 0) {
+        toast(`${res.total_success} prime(s) validée(s), ${errors.length} erreur(s) : ${errors[0].error}`, { icon: '⚠️' });
+      } else {
+        toast.success(`${res.total_success} prime(s) validée(s)`);
+      }
       clearSelection();
       setConfirmBonus(null);
       fetchBonuses(queryParams);
@@ -229,7 +236,14 @@ const [filterMonth, setFilterMonth] = useState('');
     const ids = [...selectedBonuses];
     try {
       const res = await batchValidateBonuses(ids, 'REJETER', step, batchReject);
-      toast.success(`${res.total_success} prime(s) rejetée(s)${res.total_errors > 0 ? `, ${res.total_errors} erreur(s)` : ''}`);
+      const errors = (res.results || []).filter((r) => !r.success);
+      if (res.total_success === 0 && errors.length > 0) {
+        toast.error(`Aucune prime rejetée : ${errors[0].error}`);
+      } else if (errors.length > 0) {
+        toast(`${res.total_success} prime(s) rejetée(s), ${errors.length} erreur(s) : ${errors[0].error}`, { icon: '⚠️' });
+      } else {
+        toast.success(`${res.total_success} prime(s) rejetée(s)`);
+      }
       clearSelection();
       setBatchReject(null);
       fetchBonuses(queryParams);
