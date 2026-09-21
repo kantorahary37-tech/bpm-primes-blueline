@@ -657,6 +657,29 @@ export default function BonusForm() {
     setInterventions(newData)
   }
 
+  // Création multiple (plusieurs employés d'un coup) : `Promise.all` échouait
+  // dès le premier 409 et masquait le fait que d'autres primes avaient déjà été
+  // créées. On agrège les échecs par employé pour un message explicite.
+  const reportBulkCreateResult = (created, failures, label = 'prime') => {
+    if (failures.length === 0) return
+    const nameOf = (id) => employees.find((e) => e.id === id)?.name || `employé #${id}`
+    const alreadyExists = failures
+      .filter((f) => f.reason?.response?.status === 409)
+      .map((f) => nameOf(f.employee_id))
+    const otherFailures = failures.filter((f) => f.reason?.response?.status !== 409)
+
+    const parts = []
+    if (created > 0) parts.push(`${created} ${label}(s) créée(s)`)
+    if (alreadyExists.length > 0) parts.push(`${label} déjà existante pour : ${alreadyExists.join(', ')}`)
+    otherFailures.forEach((f) => {
+      const detail = f.reason?.response?.data?.detail || f.reason?.message || 'erreur inconnue'
+      parts.push(`${nameOf(f.employee_id)} : ${detail}`)
+    })
+    setError(parts.join(' — '))
+    if (created > 0) toast.success(`${created} ${label}(s) créée(s)`)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const handleSubmitAstreinte = async (e) => {
     e.preventDefault()
     setError('')
@@ -696,7 +719,7 @@ export default function BonusForm() {
     }
 
     try {
-      await Promise.all(allEmpIds.map(employee_id => {
+      const results = await Promise.allSettled(allEmpIds.map(employee_id => {
         const empDispos = disponibilites.filter(d => d.employee_id === employee_id)
         const empIntervs = interventions.filter(i => i.employee_id === employee_id)
         const totalDispo = empDispos.reduce((s, d) => {
@@ -737,7 +760,15 @@ export default function BonusForm() {
           },
         })
       }))
-      navigateAfterSave()
+
+      const failures = results
+        .map((r, i) => ({ status: r.status, reason: r.reason, employee_id: allEmpIds[i] }))
+        .filter((r) => r.status === 'rejected')
+      if (failures.length === 0) {
+        navigateAfterSave()
+      } else {
+        reportBulkCreateResult(allEmpIds.length - failures.length, failures)
+      }
     } catch (err) {
       setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : `Erreur (${err.response?.status}): ${err.response?.data?.detail || err.message || "inconnue"}`)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -931,7 +962,7 @@ export default function BonusForm() {
       setLoading(false); return
     }
     try {
-      await Promise.all(allEmpIds.map(employee_id => {
+      const results = await Promise.allSettled(allEmpIds.map(employee_id => {
         const empMaxRate = getMensuelRate(employee_id)
         const maxPrime = empMaxRate ?? params.maxPrime
         const amount = Math.min(totalValue, maxPrime)
@@ -967,7 +998,15 @@ export default function BonusForm() {
             },
           })
       }))
-      navigateAfterSave()
+
+      const failures = results
+        .map((r, i) => ({ status: r.status, reason: r.reason, employee_id: allEmpIds[i] }))
+        .filter((r) => r.status === 'rejected')
+      if (failures.length === 0) {
+        navigateAfterSave()
+      } else {
+        reportBulkCreateResult(allEmpIds.length - failures.length, failures)
+      }
     } catch (err) {
       setError(err.response?.status === 409 ? 'Cette prime existe déjà pour cet employé sur cette période.' : `Erreur (${err.response?.status}): ${err.response?.data?.detail || err.message || "inconnue"}`)
       window.scrollTo({ top: 0, behavior: 'smooth' })
