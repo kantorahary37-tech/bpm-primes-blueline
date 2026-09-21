@@ -124,10 +124,6 @@ export default function BonusForm() {
   const [observation, setObservation] = useState('')
   const [teamSelections, setTeamSelections] = useState([])
 
-  const sameDeptEmployees = selectedEmp
-    ? employees.filter(e => e.department === selectedEmp.department && e.id !== selectedEmp.id)
-    : []
-
   const toggleTeamMember = (id) => {
     setTeamSelections(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
@@ -414,6 +410,12 @@ export default function BonusForm() {
     const names = new Set(serviceAssignments.map(a => a.service_group_name).filter(Boolean))
     return employees.filter(e => names.has(e.service))
   }, [restrictedToAssignedServices, employees, serviceAssignments])
+
+  // « Appliquer ce modèle à » : pour un N+1/N+2 avec des services affectés, on
+  // ne propose que les employés de ses services (comme le sélecteur principal).
+  const sameDeptEmployees = selectedEmp
+    ? selectableEmployees.filter(e => e.department === selectedEmp.department && e.id !== selectedEmp.id)
+    : []
 
   useEffect(() => {
     if (!empSearchOpen) return
