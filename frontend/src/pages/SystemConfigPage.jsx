@@ -150,6 +150,7 @@ export default function SystemConfigPage() {
                 </div>
                 <div className="space-y-4">
                   {categories[activeCategory].map(item => {
+                    const isBoolean = item.type === 'boolean';
                     const isPassword = PASSWORD_KEYS.has(item.key);
                     const showPwd = showPasswords[item.key];
                     const currentValue = edits[item.key] !== undefined ? edits[item.key] : item.value;
@@ -164,36 +165,49 @@ export default function SystemConfigPage() {
                           )}
                         </label>
                         <p className="text-[11px] text-gray-400 mb-1">{item.description}</p>
-                        <div className="flex items-center gap-2">
-                          {isPassword ? (
-                            <div className="join flex-1">
+                        {isBoolean ? (
+                          <select
+                            value={currentValue}
+                            onChange={e => handleChange(item.key, e.target.value)}
+                            className={`select select-bordered select-sm w-full font-mono text-sm ${
+                              isModified ? 'select-warning' : ''
+                            }`}
+                          >
+                            <option value="true">Oui / Activé (true)</option>
+                            <option value="false">Non / Désactivé (false)</option>
+                          </select>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {isPassword ? (
+                              <div className="join flex-1">
+                                <input
+                                  type={showPwd ? 'text' : 'password'}
+                                  value={currentValue}
+                                  onChange={e => handleChange(item.key, e.target.value)}
+                                  className={`input input-bordered input-sm join-item flex-1 font-mono text-sm ${
+                                    isModified ? 'input-warning' : ''
+                                  }`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => togglePassword(item.key)}
+                                  className="btn btn-sm btn-ghost join-item"
+                                >
+                                  {showPwd ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            ) : (
                               <input
-                                type={showPwd ? 'text' : 'password'}
+                                type={item.key.includes('PORT') || item.key.includes('MINUTES') || item.key.includes('HOUR') || item.key.includes('OFFSET') || item.key.includes('MAX_DOWNLOAD') ? 'number' : 'text'}
                                 value={currentValue}
                                 onChange={e => handleChange(item.key, e.target.value)}
-                                className={`input input-bordered input-sm join-item flex-1 font-mono text-sm ${
+                                className={`input input-bordered input-sm flex-1 font-mono text-sm ${
                                   isModified ? 'input-warning' : ''
                                 }`}
                               />
-                              <button
-                                type="button"
-                                onClick={() => togglePassword(item.key)}
-                                className="btn btn-sm btn-ghost join-item"
-                              >
-                                {showPwd ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                              </button>
-                            </div>
-                          ) : (
-                            <input
-                              type={item.key.includes('PORT') || item.key.includes('MINUTES') || item.key.includes('HOUR') || item.key.includes('OFFSET') || item.key.includes('MAX_DOWNLOAD') ? 'number' : 'text'}
-                              value={currentValue}
-                              onChange={e => handleChange(item.key, e.target.value)}
-                              className={`input input-bordered input-sm flex-1 font-mono text-sm ${
-                                isModified ? 'input-warning' : ''
-                              }`}
-                            />
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

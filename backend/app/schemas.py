@@ -429,6 +429,7 @@ class SystemConfigItem(BaseModel):
     value: str
     category: str
     description: str
+    type: str = 'string'
 
 class SystemConfigResponse(BaseModel):
     categories: Dict[str, List[SystemConfigItem]]

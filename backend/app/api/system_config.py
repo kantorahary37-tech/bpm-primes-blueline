@@ -34,6 +34,7 @@ async def get_system_config(user: User = Depends(get_current_user)):
             value=get_config(row.key),
             category=cat,
             description=row.description,
+            type=CONFIG_DEFINITIONS[row.key].get("type", "string"),
         ))
     return SystemConfigResponse(categories=categories)
 

@@ -11,58 +11,58 @@ _cache: dict[str, str] = {}
 # Definition of all config keys with defaults, categories and descriptions
 CONFIG_DEFINITIONS = {
     # ── Database ──
-    "DATABASE_URL": {"category": "database", "description": "URL de connexion PostgreSQL", "default": ""},
-    "DB_HOST": {"category": "database", "description": "Hôte de la base de données", "default": "db"},
-    "DB_PORT": {"category": "database", "description": "Port de la base de données", "default": "5432"},
+    "DATABASE_URL": {"category": "database", "type": "string", "description": "URL de connexion PostgreSQL", "default": ""},
+    "DB_HOST": {"category": "database", "type": "string", "description": "Hôte de la base de données", "default": "db"},
+    "DB_PORT": {"category": "database", "type": "number", "description": "Port de la base de données", "default": "5432"},
 
     # ── Auth / JWT ──
-    "SECRET_KEY": {"category": "auth", "description": "Clé secrète JWT (ne pas partager)", "default": ""},
-    "ALGORITHM": {"category": "auth", "description": "Algorithme de signature JWT", "default": "HS256"},
-    "ACCESS_TOKEN_EXPIRE_MINUTES": {"category": "auth", "description": "Durée de vie du token (minutes)", "default": "1440"},
+    "SECRET_KEY": {"category": "auth", "type": "password", "description": "Clé secrète JWT (ne pas partager)", "default": ""},
+    "ALGORITHM": {"category": "auth", "type": "string", "description": "Algorithme de signature JWT", "default": "HS256"},
+    "ACCESS_TOKEN_EXPIRE_MINUTES": {"category": "auth", "type": "number", "description": "Durée de vie du token (minutes)", "default": "1440"},
 
     # ── Frontend ──
-    "FRONTEND_URL": {"category": "auth", "description": "URL du frontend (liens dans les emails)", "default": "http://localhost:5173"},
+    "FRONTEND_URL": {"category": "auth", "type": "string", "description": "URL du frontend (liens dans les emails)", "default": "http://localhost:5173"},
 
     # ── Email (SMTP) ──
-    "SMTP_HOST": {"category": "email", "description": "Serveur SMTP", "default": "smtp.blueline.mg"},
-    "SMTP_PORT": {"category": "email", "description": "Port SMTP", "default": "25"},
-    "SMTP_USER": {"category": "email", "description": "Utilisateur SMTP", "default": "zato@staff.blueline.mg"},
-    "SMTP_PASSWORD": {"category": "email", "description": "Mot de passe SMTP", "default": ""},
-    "SMTP_FROM_EMAIL": {"category": "email", "description": "Email expéditeur", "default": "bpm@si.blueline.mg"},
-    "SMTP_FROM_NAME": {"category": "email", "description": "Nom de l'expéditeur", "default": "BPM | Gestion de Prime"},
-    "TEST_MODE": {"category": "email", "description": "Mode test (redirige les emails)", "default": "true"},
-    "TEST_EMAIL": {"category": "email", "description": "Email(s) de test (séparés par virgule)", "default": ""},
+    "SMTP_HOST": {"category": "email", "type": "string", "description": "Serveur SMTP", "default": "smtp.blueline.mg"},
+    "SMTP_PORT": {"category": "email", "type": "number", "description": "Port SMTP", "default": "25"},
+    "SMTP_USER": {"category": "email", "type": "string", "description": "Utilisateur SMTP", "default": "zato@staff.blueline.mg"},
+    "SMTP_PASSWORD": {"category": "email", "type": "password", "description": "Mot de passe SMTP", "default": ""},
+    "SMTP_FROM_EMAIL": {"category": "email", "type": "string", "description": "Email expéditeur", "default": "bpm@si.blueline.mg"},
+    "SMTP_FROM_NAME": {"category": "email", "type": "string", "description": "Nom de l'expéditeur", "default": "BPM | Gestion de Prime"},
+    "TEST_MODE": {"category": "email", "type": "boolean", "description": "Mode test (redirige les emails)", "default": "true"},
+    "TEST_EMAIL": {"category": "email", "type": "string", "description": "Email(s) de test (séparés par virgule)", "default": ""},
 
     # ── Reminders ──
-    "REMINDER_ENABLED": {"category": "reminders", "description": "Activer les rappels quotidiens", "default": "false"},
-    "REMINDER_HOUR": {"category": "reminders", "description": "Heure d'envoi des rappels (0-23)", "default": "8"},
-    "REMINDER_MINUTE": {"category": "reminders", "description": "Minute d'envoi des rappels (0-59)", "default": "30"},
-    "REMINDER_TZ_OFFSET": {"category": "reminders", "description": "Décalage horaire UTC", "default": "3"},
-    "REMINDER_RUN_ON_STARTUP": {"category": "reminders", "description": "Envoyer un rappel au démarrage", "default": "false"},
+    "REMINDER_ENABLED": {"category": "reminders", "type": "boolean", "description": "Activer les rappels quotidiens", "default": "false"},
+    "REMINDER_HOUR": {"category": "reminders", "type": "number", "description": "Heure d'envoi des rappels (0-23)", "default": "8"},
+    "REMINDER_MINUTE": {"category": "reminders", "type": "number", "description": "Minute d'envoi des rappels (0-59)", "default": "30"},
+    "REMINDER_TZ_OFFSET": {"category": "reminders", "type": "number", "description": "Décalage horaire UTC", "default": "3"},
+    "REMINDER_RUN_ON_STARTUP": {"category": "reminders", "type": "boolean", "description": "Envoyer un rappel au démarrage", "default": "false"},
 
     # ── LDAP ──
-    "LDAP_SERVER_URI": {"category": "ldap", "description": "URI du serveur LDAP", "default": "ldap://ldap.blueline.mg:389"},
-    "LDAP_BIND_DN": {"category": "ldap", "description": "DN de connexion LDAP", "default": "cn=admin,dc=blueline,dc=mg"},
-    "LDAP_BIND_PASSWORD": {"category": "ldap", "description": "Mot de passe LDAP", "default": ""},
-    "LDAP_USER_SEARCH_BASE": {"category": "ldap", "description": "Base de recherche LDAP", "default": "dc=blueline,dc=mg"},
-    "USE_LDAP_PASSWORD": {"category": "ldap", "description": "Utiliser le mot de passe LDAP pour l'auth", "default": "false"},
+    "LDAP_SERVER_URI": {"category": "ldap", "type": "string", "description": "URI du serveur LDAP", "default": "ldap://ldap.blueline.mg:389"},
+    "LDAP_BIND_DN": {"category": "ldap", "type": "string", "description": "DN de connexion LDAP", "default": "cn=admin,dc=blueline,dc=mg"},
+    "LDAP_BIND_PASSWORD": {"category": "ldap", "type": "password", "description": "Mot de passe LDAP", "default": ""},
+    "LDAP_USER_SEARCH_BASE": {"category": "ldap", "type": "string", "description": "Base de recherche LDAP", "default": "dc=blueline,dc=mg"},
+    "USE_LDAP_PASSWORD": {"category": "ldap", "type": "boolean", "description": "Utiliser le mot de passe LDAP pour l'auth", "default": "false"},
 
     # ── SFTP ──
-    "SFTP_HOST": {"category": "sftp", "description": "Hôte du serveur SFTP (4D)", "default": "192.168.1.104"},
-    "SFTP_PORT": {"category": "sftp", "description": "Port SFTP", "default": "22"},
-    "SFTP_USERNAME": {"category": "sftp", "description": "Utilisateur SFTP", "default": "4dprime"},
-    "SFTP_PASSWORD": {"category": "sftp", "description": "Mot de passe SFTP", "default": ""},
-    "SFTP_MAX_DOWNLOAD": {"category": "sftp", "description": "Taille max de téléchargement (octets)", "default": "52428800"},
+    "SFTP_HOST": {"category": "sftp", "type": "string", "description": "Hôte du serveur SFTP (4D)", "default": "192.168.1.104"},
+    "SFTP_PORT": {"category": "sftp", "type": "number", "description": "Port SFTP", "default": "22"},
+    "SFTP_USERNAME": {"category": "sftp", "type": "string", "description": "Utilisateur SFTP", "default": "4dprime"},
+    "SFTP_PASSWORD": {"category": "sftp", "type": "password", "description": "Mot de passe SFTP", "default": ""},
+    "SFTP_MAX_DOWNLOAD": {"category": "sftp", "type": "number", "description": "Taille max de téléchargement (octets)", "default": "52428800"},
 
     # ── Backups ──
-    "BACKUP_ENABLED": {"category": "backups", "description": "Activer les sauvegardes automatiques", "default": "true"},
-    "BACKUP_INTERVAL_HOURS": {"category": "backups", "description": "Intervalle entre deux sauvegardes automatiques (heures)", "default": "2"},
-    "BACKUP_RETENTION": {"category": "backups", "description": "Nombre maximal de sauvegardes conservées (les plus anciennes sont supprimées)", "default": "6"},
-    "BACKUP_LABEL": {"category": "backups", "description": "Libellé des sauvegardes automatiques", "default": "auto"},
+    "BACKUP_ENABLED": {"category": "backups", "type": "boolean", "description": "Activer les sauvegardes automatiques", "default": "true"},
+    "BACKUP_INTERVAL_HOURS": {"category": "backups", "type": "number", "description": "Intervalle entre deux sauvegardes automatiques (heures)", "default": "2"},
+    "BACKUP_RETENTION": {"category": "backups", "type": "number", "description": "Nombre maximal de sauvegardes conservées (les plus anciennes sont supprimées)", "default": "6"},
+    "BACKUP_LABEL": {"category": "backups", "type": "string", "description": "Libellé des sauvegardes automatiques", "default": "auto"},
 
     # ── Interface ──
-    "SHOW_AMOUNTS": {"category": "interface", "description": "Afficher les montants aux utilisateurs (DRH/DG/Admin)", "default": "true"},
-    "SHOW_AMOUNTS_DG_DRH": {"category": "interface", "description": "Afficher les montants aux DG/DRH/Directeur (désactiver pour masquer même pour DG/DRH)", "default": "true"},
+    "SHOW_AMOUNTS": {"category": "interface", "type": "boolean", "description": "Afficher les montants aux utilisateurs (DRH/DG/Admin)", "default": "true"},
+    "SHOW_AMOUNTS_DG_DRH": {"category": "interface", "type": "boolean", "description": "Afficher les montants aux DG/DRH/Directeur (désactiver pour masquer même pour DG/DRH)", "default": "true"},
 }
 
 CATEGORY_LABELS = {
