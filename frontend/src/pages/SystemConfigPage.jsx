@@ -148,6 +148,51 @@ export default function SystemConfigPage() {
                     {CATEGORY_META[activeCategory]?.desc}
                   </p>
                 </div>
+                {activeCategory === 'sftp' && (() => {
+                  const getVal = (key, fallback = '') => {
+                    const item = (categories['sftp'] || []).find(i => i.key === key);
+                    return item ? item.value : fallback;
+                  };
+                  const cacheEnabled = getVal('SFTP_CACHE_ENABLED', 'true') === 'true';
+                  return (
+                    <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-xs">
+                        <div>
+                          <p className="text-gray-400">Serveur</p>
+                          <p className="font-medium font-mono">
+                            {getVal('SFTP_USERNAME', '?')}@{getVal('SFTP_HOST', '?')}:{getVal('SFTP_PORT', '22')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Connexions persistantes (pool)</p>
+                          <p className="font-medium">
+                            {getVal('SFTP_POOL_SIZE', '2')} session(s) · renouvelées toutes les {getVal('SFTP_CONNECTION_TTL', '900')} s
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Cache des listes de dossiers</p>
+                          <p className="font-medium">{getVal('SFTP_LIST_CACHE_TTL', '30')} s</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Cache local des fichiers</p>
+                          <p className="font-medium">
+                            {cacheEnabled ? 'Activé' : 'Désactivé'} · validité {getVal('SFTP_CACHE_TTL', '3600')} s
+                          </p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-gray-400">Dossier de cache</p>
+                          <p className="font-medium font-mono truncate" title={getVal('SFTP_CACHE_DIR')}>
+                            {getVal('SFTP_CACHE_DIR') || 'Dossier par défaut du serveur (backend/app/sftp_cache)'}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-blue-700/80 mt-2 border-t border-blue-100 pt-2">
+                        Les connexions SFTP sont réutilisées entre les requêtes et les fichiers déjà téléchargés sont servis
+                        depuis le cache local : navigation et import CSV 4D plus rapides, sans reconnexion à chaque appel.
+                      </p>
+                    </div>
+                  );
+                })()}
                 <div className="space-y-4">
                   {categories[activeCategory].map(item => {
                     const isBoolean = item.type === 'boolean';
@@ -198,7 +243,7 @@ export default function SystemConfigPage() {
                               </div>
                             ) : (
                               <input
-                                type={item.key.includes('PORT') || item.key.includes('MINUTES') || item.key.includes('HOUR') || item.key.includes('OFFSET') || item.key.includes('MAX_DOWNLOAD') ? 'number' : 'text'}
+                                type={item.type === 'number' ? 'number' : 'text'}
                                 value={currentValue}
                                 onChange={e => handleChange(item.key, e.target.value)}
                                 className={`input input-bordered input-sm flex-1 font-mono text-sm ${
