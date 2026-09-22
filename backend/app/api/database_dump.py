@@ -450,24 +450,19 @@ async def _generate_dump():
 
 
 # ---------------------------------------------------------------------------
-# Endpoints API
+# Création / nettoyage des dumps (réutilisables par l'API et le planificateur)
 # ---------------------------------------------------------------------------
 
-class DatabaseDumpCreate(BaseModel):
-    label: str = "backup"
+_DUMP_FILE_RE = re.compile(r'^\d{8}_\d{6}.*\.sql$')
 
 
-@router.post("/database/dumps", status_code=201)
-async def create_database_dump(data: DatabaseDumpCreate, admin: User = Depends(require_admin)):
-    """Génère et sauvegarde un dump SQL COMPLET de la base (schéma + données + relations + séquences)."""
+async def create_database_dump_file(label: str = "backup") -> dict:
+    """Génère un dump SQL COMPLET et l'écrit dans DUMPS_DIR. Retourne ses métadonnées."""
     os.makedirs(DUMPS_DIR, exist_ok=True)
 
-    try:
-        sql = await _generate_dump()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la génération du dump : {str(e)}")
+    sql = await _generate_dump()
 
-    safe_label = re.sub(r'[^\w\s-]', '', data.label).strip().replace(' ', '_')[:40] or 'backup'
+    safe_label = re.sub(r'[^\w\s-]', '', label).strip().replace(' ', '_')[:40] or 'backup'
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{ts}_{safe_label}.sql"
     filepath = os.path.join(DUMPS_DIR, filename)
@@ -485,6 +480,50 @@ async def create_database_dump(data: DatabaseDumpCreate, admin: User = Depends(r
         "num_tables": tables,
         "created_at": datetime.now(),
     }
+
+
+def cleanup_old_dumps(retention: int) -> list:
+    """Supprime les dumps les plus anciens, en conservant uniquement les `retention` plus récents."""
+    os.makedirs(DUMPS_DIR, exist_ok=True)
+    dumps = sorted(
+        f for f in os.listdir(DUMPS_DIR)
+        if f.endswith('.sql') and _DUMP_FILE_RE.match(f)
+    )
+    removed = []
+    if retention >= 0 and len(dumps) > retention:
+        for old in dumps[:-retention]:
+            try:
+                os.remove(os.path.join(DUMPS_DIR, old))
+                removed.append(old)
+            except OSError:
+                pass
+    return removed
+
+
+# ---------------------------------------------------------------------------
+# Endpoints API
+# ---------------------------------------------------------------------------
+
+class DatabaseDumpCreate(BaseModel):
+    label: str = "backup"
+
+
+@router.post("/database/dumps", status_code=201)
+async def create_database_dump(data: DatabaseDumpCreate, admin: User = Depends(require_admin)):
+    """Génère et sauvegarde un dump SQL COMPLET de la base (schéma + données + relations + séquences)."""
+    try:
+        result = await create_database_dump_file(data.label)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la génération du dump : {str(e)}")
+
+    from app.config import get_config
+    try:
+        retention = max(0, int(get_config("BACKUP_RETENTION") or "6"))
+    except (TypeError, ValueError):
+        retention = 6
+    removed = cleanup_old_dumps(retention)
+
+    return {**result, "cleaned": removed}
 
 
 @router.get("/database/dumps")

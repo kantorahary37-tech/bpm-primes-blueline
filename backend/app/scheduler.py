@@ -1,6 +1,9 @@
 """
-Rappel quotidien 08h30 : un email par acteur (Directeur / DG / DRH)
-listant les primes en attente de sa validation.
+Planificateur :
+- Rappel quotidien 08h30 : un email par acteur (Directeur / DG / DRH)
+  listant les primes en attente de sa validation.
+- Sauvegarde automatique périodique de la base (dump SQL complet) avec
+  rétention des N dernières copies.
 """
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -8,6 +11,7 @@ from fastapi import APIRouter, Depends
 from app.models import User, Bonus, ValidationStatus
 from app.auth import get_current_user
 from app.api.admin import require_admin
+from app.api.database_dump import create_database_dump_file, cleanup_old_dumps
 from app.email_service import send_validation_reminder_email
 from app.config import get_config
 
@@ -91,8 +95,66 @@ async def _reminder_loop():
             await asyncio.sleep(60)
 
 
+# ---------------------------------------------------------------------------
+# Sauvegarde automatique de la base
+# ---------------------------------------------------------------------------
+
+_backup_lock = asyncio.Lock()
+
+
+async def run_automatic_backup() -> dict:
+    """Génère une sauvegarde complète puis nettoie les copies trop anciennes."""
+    if _backup_lock.locked():
+        print("[BACKUP] Une sauvegarde est déjà en cours, ignoré")
+        return {"skipped": True}
+
+    async with _backup_lock:
+        label = (get_config("BACKUP_LABEL") or "auto")[:40]
+        result = await create_database_dump_file(label)
+
+        try:
+            retention = max(0, int(get_config("BACKUP_RETENTION") or "6"))
+        except (TypeError, ValueError):
+            retention = 6
+        removed = cleanup_old_dumps(retention)
+
+        print(f"[BACKUP] Sauvegarde créée : {result['filename']} ({result['size_display']}), "
+              f"retention={retention}, supprimées={len(removed)}")
+        return {**result, "cleaned": removed, "retention": retention}
+
+
+async def _backup_loop():
+    while True:
+        try:
+            enabled = (get_config("BACKUP_ENABLED") or "true").lower() == "true"
+            if enabled:
+                try:
+                    interval_hours = max(0.25, float(get_config("BACKUP_INTERVAL_HOURS") or "2"))
+                except (TypeError, ValueError):
+                    interval_hours = 2.0
+                await run_automatic_backup()
+                print(f"[BACKUP] Prochaine sauvegarde dans {interval_hours} h")
+                await asyncio.sleep(interval_hours * 3600)
+            else:
+                print("[BACKUP] Sauvegardes automatiques désactivées")
+                await asyncio.sleep(3600)
+        except Exception as e:
+            print(f"[BACKUP] Erreur lors de la sauvegarde automatique : {e}")
+            await asyncio.sleep(300)
+
+
 def start_scheduler():
-    if get_config("REMINDER_ENABLED").lower() != "true":
+    tasks = []
+    if get_config("REMINDER_ENABLED").lower() == "true":
+        print("[SCHEDULER] Rappels activés")
+        tasks.append(asyncio.create_task(_reminder_loop()))
+    else:
         print("[SCHEDULER] Rappels désactivés")
-        return None
-    return asyncio.create_task(_reminder_loop())
+
+    if (get_config("BACKUP_ENABLED") or "true").lower() == "true":
+        print("[SCHEDULER] Sauvegardes automatiques activées")
+        tasks.append(asyncio.create_task(_backup_loop()))
+    else:
+        print("[SCHEDULER] Sauvegardes automatiques désactivées")
+
+    return tasks

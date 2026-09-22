@@ -54,6 +54,12 @@ CONFIG_DEFINITIONS = {
     "SFTP_PASSWORD": {"category": "sftp", "description": "Mot de passe SFTP", "default": ""},
     "SFTP_MAX_DOWNLOAD": {"category": "sftp", "description": "Taille max de téléchargement (octets)", "default": "52428800"},
 
+    # ── Backups ──
+    "BACKUP_ENABLED": {"category": "backups", "description": "Activer les sauvegardes automatiques", "default": "true"},
+    "BACKUP_INTERVAL_HOURS": {"category": "backups", "description": "Intervalle entre deux sauvegardes automatiques (heures)", "default": "2"},
+    "BACKUP_RETENTION": {"category": "backups", "description": "Nombre maximal de sauvegardes conservées (les plus anciennes sont supprimées)", "default": "6"},
+    "BACKUP_LABEL": {"category": "backups", "description": "Libellé des sauvegardes automatiques", "default": "auto"},
+
     # ── Interface ──
     "SHOW_AMOUNTS": {"category": "interface", "description": "Afficher les montants aux utilisateurs (DRH/DG/Admin)", "default": "true"},
     "SHOW_AMOUNTS_DG_DRH": {"category": "interface", "description": "Afficher les montants aux DG/DRH/Directeur (désactiver pour masquer même pour DG/DRH)", "default": "true"},
@@ -66,6 +72,7 @@ CATEGORY_LABELS = {
     "reminders": "Rappels quotidiens",
     "ldap": "LDAP",
     "sftp": "SFTP (serveur 4D)",
+    "backups": "Sauvegardes automatiques",
     "interface": "Interface",
 }
 
