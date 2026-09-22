@@ -533,6 +533,10 @@ def _block_gc_request(user: User, bonus_type: Optional[str] = None):
             status_code=403,
             detail="Accès à la Commission Grand Compte réservé au Directeur Commercial, Admin, DG ou DRH.",
         )
+
+
+# Route GET pour lister les primes (filtres optionnels)
+@router.get("/bonuses/", response_model=List[BonusResponse])
 async def list_bonuses(
     status: Optional[str] = None,
     employee_id: Optional[int] = None,
