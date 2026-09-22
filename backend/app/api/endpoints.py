@@ -6,7 +6,7 @@ from enum import Enum
 from tortoise.expressions import Q
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
-from app.permissions import n1_service_group_ids
+from app.permissions import employee_in_scope, employee_scope, apply_employee_scope
 from app.api.commission_gc import can_access_gc, COMMISSION_GC_DEPARTMENT
 from app.email_service import send_bonus_notification_email, send_bonus_batch_notification_email
 from app.schemas import *
@@ -123,6 +123,14 @@ async def currency_symbol(code):
 async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user)):
     employee = await Employee.get(id=bonus.employee_id)
 
+    # Périmètre N+1/N+2 : création limitée aux employés de ses services affectés
+    # (couvre notamment la prime d'astreinte, sélectionnée côté frontend).
+    if not await employee_in_scope(user, employee):
+        raise HTTPException(
+            status_code=403,
+            detail="Vous ne pouvez créer une prime que pour les employés de vos services affectés.",
+        )
+
     if bonus.bonus_type != BonusType.ASTREINTE:
         emp_currency = emp_currency_code(employee)
         emp_symbol = await currency_symbol(emp_currency)
@@ -194,9 +202,8 @@ async def batch_validate_bonuses(
                 continue
 
             if request.step == "N1" and user.is_validator_n1 and not (user.is_admin or user.is_dg or user.is_drh or user.is_directeur):
-                group_ids = await n1_service_group_ids(user)
-                if group_ids is not None and bonus.employee.service_group_id not in group_ids:
-                    results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Employé hors de vos services affectés"))
+                if not await employee_in_scope(user, bonus.employee):
+                    results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Employé hors de votre périmètre (services affectés)"))
                     continue
 
             if bonus.status == ValidationStatus.VALIDE:
@@ -596,12 +603,10 @@ async def list_bonuses(
             if user.department:
                 query = query.filter(employee__dept_str=user.department)
 
-        # Un N+1 restreint (avec des services affectés) ne voit que les primes
-        # des employés de ses services : cohérent avec la restriction appliquée
-        # à la validation, sinon il sélectionne des primes qu'il ne peut pas valider.
-        n1_group_ids = await n1_service_group_ids(user)
-        if n1_group_ids is not None:
-            query = query.filter(employee__service_group_id__in=n1_group_ids)
+        # Un N+1/N+2 restreint ne voit que les primes de son périmètre : ses
+        # services affectés, ou sa seule personne s'il n'a aucun service
+        # affecté — cohérent avec la restriction appliquée à la validation.
+        query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
 
         # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
         # Chaque rôle ne voit que les primes au statut qu'il doit traiter :
@@ -726,6 +731,9 @@ async def export_bonuses(
         if user.department:
             query = query.filter(employee__dept_str=user.department)
 
+    # Filtre périmètre pour un N+1/N+2 restreint (cohérent avec /bonuses/)
+    query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
+
     # Filtre statut selon le rôle
     if user.is_admin:
         allowed_statuses = [s for s in ValidationStatus]
@@ -838,6 +846,9 @@ async def export_bonuses_xlsx(
     if not (user.is_admin or user.is_dg or user.is_drh):
         if user.department:
             query = query.filter(employee__dept_str=user.department)
+
+    # Filtre périmètre pour un N+1/N+2 restreint (cohérent avec /bonuses/)
+    query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
 
     # Filtre statut selon le rôle
     if user.is_admin:
@@ -1140,12 +1151,12 @@ async def validate_bonus(
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
 
-    # Un N+1 avec des services affectés ne peut valider que les primes des
-    # employés de ses services (étape N1).
+    # Un N+1 ne peut valider que les primes de son périmètre (étape N1) :
+    # les employés de ses services affectés, ou sa propre personne s'il n'a
+    # aucun service affecté.
     if step == "N1" and user.is_validator_n1 and not (user.is_admin or user.is_dg or user.is_drh or user.is_directeur):
-        group_ids = await n1_service_group_ids(user)
-        if group_ids is not None and bonus.employee.service_group_id not in group_ids:
-            raise HTTPException(status_code=403, detail="Vous ne pouvez valider que les primes des employés de vos services affectés.")
+        if not await employee_in_scope(user, bonus.employee):
+            raise HTTPException(status_code=403, detail="Vous ne pouvez valider que les primes des employés de votre périmètre.")
 
     # Un N+2 ne peut valider que les primes qui lui sont assignées (ou toutes si admin/DG/DRH)
     if step == "N2" and user.is_validator_n2 and not (user.is_admin or user.is_dg or user.is_drh or user.is_directeur):

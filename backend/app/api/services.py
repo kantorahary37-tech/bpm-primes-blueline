@@ -5,6 +5,7 @@ from tortoise.exceptions import DoesNotExist, IntegrityError
 from app.models import ServiceGroup, Department, Employee, User
 from app.schemas import ServiceGroupCreate, ServiceGroupRename, ServiceAssignRequest, ServiceManagersAssignRequest
 from app.auth import get_current_user
+from app.permissions import n1_service_group_ids
 from app.api.users import employee_lookup
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -38,6 +39,12 @@ async def list_services(
             return []
         query = query.filter(department=dept)
 
+    # Un N+1/N+2 restreint ne voit que les services qui lui sont affectés
+    # (assignations UsersPage + services gérés via ServicesPage).
+    sids = await n1_service_group_ids(user)
+    if sids is not None:
+        query = query.filter(id__in=sids)
+
     groups = await query.order_by('name')
     return [
         {
@@ -65,6 +72,14 @@ async def create_service(
         group = await ServiceGroup.create(name=data.name.strip(), department=dept, created_by=user)
     except IntegrityError:
         raise HTTPException(status_code=409, detail="Un service avec ce nom existe déjà dans ce département.")
+
+    # Un N+1/N+2 restreint ne voit que ses services affectés : le service qu'il
+    # vient de créer lui est automatiquement affecté, sinon il disparaîtrait
+    # aussitôt de sa liste.
+    sids = await n1_service_group_ids(user)
+    if sids is not None:
+        await group.managers.add(user)
+
     return {"id": group.id, "name": group.name, "department": dept.name, "employee_count": 0}
 
 

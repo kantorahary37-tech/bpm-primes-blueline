@@ -313,7 +313,7 @@ const Employees = () => {
     try {
       const ids = Array.from(selectedEmpIds);
       const result = await moveEmployeesDepartment(ids, moveTarget);
-      toast.success(`${result.moved} employé(s) déplacé(s) vers « ${result.target_department} »`);
+      toast.success(`${result.moved} employé(s) déplacé(s) vers « ${result.target_department} »${result.manager ? ` — manager : ${result.manager}` : ''}`);
       setSelectedEmpIds(new Set());
       setShowMoveModal(false);
       setMoveTarget('');

@@ -12,7 +12,7 @@ const mainNavItems = [
 
 // Menu déroulant regroupant Services, Flux et Plafonds pour alléger la barre de navigation
 const serviceNavItems = [
-  { path: '/services', label: 'Services', icon: FolderIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1'], desc: 'Services des employés par département' },
+  { path: '/services', label: 'Services', icon: FolderIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1', 'is_validator_n2'], desc: 'Services des employés par département' },
   { path: '/bonuses/flows', label: 'Flux', icon: ChartIcon, desc: 'Flux de validation des primes' },
   { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true, desc: 'Configuration des plafonds' },
 ]
@@ -247,7 +247,7 @@ export default function Layout({ children }) {
                       <p className="text-[11px] text-gray-400 truncate mt-0.5">{userDept(user)} · {userRole(user)}</p>
                     </div>
 
-                    {user?.is_validator_n1 && serviceAssignments.length > 0 && (
+                    {(user?.is_validator_n1 || user?.is_validator_n2) && serviceAssignments.length > 0 && (
                       <div className="px-4 py-2.5 border-b border-gray-100">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Mes services affectés</p>
                         <div className="space-y-1">
@@ -365,7 +365,7 @@ export default function Layout({ children }) {
                   })}
                 </>
               )}
-              {user?.is_validator_n1 && serviceAssignments.length > 0 && (
+              {(user?.is_validator_n1 || user?.is_validator_n2) && serviceAssignments.length > 0 && (
                 <>
                   <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Mes services affectés</p>
                   {serviceAssignments.map((a) => (

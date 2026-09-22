@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.models import User, Employee, EvaluationTemplate, ServiceGroup
 from app.auth import get_current_user
-from app.permissions import n1_service_group_ids
+from app.permissions import employee_scope, apply_employee_scope, employee_in_scope
 from app.schemas import (
     EvaluationTemplateSaveRequest,
     EvaluationTemplateResponse,
@@ -63,18 +63,17 @@ def _can_view_evaluation(user: User) -> bool:
 async def _can_edit_employee_evaluation(user: User, emp: Employee) -> bool:
     """Périmètre d'édition d'un employé : comme la consultation des primes.
     - admin/DG/DRH : tous ;
-    - directeur/N2 : son département ;
-    - N1 : ses services affectés dans son département (fallback : tout son
-      département s'il n'a aucune affectation, comme pour les primes)."""
+    - directeur : son département ;
+    - N+1/N+2 : les employés de leurs services affectés dans leur département,
+      ou uniquement leur propre fiche employé s'ils n'ont aucun service affecté."""
     if _is_broad(user):
         return True
-    if user.is_directeur or user.is_validator_n2:
+    if user.is_directeur:
         return emp.department == user.department
-    if user.is_validator_n1:
+    if user.is_validator_n1 or user.is_validator_n2:
         if emp.department != user.department:
             return False
-        sg_ids = await n1_service_group_ids(user)
-        return sg_ids is None or emp.service_group_id in sg_ids
+        return await employee_in_scope(user, emp)
     return False
 
 
@@ -82,6 +81,11 @@ async def _can_edit_employee_evaluation(user: User, emp: Employee) -> bool:
 async def get_evaluation_templates(employee_id: int, user: User = Depends(get_current_user)):
     emp = await Employee.filter(id=employee_id).first()
     if not emp:
+        raise HTTPException(404, "Employe introuvable")
+
+    # Même périmètre que l'édition : un N+1/N+2 sans service affecté ne voit
+    # que sa propre fiche.
+    if not _can_view_evaluation(user) or not await _can_edit_employee_evaluation(user, emp):
         raise HTTPException(404, "Employe introuvable")
 
     rows = await EvaluationTemplate.filter(employee_id=emp.id).order_by("sort_order")
@@ -173,15 +177,12 @@ async def apply_service_group_evaluation(
         if not group:
             raise HTTPException(404, "Service introuvable")
 
-        # Périmètre : N1 limité à ses services affectés, N2/directeur à leur département
-        if user.is_validator_n1 and not _is_broad(user):
-            sg_ids = await n1_service_group_ids(user)
-            if sg_ids is not None and group.id not in sg_ids:
+        # Périmètre : N+1/N+2 limités à leurs services affectés (sans
+        # affectation, aucun service n'est accessible), directeur à son département
+        if (user.is_validator_n1 or user.is_validator_n2) and not _is_broad(user):
+            sg_ids, _ = await employee_scope(user)
+            if not sg_ids or group.id not in sg_ids:
                 raise HTTPException(403, "Vous ne pouvez évaluer que vos services affectés")
-            if not sg_ids and group.department.name != user.department:
-                raise HTTPException(403, "Vous ne pouvez évaluer que les services de votre département")
-        elif user.is_validator_n2 and not _is_broad(user) and group.department.name != user.department:
-            raise HTTPException(403, "Vous ne pouvez évaluer que les services de votre département")
         elif _scoped_director(user) and group.department.name != user.department:
             raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations des services de son département")
 
@@ -230,15 +231,14 @@ async def get_all_templates(user: User = Depends(get_current_user)):
 
     if _is_broad(user):
         employees = await Employee.filter(is_active=True).prefetch_related("service_group").order_by("name")
-    elif user.is_directeur or user.is_validator_n2:
+    elif user.is_directeur:
         employees = await Employee.filter(is_active=True, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
     else:
-        # N1 : ses services affectés ; fallback département si aucune affectation
-        sg_ids = await n1_service_group_ids(user)
-        if sg_ids:
-            employees = await Employee.filter(is_active=True, service_group_id__in=sg_ids).prefetch_related("service_group").order_by("name")
-        else:
-            employees = await Employee.filter(is_active=True, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
+        # N+1/N+2 : leurs services affectés ; sans affectation → uniquement
+        # leur propre fiche employé
+        query = Employee.filter(is_active=True, dept_str=user.dept_str)
+        query = apply_employee_scope(query, await employee_scope(user))
+        employees = await query.prefetch_related("service_group").order_by("name")
     result = []
 
     # Cache service_group_id → nom pour éviter une requête par employé

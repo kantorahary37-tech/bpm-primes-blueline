@@ -10,6 +10,10 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon, EditIcon, CheckIcon, XCircleIcon, C
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
 const CAN_MANAGE = ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1'];
+// Lecture : inclut le N+2 (consultation de ses services affectés). La gestion
+// (création, renommage, affectation) reste réservée à CAN_MANAGE, en cohérence
+// avec la règle can_manage du backend.
+const CAN_VIEW = [...CAN_MANAGE, 'is_validator_n2'];
 const FULL_SCOPE = ['is_admin', 'is_dg', 'is_drh'];
 
 const ServicesPage = () => {
@@ -51,7 +55,11 @@ const ServicesPage = () => {
     if (!dept && visibleDepts.length) setDept(user?.department && visibleDepts.includes(user.department) ? user.department : visibleDepts[0]);
   }, [visibleDepts, dept, user?.department]);
 
+  const canView = CAN_VIEW.some(r => user?.[r]);
   const canManage = CAN_MANAGE.some(r => user?.[r]);
+  // N+1/N+2 sans rôle large : la liste est limitée aux services qui leur sont affectés
+  const isRestrictedValidator = !isFullScope && !user?.is_directeur &&
+    (user?.is_validator_n1 || user?.is_validator_n2);
 
   const groupsByDept = useMemo(() => {
     const groups = {};
@@ -153,10 +161,10 @@ const ServicesPage = () => {
     return <div className="flex justify-center items-center h-48"><span className="loading loading-spinner loading-md" /></div>;
   }
 
-  if (!canManage) {
+  if (!canView) {
     return (
       <div className="max-w-2xl mx-auto mt-10 bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center">
-        <p className="text-sm text-gray-600">Vous n'avez pas les droits pour gérer les services.</p>
+        <p className="text-sm text-gray-600">Vous n'avez pas accès à la page des services.</p>
       </div>
     );
   }
@@ -173,6 +181,7 @@ const ServicesPage = () => {
         </div>
       </div>
 
+      {canManage && (
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-5">
         <div className="px-4 py-3 border-b bg-gray-50 border-gray-200">
           <span className="font-semibold text-sm text-gray-700 flex items-center gap-2"><PlusIcon className="w-4 h-4" /> Créer un service</span>
@@ -199,9 +208,12 @@ const ServicesPage = () => {
           </button>
         </form>
       </div>
+      )}
 
       {groupsByDept.length === 0 ? (
-        <div className="text-center py-10 text-sm text-gray-400">Aucun service pour le moment.</div>
+        <div className="text-center py-10 text-sm text-gray-400">
+          {isRestrictedValidator ? 'Aucun service ne vous est affecté pour le moment.' : 'Aucun service pour le moment.'}
+        </div>
       ) : (
         <div className="space-y-4">
           {groupsByDept.map(([department, groups]) => (
@@ -240,7 +252,7 @@ const ServicesPage = () => {
                             <button onClick={() => handleRename(group)} className="btn btn-xs btn-primary"><CheckIcon className="w-3 h-3" /></button>
                             <button onClick={() => { setRenaming(null); setRenameValue(''); }} className="btn btn-xs"><XCircleIcon className="w-3 h-3" /></button>
                           </div>
-                        ) : (
+                        ) : canManage ? (
                           <div className="ml-auto flex items-center gap-1">
                             <button
                               onClick={() => { setRenaming(group.id); setRenameValue(group.name); }}
@@ -255,7 +267,7 @@ const ServicesPage = () => {
                               <TrashIcon className="w-4 h-4" />
                             </button>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                       {isOpen && (
                         <div className="px-4 pb-4 bg-gray-50/50">
@@ -270,16 +282,19 @@ const ServicesPage = () => {
                                     <p className="text-sm font-medium text-gray-800 truncate">{emp.name}</p>
                                     <p className="text-[11px] text-gray-400 font-mono">{emp.matricule}{emp.poste ? ` · ${emp.poste}` : ''}</p>
                                   </div>
+                                  {canManage && (
                                   <button
                                     onClick={() => handleUnassign(group, emp.id)}
                                     className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" title="Retirer du service"
                                   >
                                     <XCircleIcon className="w-4 h-4" />
                                   </button>
+                                  )}
                                 </li>
                               ))}
                             </ul>
                           )}
+                          {canManage && (
                           <div className="border-t border-gray-200 pt-3">
                             <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Affecter des employés</p>
                             <div className="flex items-center gap-2 mb-2">
@@ -337,6 +352,7 @@ const ServicesPage = () => {
                               );
                             })()}
                           </div>
+                          )}
 
                           <div className="border-t border-gray-200 pt-3">
                           </div>

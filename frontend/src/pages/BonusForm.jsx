@@ -403,10 +403,9 @@ export default function BonusForm() {
     }).catch(() => {})
   }, [])
 
-  // Pour une prime MENSELLE, un N+1 avec des services affectés ne sélectionne
-  // que les employés de ses services. (Prime ASTREINTE : inchangée.)
+  // Un N+1/N+2 avec des services affectés ne sélectionne que les employés de
+  // ses services, quel que soit le type de prime (mensuelle, astreinte, …).
   const restrictedToAssignedServices =
-    editType === 'mensuel' &&
     (connectedUser?.is_validator_n1 || connectedUser?.is_validator_n2) &&
     !(connectedUser?.is_admin || connectedUser?.is_dg || connectedUser?.is_drh || connectedUser?.is_directeur) &&
     serviceAssignments.length > 0
@@ -439,7 +438,7 @@ export default function BonusForm() {
 
   const employeeOptGroups = (() => {
     const grouped = {}
-    employees.forEach(e => {
+    selectableEmployees.forEach(e => {
       const key = e.service || 'Sans service'
       if (!grouped[key]) grouped[key] = []
       grouped[key].push(e)

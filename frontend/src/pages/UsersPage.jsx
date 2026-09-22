@@ -784,14 +784,14 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
             </div>
           </div>
 
-          {/* Services assignés — réservé au rôle Validateur N+1 */}
-          {form.is_validator_n1 && (
+          {/* Services assignés — réservé aux rôles Validateur N+1 / N+2 */}
+          {(form.is_validator_n1 || form.is_validator_n2) && (
             <div>
               <label className="label py-1"><span className="label-text text-xs font-medium">Services assignés</span></label>
               {user?.department ? (
                 <div className="text-[10px] text-gray-400 mb-1.5">Uniquement les services du département « {user.department} »</div>
               ) : (
-                <div className="text-[10px] text-gray-400 mb-1.5">Définissez un département pour restreindre les services au département du validateur N+1</div>
+                <div className="text-[10px] text-gray-400 mb-1.5">Définissez un département pour restreindre les services au département du validateur N+1 / N+2</div>
               )}
               {localAssignments.length === 0 ? (
                 <div className="text-xs text-gray-400 py-1.5 px-1">Aucun service assigné pour le moment.</div>
