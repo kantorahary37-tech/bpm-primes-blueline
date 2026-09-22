@@ -339,8 +339,8 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     can_edit_any = user.is_admin or user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
 
     if not can_edit_any:
-        if bonus.status not in (ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_DIRECTEUR):
-            raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé' ou 'En attente Directeur'")
+        if bonus.status != ValidationStatus.INITIALISE:
+            raise HTTPException(400, "Impossible de modifier une prime dont le statut n'est pas 'Initialisé'")
 
     update_data = data.dict(exclude_unset=True)
     if 'total_amount' in update_data and data.bonus_type != BonusType.ASTREINTE:
@@ -512,6 +512,37 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
                 print(f"[NOTIF] Erreur création notification pour {r.name}: {e}")
 
     return updated
+
+# Route DELETE pour supprimer une prime
+# - N+1 / N+2 : uniquement si la prime est encore au statut 'Initialisé'
+# - Admin / DG / DRH / Directeur (du département) : tout sauf une prime déjà 'Prime validée'
+@router.delete("/bonuses/{bonus_id}")
+async def delete_bonus(bonus_id: int, user: User = Depends(get_current_user)):
+    bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
+    if not bonus:
+        raise HTTPException(404, "Bonus not found")
+
+    # Commission GC réservée au Directeur Commercial (+ Admin/DG/DRH)
+    if bonus.bonus_type == BonusType.COMMISSION_GC and not _can_see_gc(user):
+        raise HTTPException(status_code=404, detail="Bonus introuvable")
+
+    can_delete_any = user.is_admin or user.is_dg or user.is_drh or (
+        user.is_directeur and bonus.employee.dept_str == user.department
+    )
+
+    if not can_delete_any:
+        if bonus.status != ValidationStatus.INITIALISE:
+            raise HTTPException(400, "Impossible de supprimer une prime dont le statut n'est pas 'Initialisé'")
+    else:
+        if bonus.status == ValidationStatus.VALIDE:
+            raise HTTPException(400, "Impossible de supprimer une prime déjà validée")
+
+    employee_name = bonus.employee.name if bonus.employee else None
+    await bonus.delete()
+
+    print(f"[DELETE] bonus_id={bonus_id}, user={user.name}, can_delete_any={can_delete_any}, employee={employee_name}")
+
+    return {"message": "Prime supprimée", "id": bonus_id, "employee": employee_name}
 
 # Helpers de restriction Commission GC : réservée au Directeur Commercial
 # (département COMMISSION_GC_DEPARTMENT), en plus des Admin, DG et DRH.

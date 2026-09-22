@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getBonus, getBonusValidations, getAuditLogs, validateBonus } from '../services/api';
+import { getBonus, getBonusValidations, getAuditLogs, validateBonus, deleteBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
 import toast from 'react-hot-toast';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
-import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon, LockIcon, PaperclipIcon } from '../components/Icons';
+import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon, LockIcon, PaperclipIcon, TrashIcon } from '../components/Icons';
 import FilePreview from '../components/FilePreview';
 
 const typeIcons = {
@@ -54,9 +54,11 @@ const BonusDetail = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [exportColumns, setExportColumns] = useState([]);
   const [motifRejet, setMotifRejet] = useState('');
   const [validating, setValidating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     Promise.all([getBonus(id), getBonusValidations(id)])
@@ -125,6 +127,21 @@ const BonusDetail = () => {
       setValidations(timeline);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur lors du rejet');
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteBonus(bonus.id);
+      toast.success('Prime supprimée');
+      setShowDeleteModal(false);
+      setTimeout(() => navigate('/bonuses'), 800);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de la suppression');
+      setShowDeleteModal(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -263,6 +280,14 @@ const BonusDetail = () => {
   const step = getValidStep(bonus.status);
   const TypeIcon = typeIcons[bonus.bonus_type] || ClipboardIcon
   const canEditAsAdmin = user?.is_admin || user?.is_dg || user?.is_drh || (user?.is_directeur && bonus.employee?.department === user.department && bonus.status !== 'En attente DG')
+  const isValidator = user?.is_validator_n1 || user?.is_validator_n2
+  // N+1 / N+2 peuvent modifier une prime tant qu'elle est encore "Initialisé"
+  const canModifyAsValidator = !canEditAsAdmin && isValidator && bonus.status === 'Initialisé'
+  // Suppression : Admin/DG/DRH/Directeur sauf prime déjà validée ;
+  // N+1 / N+2 uniquement si la prime est encore "Initialisé"
+  const canDelete = canEditAsAdmin
+    ? bonus.status !== 'Prime validée'
+    : isValidator && bonus.status === 'Initialisé'
 
   return (
     <div className="page-container max-w-4xl">
@@ -698,11 +723,20 @@ const BonusDetail = () => {
                 <EditIcon className="w-4 h-4" /> Modifier
               </Link>
             )}
-            {!canEditAsAdmin && bonus.status === 'Initialisé' && bonus.was_rejected ? (
+            {canModifyAsValidator && (
               <Link to={`/bonuses/edit/${bonus.id}`} className="btn bg-amber-500 hover:bg-amber-600 text-white border-0">
                 <EditIcon className="w-4 h-4" /> Modifier
               </Link>
-            ) : (
+            )}
+            {canDelete && (
+              <button
+                className="btn bg-red-500 hover:bg-red-600 text-white border-0"
+                onClick={() => setShowDeleteModal(true)}
+              >
+                <TrashIcon className="w-4 h-4" /> Supprimer
+              </button>
+            )}
+            {step && (
               <button className="btn bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={handleValidate} disabled={validating}>
                 <CheckIcon className="w-4 h-4" /> Valider
               </button>
@@ -732,6 +766,19 @@ const BonusDetail = () => {
           </button>
           <button className="btn bg-red-500 hover:bg-red-600 text-white border-0" onClick={handleReject} disabled={!motifRejet.trim()}>
             Confirmer le rejet
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Supprimer la prime" size="sm">
+        <p className="text-sm text-gray-600 mb-6">
+          Êtes-vous sûr de vouloir supprimer la prime de <strong>{bonus.employee?.name || 'cet employé'}</strong> ?<br />
+          <span className="text-red-500 font-medium">Cette action est irréversible</span> (validations et notifications liées supprimées).
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => setShowDeleteModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+          <button onClick={handleDelete} className="btn btn-sm bg-red-500 hover:bg-red-600 text-white border-0" disabled={deleting}>
+            {deleting ? 'Suppression...' : 'Supprimer définitivement'}
           </button>
         </div>
       </Modal>

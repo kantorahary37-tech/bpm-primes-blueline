@@ -153,6 +153,11 @@ export const updateBonus = async (id, data) => {
   return res;
 };
 
+export const deleteBonus = async (id) => {
+  const { data } = await api.delete(`/bonuses/${id}`);
+  return data;
+};
+
 export const getBonus = async (id) => {
   const { data } = await api.get(`/bonuses/${id}`);
   return data;
