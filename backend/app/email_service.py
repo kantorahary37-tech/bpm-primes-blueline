@@ -15,15 +15,29 @@ def _smtp_config():
         "from_name": get_config("SMTP_FROM_NAME"),
         "test_mode": get_config("TEST_MODE").lower() == "true",
         "test_email": get_config("TEST_EMAIL"),
+        "user_mail_test_mode": get_config("USER_MAIL_TEST_MODE").lower() == "true",
     }
 
 
 def _resolve_email(to_email: str) -> str:
+    """Résout l'adresse de destination.
+
+    TEST_MODE actif :
+      - USER_MAIL_TEST_MODE=FASLE → redirection vers TEST_EMAIL (mode test pur)
+      - USER_MAIL_TEST_MODE=TRUE  → envoi au destinataire réel (contenu test
+        préservé : bandeau, badge, préfixe [TEST]) + copie aux adresses
+        TEST_EMAIL
+    """
     cfg = _smtp_config()
-    if cfg["test_mode"]:
-        print(f"[EMAIL TEST] Redirecting {to_email} -> {cfg['test_email']}")
-        return cfg["test_email"]
-    return to_email
+    if not cfg["test_mode"]:
+        return to_email
+
+    if cfg["user_mail_test_mode"]:
+        print(f"[EMAIL TEST] Mail test vers l'adresse réelle {to_email} (USER_MAIL_TEST_MODE)")
+        return to_email
+
+    print(f"[EMAIL TEST] Redirecting {to_email} -> {cfg['test_email']}")
+    return cfg["test_email"]
 
 
 def _env_label(cfg: dict) -> str:

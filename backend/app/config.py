@@ -30,8 +30,9 @@ CONFIG_DEFINITIONS = {
     "SMTP_PASSWORD": {"category": "email", "type": "password", "description": "Mot de passe SMTP", "default": ""},
     "SMTP_FROM_EMAIL": {"category": "email", "type": "string", "description": "Email expéditeur", "default": "bpm@si.blueline.mg"},
     "SMTP_FROM_NAME": {"category": "email", "type": "string", "description": "Nom de l'expéditeur", "default": "BPM | Gestion de Prime"},
-    "TEST_MODE": {"category": "email", "type": "boolean", "description": "Mode test (redirige les emails)", "default": "true"},
+    "TEST_MODE": {"category": "email", "type": "boolean", "description": "Mode test (redirige les emails vers TEST_EMAIL)", "default": "true"},
     "TEST_EMAIL": {"category": "email", "type": "string", "description": "Email(s) de test (séparés par virgule)", "default": ""},
+    "USER_MAIL_TEST_MODE": {"category": "email", "type": "boolean", "description": "En mode test, envoyer également aux adresses réelles des destinataires (contenu test conservé)", "default": "false"},
 
     # ── Reminders ──
     "REMINDER_ENABLED": {"category": "reminders", "type": "boolean", "description": "Activer les rappels quotidiens", "default": "false"},
