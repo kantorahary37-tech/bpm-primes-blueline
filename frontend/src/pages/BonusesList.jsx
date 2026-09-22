@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { getBonuses, getUsers, validateBonus, batchValidateBonuses, markBonusesPaid } from '../services/api';
+import { getBonuses, getUsers, validateBonus, batchValidateBonuses, markBonusesPaid, deleteBonus } from '../services/api';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import toast from 'react-hot-toast';
-import { DownloadIcon, FilterIcon, ChevronLeftIcon } from '../components/Icons';
+import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 import BonusTable from '../components/BonusTable';
 
@@ -74,6 +74,8 @@ const [filterMonth, setFilterMonth] = useState('');
   const [exportColumns, setExportColumns] = useState(EXPORT_COLUMNS_LIST);
   const [selectedBonuses, setSelectedBonuses] = useState(new Set());
   const [batchReject, setBatchReject] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [datePage, setDatePage] = useState(1);
   const [sectionExpand, setSectionExpand] = useState({});
@@ -251,6 +253,34 @@ const [filterMonth, setFilterMonth] = useState('');
       toast.error(error.response?.data?.detail || "Erreur lors du rejet par lot");
       setBatchReject(null);
     }
+  };
+
+  // Suppression par lot des primes cochées (N+1 / N+2 : uniquement celles encore "Initialisé" — vérifié côté backend)
+  const confirmBatchDelete = async () => {
+    const ids = [...selectedBonuses];
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const failures = [];
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        await deleteBonus(id);
+        ok++;
+      } catch (err) {
+        failures.push(err.response?.data?.detail || err.message || `Prime ${id}`);
+      }
+    }
+    setDeleting(false);
+    setShowDeleteConfirm(false);
+    clearSelection();
+    if (ok === 0 && failures.length > 0) {
+      toast.error(failures[0]);
+    } else if (failures.length > 0) {
+      toast(`${ok} prime(s) supprimée(s), ${failures.length} erreur(s) : ${failures[0]}`, { icon: '⚠️' });
+    } else {
+      toast.success(`${ok} prime(s) supprimée(s)`);
+    }
+    fetchBonuses(queryParams);
   };
 
   const getValidStep = (bonus) => {
@@ -820,9 +850,15 @@ const [filterMonth, setFilterMonth] = useState('');
                     className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">
                     {depFilter ? `Valider ${depFilter}` : 'Valider'} ({selectedBonuses.size})
                   </button>
-                  <button onClick={() => setBatchReject('')}
-                    className="btn btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200">
-                    {depFilter ? `Rejeter ${depFilter}` : 'Rejeter'}
+                  {(user?.is_dg || user?.is_admin) && (
+                    <button onClick={() => setBatchReject('')}
+                      className="btn btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200">
+                      {depFilter ? `Rejeter ${depFilter}` : 'Rejeter'}
+                    </button>
+                  )}
+                  <button onClick={() => setShowDeleteConfirm(true)}
+                    className="btn btn-sm bg-red-500 hover:bg-red-600 text-white border-0">
+                    <TrashIcon className="w-4 h-4" /> Supprimer
                   </button>
                 </>
               ) : (
@@ -862,6 +898,18 @@ const [filterMonth, setFilterMonth] = useState('');
         <div className="flex gap-2 justify-end">
           <button onClick={() => setBatchReject(null)} className="btn btn-sm btn-ghost">Annuler</button>
           <button onClick={confirmBatchReject} className="btn btn-sm bg-red-600 hover:bg-red-700 text-white border-0">Rejeter</button>
+        </div>
+      </Modal>
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Supprimer les primes" size="sm">
+        <p className="text-sm text-gray-600 mb-6">
+          Supprimer définitivement les <strong>{selectedBonuses.size}</strong> prime(s) sélectionnée(s) ?
+          <br /><span className="text-red-500 font-medium">Cette action est irréversible</span> (validations et notifications liées supprimées).
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => setShowDeleteConfirm(false)} className="btn btn-sm btn-ghost">Annuler</button>
+          <button onClick={confirmBatchDelete} className="btn btn-sm bg-red-500 hover:bg-red-600 text-white border-0" disabled={deleting}>
+            {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+          </button>
         </div>
       </Modal>
       <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Exporter les primes" size="md">
