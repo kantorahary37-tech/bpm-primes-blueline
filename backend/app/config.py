@@ -60,6 +60,12 @@ CONFIG_DEFINITIONS = {
     "SFTP_USERNAME": {"category": "sftp", "type": "string", "description": "Utilisateur SFTP", "default": "4dprime"},
     "SFTP_PASSWORD": {"category": "sftp", "type": "password", "description": "Mot de passe SFTP", "default": ""},
     "SFTP_MAX_DOWNLOAD": {"category": "sftp", "type": "number", "description": "Taille max de téléchargement (octets)", "default": "52428800"},
+    "SFTP_POOL_SIZE": {"category": "sftp", "type": "number", "description": "Nb de connexions SFTP conservées ouvertes entre les requêtes (évite de se reconnecter à chaque appel)", "default": "2"},
+    "SFTP_CONNECTION_TTL": {"category": "sftp", "type": "number", "description": "Durée de vie max d'une connexion SFTP avant reconnexion (secondes)", "default": "900"},
+    "SFTP_LIST_CACHE_TTL": {"category": "sftp", "type": "number", "description": "Validité du cache des listes de dossiers SFTP (secondes, 0 = désactivé)", "default": "30"},
+    "SFTP_CACHE_ENABLED": {"category": "sftp", "type": "boolean", "description": "Mettre en cache localement les fichiers SFTP téléchargés (réutilisation sans redownload)", "default": "true"},
+    "SFTP_CACHE_TTL": {"category": "sftp", "type": "number", "description": "Validité du cache local des fichiers SFTP (secondes)", "default": "3600"},
+    "SFTP_CACHE_DIR": {"category": "sftp", "type": "string", "description": "Dossier local du cache SFTP (vide = dossier par défaut du serveur)", "default": ""},
 
     # ── Backups ──
     "BACKUP_ENABLED": {"category": "backups", "type": "boolean", "description": "Activer les sauvegardes automatiques", "default": "true"},
