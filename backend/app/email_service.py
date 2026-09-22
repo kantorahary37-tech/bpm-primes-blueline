@@ -533,3 +533,139 @@ def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: lis
     except Exception as e:
         print(f"SMTP error (reminder): {e}")
         return False
+
+
+async def send_deadline_reminder_email(
+    to_email: str,
+    to_name: str,
+    reminder_label: str,
+    deadline_date: str,
+    items: list,
+) -> bool:
+    """
+    Rappel de la date limite de validation (le 20 du mois) envoyé aux N+1, N+2
+    et Directeurs. items : liste de dicts {employee_name, type_label, amount, status_label, url}
+    """
+    return await asyncio.to_thread(
+        _send_deadline_reminder_email_sync,
+        to_email, to_name, reminder_label, deadline_date, items,
+    )
+
+
+def _send_deadline_reminder_email_sync(
+    to_email: str,
+    to_name: str,
+    reminder_label: str,
+    deadline_date: str,
+    items: list,
+) -> bool:
+    try:
+        cfg = _smtp_config()
+        env_label = _env_label(cfg)
+        prefix = _test_subject_prefix(cfg)
+        count = len(items)
+        plural = "s" if count > 1 else ""
+        frontend_url = get_config("FRONTEND_URL")
+        msg = EmailMessage()
+        msg["Subject"] = f"{prefix}Rappel : finalisez vos validations avant le {deadline_date} | BPM"
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
+        msg["To"] = _resolve_email(to_email)
+
+        plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
+        items_text = "\n".join(
+            f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}"
+            for it in items
+        )
+        msg.set_content(
+            f"{plain_env}"
+            f"Bonjour {to_name},\n\n"
+            f"{reminder_label} : la date limite de finalisation des validations de primes est fixée au {deadline_date}.\n"
+            f"Merci de bien vouloir finaliser les validations en attente avant cette échéance.\n\n"
+            f"Validations en attente ({count} prime{plural}) :\n"
+            f"{items_text}\n\n"
+            f"---\nBPM | Gestion de Prime"
+        )
+
+        links = "".join(
+            f"<li style=\"margin:8px 0;\">"
+            f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
+            f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
+            f"</li>"
+            for it in items
+        )
+
+        banner = _test_banner_html(cfg)
+        footer = _test_footer_html(cfg)
+        env_badge = (
+            f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+            f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+            if cfg["test_mode"] else ""
+        )
+        msg.add_alternative(f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#1e40af,#2563eb);padding:24px 32px;border-radius:16px 16px 0 0;">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td>
+              <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">BPM</div>
+              <div style="font-size:20px;color:#fff;font-weight:700;margin-top:2px;">Gestion de Prime</div>
+            </td>
+            <td align="right">
+              <span style="font-size:11px;font-weight:600;color:#fbbf24;background:#b45309;padding:3px 10px;border-radius:12px;">Date limite : {deadline_date}</span>
+              {' ' + env_badge if env_badge else ''}
+            </td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;">
+          {banner}
+          <p style="margin:0 0 16px;font-size:15px;color:#334155;">Bonjour <strong style="color:#0f172a;">{to_name}</strong>,</p>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
+            <strong style="color:#0f172a;">{reminder_label}</strong> : la date limite de finalisation
+            des validations de primes est fixée au <strong style="color:#0f172a;">{deadline_date}</strong>.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+            <tr><td style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:10px;padding:16px 20px;">
+              <span style="font-size:13px;color:#92400e;font-weight:600;">&#9888;&#65039; Échéance</span>
+              <div style="font-size:16px;font-weight:700;color:#b45309;margin-top:2px;">{deadline_date}</div>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
+            Merci de bien vouloir finaliser les validations en attente avant cette échéance afin que
+            les processus puissent se poursuivre.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+            <tr><td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:10px;padding:14px 20px;">
+              <span style="font-size:22px;font-weight:700;color:#1d4ed8;">{count}</span>
+              <span style="font-size:13px;color:#334155;"> prime{plural} encore en attente de votre décision</span>
+            </td></tr>
+          </table>
+          <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#475569;line-height:1.6;">
+            {links}
+          </ul>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:8px 0 24px;">
+            <a href="{frontend_url}" style="display:inline-block;background:#f59e0b;color:#fff;padding:12px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;letter-spacing:0.3px;">
+              Ouvrir la plateforme BPM &rarr;
+            </a>
+          </td></tr></table>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
+          {footer}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>""", subtype="html")
+
+        with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
+            server.starttls()
+            server.login(cfg["user"], cfg["password"])
+            server.send_message(msg)
+
+        return True
+    except Exception as e:
+        print(f"SMTP error (deadline reminder): {e}")
+        return False

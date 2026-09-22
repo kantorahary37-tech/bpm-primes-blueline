@@ -40,6 +40,12 @@ CONFIG_DEFINITIONS = {
     "REMINDER_TZ_OFFSET": {"category": "reminders", "type": "number", "description": "Décalage horaire UTC", "default": "3"},
     "REMINDER_RUN_ON_STARTUP": {"category": "reminders", "type": "boolean", "description": "Envoyer un rappel au démarrage", "default": "false"},
 
+    # ── Rappel date limite (finalisation des validations le 20 du mois) ──
+    "REMINDER_DEADLINE_ENABLED": {"category": "reminders", "type": "boolean", "description": "Activer les rappels de la date limite de validation (5, 10 & 15 du mois)", "default": "false"},
+    "REMINDER_DEADLINE_DAY": {"category": "reminders", "type": "number", "description": "Date limite de finalisation des validations (jour du mois)", "default": "20"},
+    "REMINDER_DEADLINE_DAYS": {"category": "reminders", "type": "string", "description": "Jours des rappels dans le mois (séparés par virgule)", "default": "5,10,15"},
+    "REMINDER_DEADLINE_HOURS": {"category": "reminders", "type": "string", "description": "Heures d'envoi des rappels dans la journée (séparées par virgule)", "default": "8,17"},
+
     # ── LDAP ──
     "LDAP_SERVER_URI": {"category": "ldap", "type": "string", "description": "URI du serveur LDAP", "default": "ldap://ldap.blueline.mg:389"},
     "LDAP_BIND_DN": {"category": "ldap", "type": "string", "description": "DN de connexion LDAP", "default": "cn=admin,dc=blueline,dc=mg"},
@@ -69,7 +75,7 @@ CATEGORY_LABELS = {
     "database": "Base de données",
     "auth": "Authentification",
     "email": "Email (SMTP)",
-    "reminders": "Rappels quotidiens",
+    "reminders": "Rappels (quotidien & date limite)",
     "ldap": "LDAP",
     "sftp": "SFTP (serveur 4D)",
     "backups": "Sauvegardes automatiques",

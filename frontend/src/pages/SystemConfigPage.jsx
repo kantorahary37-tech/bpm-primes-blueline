@@ -9,7 +9,7 @@ const CATEGORY_META = {
   ldap: { label: 'LDAP', Icon: BuildingIcon, desc: 'Authentification et synchronisation LDAP' },
   sftp: { label: 'SFTP (serveur 4D)', Icon: FolderIcon, desc: 'Connexion au serveur de fichiers 4D' },
   auth: { label: 'Authentification', Icon: KeyIcon, desc: 'Clés JWT et URL du frontend' },
-  reminders: { label: 'Rappels quotidiens', Icon: BellIcon, desc: 'Planification des emails de rappel' },
+  reminders: { label: 'Rappels', Icon: BellIcon, desc: 'Planification des rappels quotidiens et de la date limite de validation' },
   backups: { label: 'Sauvegardes automatiques', Icon: ArchiveIcon, desc: 'Planification et rétention des sauvegardes de la base' },
   database: { label: 'Base de données', Icon: DatabaseIcon, desc: 'Connexion PostgreSQL (requiert redémarrage)' },
 };

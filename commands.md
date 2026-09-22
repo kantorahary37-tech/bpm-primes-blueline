@@ -45,6 +45,13 @@ ayant des primes en attente — identique au rappel automatique quotidien de 08h
 docker compose exec backend python -m scripts.send_reminder
 ```
 
+Envoi manuel du rappel de la date limite de validation (le 20 du mois, envoyé aux
+N+1/N+2/Directeurs, identique au rappel automatique des 10 & 15 à 08h00/17h00) :
+
+```Shell
+docker compose exec backend python -m scripts.send_deadline_reminder
+```
+
 Suppression de toutes les primes (et validations, logs, notifications) :
 
 ```Shell

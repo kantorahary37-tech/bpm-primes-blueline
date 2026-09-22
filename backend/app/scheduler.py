@@ -2,6 +2,9 @@
 Planificateur :
 - Rappel quotidien 08h30 : un email par acteur (Directeur / DG / DRH)
   listant les primes en attente de sa validation.
+- Rappel de la date limite (le 20 du mois) : un email les 5, 10 et 15 du mois à
+  08h00 et 17h00 aux N+1, N+2 et Directeurs concernés, listant leurs
+  validations encore en attente et la date limite fixée.
 - Sauvegarde automatique périodique de la base (dump SQL complet) avec
   rétention des N dernières copies.
 """
@@ -12,8 +15,9 @@ from app.models import User, Bonus, ValidationStatus
 from app.auth import get_current_user
 from app.api.admin import require_admin
 from app.api.database_dump import create_database_dump_file, cleanup_old_dumps
-from app.email_service import send_validation_reminder_email
+from app.email_service import send_validation_reminder_email, send_deadline_reminder_email
 from app.config import get_config
+from app.permissions import n1_service_group_ids
 
 router = APIRouter()
 
@@ -23,6 +27,16 @@ TYPE_LABELS = {
     "commission_entreprise": "Commission Entreprise",
     "intervention": "Intervention", "ponctuelle": "Ponctuelle", "exceptionnel": "Exceptionnelle",
 }
+
+MONTHS_FR = [
+    "janvier", "février", "mars", "avril", "mai", "juin",
+    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+]
+
+# Largeur du créneau (en secondes) après un horaire planifié pendant laquelle on
+# considère encore que le rappel est dû (évite de sauter un créneau après un
+# léger réveil tardif du planificateur).
+DEADLINE_SLOT_GRACE_SECONDS = 600
 
 # Statut bloquant → (libellé de l'étape, filtre sur le rôle responsable)
 # Uniquement les étapes Directeur, DG et DRH (traitement)
@@ -70,6 +84,179 @@ async def send_daily_reminders() -> dict:
 async def send_now(_admin: User = Depends(require_admin)):
     """Déclenchement manuel (test admin)."""
     return await send_daily_reminders()
+
+
+# ---------------------------------------------------------------------------
+# Rappel de la date limite de validation (le 20 du mois)
+# ---------------------------------------------------------------------------
+
+def _deadline_tz() -> timezone:
+    return timezone(timedelta(hours=float(get_config("REMINDER_TZ_OFFSET") or "3")))
+
+
+def _deadline_day() -> int:
+    try:
+        return max(1, min(28, int(get_config("REMINDER_DEADLINE_DAY") or "20")))
+    except (TypeError, ValueError):
+        return 20
+
+
+def _parse_int_list(value: str, default: list) -> list:
+    parts = [p.strip() for p in (value or "").split(",") if p.strip()]
+    parsed = []
+    for p in parts:
+        if p.isdigit():
+            parsed.append(int(p))
+    return sorted(set(parsed)) if parsed else default
+
+
+def _deadline_reminder_days() -> list:
+    return _parse_int_list(get_config("REMINDER_DEADLINE_DAYS"), [5, 10, 15])
+
+
+def _deadline_reminder_hours() -> list:
+    return _parse_int_list(get_config("REMINDER_DEADLINE_HOURS"), [8, 17])
+
+
+def _deadline_label(now: datetime) -> str:
+    day = _deadline_day()
+    return f"{day} {MONTHS_FR[now.month - 1]} {now.year}"
+
+
+def _wave_label(reminder_day: int) -> str:
+    days = _deadline_reminder_days()
+    try:
+        idx = days.index(reminder_day)
+    except ValueError:
+        return "Rappel"
+    labels = ["1er rappel", "2ème rappel", "3ème rappel", "4ème rappel"]
+    return labels[idx] if idx < len(labels) else f"{idx + 1}ème rappel"
+
+
+async def collect_deadline_pending_by_actor() -> dict:
+    """
+    {user_id: {"user": User, "items": [...]}} pour les primes restant à
+    valider, adressé aux N+1, N+2 et Directeurs concernés :
+      - INITIALISE             → N+1 du département (restreint à ses services)
+      - EN_ATTENTE_N2          → N+2 sélectionné (n2_user)
+      - EN_ATTENTE_DIRECTEUR   → Directeur du département
+    """
+    actors = {}
+
+    def _add(user: User, bonus: Bonus, status_label: str):
+        emp = bonus.employee
+        actors.setdefault(user.id, {"user": user, "items": []})["items"].append({
+            "employee_name": emp.name,
+            "type_label": TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
+            "amount": f"{int(bonus.total_amount):,}".replace(",", " ") + " Ar",
+            "status_label": status_label,
+            "url": f"{get_config('FRONTEND_URL')}/bonuses/{bonus.id}",
+        })
+
+    # N+1 : primes initialisées
+    for bonus in await Bonus.filter(
+        status=ValidationStatus.INITIALISE, paid_at__isnull=True
+    ).prefetch_related("employee", "employee__service_group", "employee__dept"):
+        emp = bonus.employee
+        n1s = await User.filter(is_validator_n1=True, is_admin=False, dept_str=emp.dept_str).all()
+        for n1 in n1s:
+            group_ids = await n1_service_group_ids(n1)
+            if group_ids is not None and emp.service_group_id not in group_ids:
+                continue
+            _add(n1, bonus, "Validation N+1")
+
+    # N+2 : primes en attente N+2 (validateur désigné)
+    for bonus in await Bonus.filter(
+        status=ValidationStatus.EN_ATTENTE_N2, paid_at__isnull=True
+    ).prefetch_related("employee"):
+        n2 = await User.get_or_none(id=bonus.n2_user_id) if bonus.n2_user_id else None
+        if n2 and n2.is_validator_n2 and not n2.is_admin:
+            _add(n2, bonus, "Validation N+2")
+
+    # Directeurs : primes en attente Directeur
+    for bonus in await Bonus.filter(
+        status=ValidationStatus.EN_ATTENTE_DIRECTEUR, paid_at__isnull=True
+    ).prefetch_related("employee"):
+        emp = bonus.employee
+        directeurs = await User.filter(is_directeur=True, is_admin=False, dept_str=emp.dept_str).all()
+        for d in directeurs:
+            _add(d, bonus, "Validation Directeur")
+
+    return actors
+
+
+async def send_deadline_reminders() -> dict:
+    """Envoie, pour le mois courant, le rappel de la date limite de validation."""
+    now = datetime.now(_deadline_tz())
+    wave = _wave_label(now.day)
+    deadline = _deadline_label(now)
+    sent = failed = 0
+    for entry in (await collect_deadline_pending_by_actor()).values():
+        user, items = entry["user"], entry["items"]
+        if not items or not user.email:
+            continue
+        if await send_deadline_reminder_email(user.email, user.name, wave, deadline, items):
+            sent += 1
+        else:
+            failed += 1
+    print(f"[REMINDER-DEADLINE] {wave} ({deadline}) envoyés: {sent}, échecs: {failed}")
+    return {"wave": wave, "deadline": deadline, "emails_sent": sent, "emails_failed": failed}
+
+
+@router.post("/reminders/send-deadline-now")
+async def send_deadline_now(_admin: User = Depends(require_admin)):
+    """Déclenchement manuel (test admin) du rappel de date limite."""
+    return await send_deadline_reminders()
+
+
+def _next_deadline_slot(now: datetime):
+    """
+    Retourne ((year, month, day, hour), delay_seconds) pour le prochain créneau
+    (jour-heure) de rappel de date limite, en tenant compte d'une petite marge
+    post-créneau pour ne pas sauter un envoi après un léger réveil tardif.
+    """
+    candidates = []
+    for day in _deadline_reminder_days():
+        for hour in _deadline_reminder_hours():
+            for offset in range(0, 367):
+                d = now + timedelta(days=offset)
+                try:
+                    target = d.replace(day=day, hour=hour, minute=0, second=0, microsecond=0)
+                except ValueError:
+                    continue
+                delta = (target - now).total_seconds()
+                if delta > -DEADLINE_SLOT_GRACE_SECONDS:
+                    candidates.append(((target.year, target.month, target.day, hour), delta))
+                    break
+    if not candidates:
+        return None, None
+    key, delta = min(candidates, key=lambda c: c[1])
+    return key, max(delta, 0.0)
+
+
+_last_deadline_sent = None
+
+
+async def _deadline_reminder_loop():
+    global _last_deadline_sent
+    while True:
+        now = datetime.now(_deadline_tz())
+        slot_key, delay = _next_deadline_slot(now)
+        if slot_key is None:
+            print("[SCHEDULER] Aucun créneau de rappel de date limite configuré")
+            await asyncio.sleep(3600)
+            continue
+        if delay <= 0 and slot_key != _last_deadline_sent:
+            _last_deadline_sent = slot_key
+            try:
+                print(f"[SCHEDULER] Rappel de date limite déclenché pour le créneau {slot_key}")
+                await send_deadline_reminders()
+            except Exception as e:
+                print(f"[SCHEDULER] Erreur rappel de date limite : {e}")
+                await asyncio.sleep(60)
+                continue
+        print(f"[SCHEDULER] Prochain rappel de date limite dans {delay/3600:.2f} h")
+        await asyncio.sleep(max(delay, 1.0))
 
 
 def _seconds_until_next_run() -> float:
@@ -150,6 +337,12 @@ def start_scheduler():
         tasks.append(asyncio.create_task(_reminder_loop()))
     else:
         print("[SCHEDULER] Rappels désactivés")
+
+    if (get_config("REMINDER_DEADLINE_ENABLED") or "false").lower() == "true":
+        print("[SCHEDULER] Rappel de date limite activé")
+        tasks.append(asyncio.create_task(_deadline_reminder_loop()))
+    else:
+        print("[SCHEDULER] Rappel de date limite désactivé")
 
     if (get_config("BACKUP_ENABLED") or "true").lower() == "true":
         print("[SCHEDULER] Sauvegardes automatiques activées")
