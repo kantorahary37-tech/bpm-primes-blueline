@@ -285,6 +285,17 @@ def can_manage_gc_config(user: User) -> bool:
     """
     if user.is_admin or user.is_dg or user.is_drh:
         return True
+    return can_access_gc(user)
+
+
+def can_access_gc(user: User) -> bool:
+    """
+    Droits de CONSULTATION/utilisation de la Commission Grand Compte.
+    Réservée au Directeur du département « Direction Commerciale »
+    (ex: Julien Lorel), en plus des Admin, DG et DRH.
+    """
+    if user.is_admin or user.is_dg or user.is_drh:
+        return True
     return bool(
         user.is_directeur
         and (user.dept_str or '') == COMMISSION_GC_DEPARTMENT
@@ -432,6 +443,12 @@ def _require_commission_rights(user: User):
         raise HTTPException(403, "Vous n'avez pas le droit de créer des primes commission.")
 
 
+def _require_gc_access(user: User):
+    """Commission GC réservée au Directeur Commercial (+ Admin/DG/DRH)."""
+    if not can_access_gc(user):
+        raise HTTPException(403, "Accès à la Commission Grand Compte réservé au Directeur Commercial, Admin, DG ou DRH.")
+
+
 async def _load_gc_csv_and_compute(file: UploadFile):
     content = await file.read()
     return await compute_gc_rows(content)
@@ -446,6 +463,8 @@ async def list_gc_config(
     include_inactive: bool = False,
     user: User = Depends(get_current_user),
 ):
+    if not can_access_gc(user):
+        raise HTTPException(403, "Accès à la Commission Grand Compte réservé au Directeur Commercial, Admin, DG ou DRH.")
     query = CommissionGCConfig.all()
     if not include_inactive:
         query = query.filter(active=True)
@@ -508,6 +527,7 @@ async def preview_gc_bonuses(
     user: User = Depends(get_current_user),
 ):
     _require_commission_rights(user)
+    _require_gc_access(user)
     if start_date > end_date:
         raise HTTPException(400, "La date de début ne peut pas être après la date de fin.")
 
@@ -535,6 +555,7 @@ async def import_gc_bonuses(
     user: User = Depends(get_current_user),
 ):
     _require_commission_rights(user)
+    _require_gc_access(user)
     if start_date > end_date:
         raise HTTPException(400, "La date de début ne peut pas être après la date de fin.")
 

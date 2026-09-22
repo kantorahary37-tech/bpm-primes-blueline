@@ -22,6 +22,12 @@ import EvaluationTemplatesPage from './pages/EvaluationTemplatesPage'
 import CommissionConfigPage from './pages/CommissionConfigPage'
 import AdminConfigPage from './pages/AdminConfigPage'
 import Login from './pages/Login'
+
+// Droit de voir l'onglet/page « Commission GC » : Directeur Commercial (+ Admin/DG/DRH)
+// — miroir de la règle backend can_access_gc.
+const canAccessGC = (user) =>
+  user?.is_admin || user?.is_dg || user?.is_drh ||
+  (user?.is_directeur && user?.department === 'Direction Commerciale')
 import SignUp from './pages/SignUp'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
@@ -64,7 +70,7 @@ function AppContent() {
       <Route path="/services" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1']}><ServicesPage /></RestrictedRoute>} />
       <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><UsersPage /></RestrictedRoute>} />
       <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2']}><EvaluationTemplatesPage /></RestrictedRoute>} />
-      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh']}><AdminConfigPage /></RestrictedRoute>} />
+      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur']}><AdminConfigPage /></RestrictedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>
   )

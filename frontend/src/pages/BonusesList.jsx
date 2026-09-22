@@ -478,7 +478,10 @@ const [filterMonth, setFilterMonth] = useState('');
           <option value="mensuel">Mensuelle</option>
           <option value="astreinte">Astreinte</option>
           <option value="commission">Commission GP</option>
-          <option value="commission_gc">Commission GC</option>
+          {(user?.is_admin || user?.is_dg || user?.is_drh ||
+            (user?.is_directeur && user?.department === 'Direction Commerciale')) && (
+            <option value="commission_gc">Commission GC</option>
+          )}
         </select>
         {/* Filtre statut : limité aux statuts autorisés du rôle */}
         {statusOptions.length > 0 && (

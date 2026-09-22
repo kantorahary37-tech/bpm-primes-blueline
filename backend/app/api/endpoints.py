@@ -7,6 +7,7 @@ from tortoise.expressions import Q
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
 from app.permissions import n1_service_group_ids
+from app.api.commission_gc import can_access_gc, COMMISSION_GC_DEPARTMENT
 from app.email_service import send_bonus_notification_email, send_bonus_batch_notification_email
 from app.schemas import *
 from fastapi import HTTPException
@@ -331,6 +332,10 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
 
+    # Commission GC réservée au Directeur Commercial (+ Admin/DG/DRH)
+    if bonus.bonus_type == BonusType.COMMISSION_GC and not _can_see_gc(user):
+        raise HTTPException(status_code=404, detail="Bonus introuvable")
+
     can_edit_any = user.is_admin or user.is_dg or user.is_drh or (user.is_directeur and bonus.employee.dept_str == user.department)
 
     if not can_edit_any:
@@ -508,8 +513,26 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
 
     return updated
 
-# Route GET pour lister les primes (filtres optionnels)
-@router.get("/bonuses/", response_model=List[BonusResponse])
+# Helpers de restriction Commission GC : réservée au Directeur Commercial
+# (département COMMISSION_GC_DEPARTMENT), en plus des Admin, DG et DRH.
+def _can_see_gc(user: User) -> bool:
+    return can_access_gc(user)
+
+
+def _apply_gc_filter(query, user: User):
+    """Masque les primes commission_gc pour les utilisateurs sans accès GC."""
+    if not _can_see_gc(user):
+        return query.exclude(bonus_type=BonusType.COMMISSION_GC)
+    return query
+
+
+def _block_gc_request(user: User, bonus_type: Optional[str] = None):
+    """403 si l'utilisateur tente d'accéder explicitement aux données GC."""
+    if bonus_type == BonusType.COMMISSION_GC.value and not _can_see_gc(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Accès à la Commission Grand Compte réservé au Directeur Commercial, Admin, DG ou DRH.",
+        )
 async def list_bonuses(
     status: Optional[str] = None,
     employee_id: Optional[int] = None,
@@ -528,6 +551,7 @@ async def list_bonuses(
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'employee__service_group')
+    query = _apply_gc_filter(query, user)
 
     if archive_mode:
         query = query.filter(status=ValidationStatus.VALIDE)
@@ -592,6 +616,7 @@ async def list_bonuses(
         # include_paid=True les réintègre (ex: dashboard, statistiques complètes)
         query = query.filter(paid_at__isnull=True)
     if employee_id: query = query.filter(employee_id=employee_id)
+    _block_gc_request(user, bonus_type)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date: query = query.filter(start_date__gte=start_date)
     if end_date: query = query.filter(end_date__lte=end_date)
@@ -659,6 +684,7 @@ async def export_bonuses(
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by', 'employee__service_group')
+    query = _apply_gc_filter(query, user)
 
     # Filtre département selon le rôle
     if not (user.is_admin or user.is_dg or user.is_drh):
@@ -701,6 +727,7 @@ async def export_bonuses(
         if not (user.is_admin or user.is_dg or user.is_drh) and department != user.department:
             raise HTTPException(status_code=403, detail="Vous ne pouvez exporter que les primes de votre département")
         query = query.filter(employee__dept_str=department)
+    _block_gc_request(user, bonus_type)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if search:
         query = query.filter(
@@ -770,6 +797,7 @@ async def export_bonuses_xlsx(
     user: User = Depends(get_current_user),
 ):
     query = Bonus.all().prefetch_related('employee', 'created_by', 'employee__service_group')
+    query = _apply_gc_filter(query, user)
 
     # Filtre département selon le rôle
     if not (user.is_admin or user.is_dg or user.is_drh):
@@ -818,6 +846,7 @@ async def export_bonuses_xlsx(
             Q(employee__name__icontains=search) | Q(employee__matricule__icontains=search)
         )
 
+    _block_gc_request(user, bonus_type)
     bonuses = await query.order_by('-start_date')
 
     all_columns = [
@@ -940,10 +969,14 @@ async def export_sage():
 
 # Route GET pour l'export d'une prime spécifique
 @router.get("/bonuses/{bonus_id}/export")
-async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
+async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee', 'created_by')
     if not bonus:
         raise HTTPException(404, "Bonus not found")
+
+    # Commission GC réservée au Directeur Commercial (+ Admin/DG/DRH)
+    if bonus.bonus_type == BonusType.COMMISSION_GC and not _can_see_gc(user):
+        raise HTTPException(status_code=404, detail="Bonus introuvable")
 
     common = [
         "Matricule", "Nom", "Departement", "TypePrime",
@@ -1008,6 +1041,10 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None):
 async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
     bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee')
     if not bonus: raise HTTPException(404, "Bonus not found")
+
+    # Commission GC réservée au Directeur Commercial (+ Admin/DG/DRH)
+    if bonus.bonus_type == BonusType.COMMISSION_GC and not _can_see_gc(user):
+        raise HTTPException(status_code=404, detail="Bonus introuvable")
 
     # Vérifier le département (sauf admin/DG/DRH)
     if not (user.is_admin or user.is_dg or user.is_drh):

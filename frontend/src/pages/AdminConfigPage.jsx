@@ -13,13 +13,18 @@ import { useDepartments } from '../contexts/DepartmentsContext';
 import { adminLdapSyncDepartments } from '../services/api';
 import { SettingsIcon, ChartIcon, ArchiveIcon } from '../components/Icons';
 
+// Commission GC : réservée au Directeur Commercial (+ Admin/DG/DRH)
+const canAccessGC = (user) =>
+  user?.is_admin || user?.is_dg || user?.is_drh ||
+  (user?.is_directeur && user?.department === 'Direction Commerciale');
+
 const TABS_ALL = [
   { key: 'plafonds', label: 'Plafonds', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { key: 'bareme', label: 'Barème Commission GP', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { key: 'otherPrimes', label: 'Autres primes', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { key: 'affectations', label: 'Affectations', Icon: ArchiveIcon, adminOnly: true },
   { key: 'databaseBackup', label: 'Sauvegardes DB', Icon: ArchiveIcon, adminOnly: true },
-  { key: 'commissionGC', label: 'Commission GC', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur'] },
+  { key: 'commissionGC', label: 'Commission GC', Icon: ChartIcon, check: canAccessGC },
   { key: 'system', label: 'Paramètres système', Icon: SettingsIcon, adminOnly: true },
 ];
 
@@ -28,7 +33,8 @@ export default function AdminConfigPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const TABS = TABS_ALL.filter(t =>
     (!t.adminOnly || user?.is_admin) &&
-    (!t.roles || t.roles.some(r => user?.[r]))
+    (!t.roles || t.roles.some(r => user?.[r])) &&
+    (!t.check || t.check(user))
   );
   const initialTab = searchParams.get('tab') || TABS[0]?.key || 'plafonds';
   const [activeTab, setActiveTab] = useState(
@@ -85,7 +91,7 @@ export default function AdminConfigPage() {
         {activeTab === 'otherPrimes' && <OtherPrimesConfigPage />}
         {activeTab === 'affectations' && user?.is_admin && <ConfigSnapshotPage />}
         {activeTab === 'databaseBackup' && user?.is_admin && <DatabaseBackupPage />}
-        {activeTab === 'commissionGC' && <CommissionGCConfigPage />}
+        {activeTab === 'commissionGC' && canAccessGC(user) && <CommissionGCConfigPage />}
         {activeTab === 'system' && user?.is_admin && <SystemConfigPage />}
       </div>
     </div>

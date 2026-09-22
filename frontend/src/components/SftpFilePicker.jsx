@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Modal from './Modal'
 import { sftpInfo, sftpList, sftpDownload } from '../services/api'
+import * as XLSX from 'xlsx'
 
 const fmtSize = (bytes) => {
   if (bytes == null) return '—'
@@ -20,6 +21,53 @@ const joinPath = (base, name) => (base === '/' ? `/${name}` : `${base}/${name}`)
 
 const isCsv = (name) => name.toLowerCase().endsWith('.csv')
 
+// Découpe une ligne CSV (séparateur « ; ») en gérant les champs quotés.
+const parseCsvLine = (line) => {
+  const out = []
+  let cur = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++ } else inQuotes = false
+      } else {
+        cur += ch
+      }
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ';') {
+      out.push(cur)
+      cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  out.push(cur)
+  return out
+}
+
+// Convertit le contenu CSV des ventes en classeur Excel (1 ligne CSV = 1 ligne Excel).
+const csvToWorkbook = (text) => {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/).filter((l) => l.trim() !== '')
+  const sheet = XLSX.utils.aoa_to_sheet(lines.map(parseCsvLine))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, sheet, 'Ventes')
+  return wb
+}
+
+// Déclenche le téléchargement d'un Blob côté navigateur.
+const saveBlob = (blob, name) => {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export default function SftpFilePicker({ open, onClose, onSelect }) {
   const [info, setInfo] = useState(null)
   const [path, setPath] = useState('')
@@ -27,6 +75,7 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
   const [selected, setSelected] = useState(null) // entrée fichier sélectionnée
   const [loading, setLoading] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [exportingName, setExportingName] = useState(null)
   const [error, setError] = useState('')
 
   const loadList = useCallback(async (p) => {
@@ -86,6 +135,37 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
     }
   }
 
+  // Ferme le menu « Exporter » (dropdown daisyUI basé sur le focus)
+  const closeDropdown = () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  }
+
+  // Export (téléchargement local) d'un fichier du serveur SFTP.
+  // - asXlsx = false : le fichier est téléchargé tel quel (.csv)
+  // - asXlsx = true  : le CSV est converti en classeur Excel (.xlsx) pour faciliter le suivi des commissions
+  const handleExport = async (entry, asXlsx = false) => {
+    if (!entry) return
+    setExportingName(entry.name)
+    setError('')
+    try {
+      const data = await sftpDownload(joinPath(path, entry.name))
+      const binary = atob(data.content_base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const baseName = (data.name || entry.name).replace(/\.[^.]+$/, '')
+      if (asXlsx) {
+        const text = new TextDecoder('utf-8').decode(bytes)
+        XLSX.writeFile(csvToWorkbook(text), `${baseName}.xlsx`)
+      } else {
+        saveBlob(new Blob([bytes], { type: 'text/csv;charset=utf-8' }), data.name || entry.name)
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || "Erreur lors de l'export du fichier.")
+    } finally {
+      setExportingName(null)
+    }
+  }
+
   // Fil d'Ariane : / Prime / juillet_2026
   const segments = (path || '').split('/').filter(Boolean)
   const crumbs = segments.map((seg, i) => ({
@@ -141,7 +221,8 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
       {/* Liste des fichiers */}
       <div className="rounded-lg border border-base-300 overflow-hidden">
         <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-base-200/60 text-[11px] font-medium text-base-content/60 uppercase tracking-wide">
-          <div className="col-span-7">Nom de fichier</div>
+          <div className="col-span-6">Nom de fichier</div>
+          <div className="col-span-1 text-center">Export</div>
           <div className="col-span-2 text-right">Taille</div>
           <div className="col-span-3 text-right">Dernière modification</div>
         </div>
@@ -157,7 +238,8 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
               onClick={goUp}
               className="w-full grid grid-cols-12 gap-2 px-3 py-1.5 text-left hover:bg-base-200/60 border-b border-base-200/60"
             >
-              <span className="col-span-7 text-base-content/70 font-medium">..</span>
+              <span className="col-span-6 text-base-content/70 font-medium">..</span>
+              <span className="col-span-1" />
               <span className="col-span-2" />
               <span className="col-span-3" />
             </button>
@@ -169,11 +251,18 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
             const csv = isCsv(entry.name)
             const isDir = entry.type === 'dir'
             return (
-              <button
+              <div
                 key={entry.name}
-                type="button"
+                role="button"
+                tabIndex={isDir || csv ? 0 : -1}
                 onClick={() => (isDir ? navigateTo(entry) : selectFile(entry))}
-                disabled={!isDir && !csv}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && (isDir || csv)) {
+                    e.preventDefault()
+                    if (isDir) navigateTo(entry)
+                    else selectFile(entry)
+                  }
+                }}
                 title={!isDir && !csv ? 'Seuls les fichiers .csv peuvent être sélectionnés' : undefined}
                 className={`w-full grid grid-cols-12 gap-2 px-3 py-1.5 text-left border-b border-base-200/40 items-center ${
                   isDir ? 'hover:bg-base-200/60 cursor-pointer'
@@ -182,7 +271,7 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
                   : 'opacity-40 cursor-not-allowed'
                 }`}
               >
-                <span className="col-span-7 flex items-center gap-2 min-w-0">
+                <span className="col-span-6 flex items-center gap-2 min-w-0">
                   {isDir ? (
                     <svg className="w-4 h-4 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a2.25 2.25 0 011.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 013 3v1.146A4.483 4.483 0 0019.5 9h-15a4.483 4.483 0 00-3 1.146z" />
@@ -199,16 +288,35 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
                     <span className="badge badge-ghost badge-xs text-brand-600 shrink-0">CSV</span>
                   )}
                 </span>
+                <span className="col-span-1 text-center">
+                  {!isDir && csv && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleExport(entry, false) }}
+                      disabled={!!exportingName}
+                      title="Exporter ce fichier (téléchargement direct)"
+                      className="btn btn-ghost btn-xs btn-circle text-brand-600 hover:bg-brand-50"
+                    >
+                      {exportingName === entry.name ? (
+                        <span className="loading loading-spinner loading-xs" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                </span>
                 <span className="col-span-2 text-right text-base-content/50">{isDir ? '—' : fmtSize(entry.size)}</span>
                 <span className="col-span-3 text-right text-base-content/50">{fmtDate(entry.mtime)}</span>
-              </button>
+              </div>
             )
           })}
         </div>
       </div>
 
       <p className="text-[11px] text-base-content/40 mt-2">
-        Cliquez sur un dossier pour naviguer, sur un fichier <b>.csv</b> pour le sélectionner.
+        Cliquez sur un dossier pour naviguer, sur un fichier <b>.csv</b> pour le sélectionner. L'icône de téléchargement permet d'exporter directement le fichier.
       </p>
 
       {/* Pied : boutons */}
@@ -219,6 +327,32 @@ export default function SftpFilePicker({ open, onClose, onSelect }) {
             : 'Aucun fichier sélectionné'}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {selected && (
+            <div className="dropdown dropdown-top dropdown-end">
+              <button type="button" tabIndex={0} className="btn btn-sm btn-ghost gap-1" disabled={!!exportingName}>
+                {exportingName === selected.name ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                )}
+                Exporter
+              </button>
+              <ul tabIndex={0} className="dropdown-content z-10 menu p-2 shadow-xl bg-base-100 rounded-box w-60 border border-base-300">
+                <li>
+                  <button type="button" onClick={() => { closeDropdown(); handleExport(selected, false) }}>
+                    Format d'origine (.csv)
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => { closeDropdown(); handleExport(selected, true) }}>
+                    Classeur Excel (.xlsx)
+                  </button>
+                </li>
+              </ul>
+            </div>
+          )}
           <button type="button" onClick={onClose} className="btn btn-sm btn-ghost">Annuler</button>
           <button
             type="button"

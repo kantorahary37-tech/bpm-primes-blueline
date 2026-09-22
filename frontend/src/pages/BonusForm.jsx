@@ -8,6 +8,12 @@ import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '..
 import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
 import SftpFilePicker from '../components/SftpFilePicker'
+
+// Commission GC : réservée au Directeur Commercial (+ Admin/DG/DRH) —
+// miroir frontend de la règle backend can_access_gc (commission_gc.py).
+const canAccessGC = (user) =>
+  user?.is_admin || user?.is_dg || user?.is_drh ||
+  (user?.is_directeur && user?.department === 'Direction Commerciale')
 import * as XLSX from 'xlsx'
 
 const FRENCH_MONTHS = {
@@ -1272,6 +1278,7 @@ export default function BonusForm() {
     const fmtAr = (n) => seeAmounts ? (parseFloat(n) || 0).toLocaleString('fr-FR') : '••••••'
     const fmtPct = (p) => `${((parseFloat(p) ?? 0) * 100).toFixed(2)} %`
     const isGc = editType === 'commission_gc'
+    const canGC = canAccessGC(connectedUser)
     const gcDet = loadedBonus?.details || {}
 
     const commTypeSelector = (
@@ -1282,8 +1289,9 @@ export default function BonusForm() {
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${commSubType === 'gp' ? 'bg-brand-600 text-white' : 'text-base-content/70 hover:text-base-content'}`}>
             Prime Commission GP
           </button>
-          <button type="button" onClick={() => setCommSubType('gc')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${commSubType === 'gc' ? 'bg-brand-600 text-white' : 'text-base-content/70 hover:text-base-content'}`}>
+          <button type="button" onClick={() => canGC && setCommSubType('gc')} disabled={!canGC}
+            title={canGC ? undefined : "Réservé au Directeur Commercial"}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${commSubType === 'gc' && canGC ? 'bg-brand-600 text-white' : 'text-base-content/70 hover:text-base-content'} ${!canGC ? 'opacity-40 cursor-not-allowed' : ''}`}>
             Prime Commission GC
           </button>
         </div>
@@ -1445,7 +1453,7 @@ export default function BonusForm() {
     }
 
     // ----- Mode création : Commission Entreprise / Grand Compte -----
-    if (isGc || commSubType === 'gc') {
+    if ((isGc || commSubType === 'gc') && canGC) {
       const previewCount = gcPreview?.count ?? 0
       const totalAmount = gcPreview?.total_amount ?? 0
       const config = gcPreview?.config
