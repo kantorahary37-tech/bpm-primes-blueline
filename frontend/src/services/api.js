@@ -586,4 +586,30 @@ export const deleteOtherPrimeType = async (id) => {
   return data;
 };
 
+// --- Rappel DG des primes en cours de validation ---
+export const getPrimeReminderConfig = async () => {
+  const { data } = await api.get('/admin/prime-reminder/config');
+  return data;
+};
+
+export const updatePrimeReminderConfig = async (payload) => {
+  const { data } = await api.put('/admin/prime-reminder/config', payload);
+  return data;
+};
+
+export const sendPrimeReminderNow = async () => {
+  const { data } = await api.post('/admin/prime-reminder/send');
+  return data;
+};
+
+export const previewPrimeReminder = async () => {
+  const { data } = await api.get('/admin/prime-reminder/preview');
+  return data;
+};
+
+export const getPrimeReminderExecutions = async (params = {}) => {
+  const { data } = await api.get('/admin/prime-reminder/executions', { params });
+  return data;
+};
+
 export default api;

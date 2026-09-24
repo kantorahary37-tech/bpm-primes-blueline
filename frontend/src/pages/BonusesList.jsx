@@ -27,7 +27,7 @@ const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 const ALL_STATUSES = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
 
 // Statuts proposés dans le filtre : chaque rôle ne filtre que sur son flux :
-// Directeur : En attente Directeur · DRH : Prime validée · N+1 : Initialisé · N+2 : Initialisé / En attente N+2 · DG : En attente DG · Admin : tous
+// Directeur : En attente Directeur · DRH : En attente DG (défaut) / Prime validée · N+1 : Initialisé · N+2 : Initialisé / En attente N+2 · DG : En attente DG · Admin : tous
 const roleStatuses = (user) => {
   if (!user) return [];
   if (user.is_admin) return ALL_STATUSES;
@@ -97,6 +97,13 @@ const [filterMonth, setFilterMonth] = useState('');
       setStatusFilter(defaultStatusFor(user));
     }
   }, [user?.is_admin, user?.is_dg, user?.is_drh, user?.is_directeur, user?.is_validator_n1, user?.is_validator_n2]);
+
+  // Vue « département » + statut « En attente DG » par défaut pour les DG et DRH
+  useEffect(() => {
+    if (!user) return;
+    if (new URLSearchParams(window.location.search).get('view')) return;
+    if (user.is_dg || user.is_drh) setViewMode('department');
+  }, [user?.is_dg, user?.is_drh]);
 
   // Paramètres de filtrage/tri/recherche envoyés au backend
   const queryParams = useMemo(() => {

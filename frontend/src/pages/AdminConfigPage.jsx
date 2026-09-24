@@ -8,6 +8,7 @@ import SystemConfigPage from './SystemConfigPage';
 import ConfigSnapshotPage from './ConfigSnapshotPage';
 import DatabaseBackupPage from './DatabaseBackupPage';
 import OtherPrimesConfigPage from './OtherPrimesConfigPage';
+import PrimeReminderPage from './PrimeReminderPage';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import { adminLdapSyncDepartments } from '../services/api';
@@ -24,6 +25,7 @@ const TABS_ALL = [
   { key: 'otherPrimes', label: 'Autres primes', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
   { key: 'affectations', label: 'Affectations', Icon: ArchiveIcon, adminOnly: true },
   { key: 'databaseBackup', label: 'Sauvegardes DB', Icon: ArchiveIcon, adminOnly: true },
+  { key: 'primeReminder', label: 'Rappel DG', Icon: SettingsIcon, adminOnly: true },
   { key: 'commissionGC', label: 'Commission GC', Icon: ChartIcon, check: canAccessGC },
   { key: 'system', label: 'Paramètres système', Icon: SettingsIcon, adminOnly: true },
 ];
@@ -91,6 +93,7 @@ export default function AdminConfigPage() {
         {activeTab === 'otherPrimes' && <OtherPrimesConfigPage />}
         {activeTab === 'affectations' && user?.is_admin && <ConfigSnapshotPage />}
         {activeTab === 'databaseBackup' && user?.is_admin && <DatabaseBackupPage />}
+        {activeTab === 'primeReminder' && user?.is_admin && <PrimeReminderPage />}
         {activeTab === 'commissionGC' && canAccessGC(user) && <CommissionGCConfigPage />}
         {activeTab === 'system' && user?.is_admin && <SystemConfigPage />}
       </div>

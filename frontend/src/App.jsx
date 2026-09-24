@@ -21,6 +21,7 @@ import UsersPage from './pages/UsersPage'
 import EvaluationTemplatesPage from './pages/EvaluationTemplatesPage'
 import CommissionConfigPage from './pages/CommissionConfigPage'
 import AdminConfigPage from './pages/AdminConfigPage'
+import PrimeReminderPage from './pages/PrimeReminderPage'
 import Login from './pages/Login'
 
 // Droit de voir l'onglet/page « Commission GC » : Directeur Commercial (+ Admin/DG/DRH)
@@ -71,6 +72,7 @@ function AppContent() {
       <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><UsersPage /></RestrictedRoute>} />
       <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2']}><EvaluationTemplatesPage /></RestrictedRoute>} />
       <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur']}><AdminConfigPage /></RestrictedRoute>} />
+      <Route path="/admin/prime-reminder" element={<RestrictedRoute roles={['is_admin']}><PrimeReminderPage /></RestrictedRoute>} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>
   )

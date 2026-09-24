@@ -47,6 +47,12 @@ CONFIG_DEFINITIONS = {
     "REMINDER_DEADLINE_DAYS": {"category": "reminders", "type": "string", "description": "Jours des rappels dans le mois (séparés par virgule)", "default": "5,10,15"},
     "REMINDER_DEADLINE_HOURS": {"category": "reminders", "type": "string", "description": "Heures d'envoi des rappels dans la journée (séparées par virgule)", "default": "8,17"},
 
+    # ── Rappel DG des primes en cours de validation (résumé groupé) ──
+    "PRIME_REMINDER_ENABLED": {"category": "reminders", "type": "boolean", "description": "Activer le rappel DG des primes en cours de validation", "default": "false"},
+    "PRIME_REMINDER_DAYS": {"category": "reminders", "type": "string", "description": "Jours du mois d'envoi du rappel DG (séparés par virgule)", "default": "15,20"},
+    "PRIME_REMINDER_HOURS": {"category": "reminders", "type": "string", "description": "Heures d'envoi du rappel DG dans la journée (séparées par virgule)", "default": "8,17"},
+    "PRIME_REMINDER_RECIPIENT": {"category": "reminders", "type": "string", "description": "Destinataire(s) du rappel DG (emails séparés par virgule ; vide = compte(s) DG de l'application)", "default": ""},
+
     # ── LDAP ──
     "LDAP_SERVER_URI": {"category": "ldap", "type": "string", "description": "URI du serveur LDAP", "default": "ldap://ldap.blueline.mg:389"},
     "LDAP_BIND_DN": {"category": "ldap", "type": "string", "description": "DN de connexion LDAP", "default": "cn=admin,dc=blueline,dc=mg"},
@@ -124,6 +130,21 @@ async def load_configs_to_env() -> None:
         print(f"[CONFIG] {len(rows)} configuration(s) chargée(s) depuis la base de données")
     except Exception as e:
         print(f"[CONFIG] Impossible de charger la config depuis la DB: {e}")
+
+
+async def bootstrap_config() -> None:
+    """Point d'entrée unique de chargement de la configuration.
+
+    Initialise les clés manquantes depuis .env puis charge TOUTES les valeurs
+    depuis la base de données, qui priment sur le fichier .env. À appeler
+    après l'init de Tortoise (et avant toute lecture de config) dans chaque
+    processus : application web, scripts d'envoi (send_prime_reminder,
+    send_reminder, send_deadline_reminder), CLI, etc. Sans cet appel, un
+    processus autonome ne verrait que les valeurs du fichier .env et ignorerait
+    la configuration modifiée via l'interface (SystemConfig en DB).
+    """
+    await seed_config_from_env()
+    await load_configs_to_env()
 
 
 async def seed_config_from_env() -> None:

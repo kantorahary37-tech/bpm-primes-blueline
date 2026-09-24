@@ -9,12 +9,15 @@ sys.path.append('.')
 
 from tortoise import Tortoise, run_async
 from app.db_config import TORTOISE_ORM
+from app.config import bootstrap_config
 from app.scheduler import send_daily_reminders
 
 
 async def main():
     await Tortoise.init(config=TORTOISE_ORM)
     await Tortoise.generate_schemas()
+    # La config de la base de données prime sur le fichier .env.
+    await bootstrap_config()
     summary = await send_daily_reminders()
     print(f"Rappels : {summary['emails_sent']} envoyé(s), {summary['emails_failed']} échec(s)")
     await Tortoise.close_connections()

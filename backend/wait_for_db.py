@@ -377,11 +377,46 @@ try:
     cur.execute("""
         ALTER TABLE bonus ADD COLUMN IF NOT EXISTS "n2_user_id" INT REFERENCES "user" ("id") ON DELETE SET NULL;
     """)
+    # bonus.bonus_type: les 8 types (le plus long est "commission_entreprise", 21 car.)
+    cur.execute("""
+        ALTER TABLE bonus ALTER COLUMN "bonus_type" TYPE VARCHAR(30);
+    """)
     conn.commit()
     cur.close()
     conn.close()
     print("N+2 role columns OK")
 except Exception as e:
     print(f"N+2 role columns check skipped: {e}")
+
+print("Ensuring primereminderexecution table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "primereminderexecution" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "notification_type" VARCHAR(50) NOT NULL,
+            "trigger_type" VARCHAR(20) NOT NULL,
+            "scheduled_for" TIMESTAMPTZ,
+            "recipient" VARCHAR(1000) NOT NULL DEFAULT '',
+            "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+            "summary" JSONB,
+            "total_count" INT NOT NULL DEFAULT 0,
+            "sent_at" TIMESTAMPTZ,
+            "error_message" TEXT,
+            "created_by_id" INT REFERENCES "user" ("id"),
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE ("notification_type", "scheduled_for")
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("primereminderexecution table OK")
+except Exception as e:
+    print(f"primereminderexecution table check skipped: {e}")
 
 print("Starting application...")

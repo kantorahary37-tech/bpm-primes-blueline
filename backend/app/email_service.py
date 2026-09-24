@@ -2,6 +2,7 @@ import smtplib
 import asyncio
 from datetime import date
 from email.message import EmailMessage
+from urllib.parse import urlencode
 from app.config import get_config
 
 
@@ -682,4 +683,194 @@ def _send_deadline_reminder_email_sync(
         return True
     except Exception as e:
         print(f"SMTP error (deadline reminder): {e}")
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Rappel DG des primes en attente de validation (résumé groupé)
+# ---------------------------------------------------------------------------
+
+def _prime_reminder_greeting(greeting_name: str | None) -> str:
+    return f"Bonjour {greeting_name}," if greeting_name else "Bonjour,"
+
+
+def _prime_reminder_greeting_name(email: str) -> str | None:
+    """Nom réel (nom d'affichage) du destinataire récupéré sur LDAP.
+    Préfère le champ ``cn`` de l'annuaire, sinon given + sn via full_name."""
+    try:
+        from app.ldap_helpers import find_by_email, full_name
+        rec = find_by_email(email)
+        if not rec:
+            return None
+        name = rec.get('cn')
+        if not name:
+            name = full_name(rec)
+        name = str(name).strip()
+        name = " ".join(name.split()) if name else name
+        return name or None
+    except Exception:
+        return None
+
+
+def render_prime_reminder_email(cfg: dict, sections: list, total: int,
+                                greeting_name: str | None = None) -> tuple:
+    """
+    Construit (subject, texte_brut, html) du rappel DG. Les sections sont des
+    dicts {department, bonus_type_label, count}. Le résumé ne contient AUCUNE
+    information nominative des primes (uniquement département / type / nombre) ;
+    l'objet de l'email est personnalisé avec le nom réel du DG (LDAP, sinon
+    compte BPM) et inclut l'URL de l'application (FRONTEND_URL, config auth).
+    """
+    env_label = _env_label(cfg)
+    prefix = _test_subject_prefix(cfg)
+    subject = f"{prefix}Rappel : {total} prime(s) en attente de votre validation | BPM"
+    greeting = _prime_reminder_greeting(greeting_name)
+    app_url = (get_config("FRONTEND_URL") or "").strip().rstrip("/")
+    # Lien direct vers la liste filtrée des primes en attente de la validation DG.
+    list_url = (
+        f"{app_url}/bonuses?{urlencode({'status': 'En attente DG', 'view': 'department'})}"
+        if app_url else ""
+    )
+    app_url_button = (
+        f'<table width="100%" cellpadding="0" cellspacing="0">'
+        f'<tr><td align="center" style="padding:4px 0 6px;">'
+        f'<a href="{list_url}" style="display:inline-block;background:#1d4ed8;color:#fff;'
+        f'padding:12px 32px;border-radius:10px;text-decoration:none;font-size:14px;'
+        f'font-weight:600;letter-spacing:0.3px;">Voir les primes en attente &rarr;</a>'
+        f'</td></tr>'
+        f'<tr><td align="center" style="padding:0 0 20px;">'
+        f'<a href="{app_url}" style="font-size:13px;color:#2563eb;text-decoration:none;">{app_url}</a>'
+        f'</td></tr></table>'
+        if app_url else ""
+    )
+
+    def line_plain(s):
+        return f"- {s['department']} / {s['bonus_type_label']} : {s['count']}"
+
+    plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
+    app_url_line = (
+        f"Voir les primes en attente de votre validation :\n{list_url}\n\n"
+        f"Ouvrir l'application BPM :\n{app_url}\n\n"
+        if app_url else ""
+    )
+    plain = (
+        f"{plain_env}"
+        f"{greeting}\n\n"
+        f"Voici le récapitulatif des primes en attente de votre validation :\n\n"
+        + "\n".join(line_plain(s) for s in sections)
+        + f"\n\nMerci de valider ces primes afin que le processus puisse se poursuivre.\n\n"
+        + app_url_line
+        + f"Cordialement,\nBPM | Gestion de Prime"
+    )
+
+    banner = _test_banner_html(cfg)
+    footer = _test_footer_html(cfg)
+    env_badge = (
+        f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+        f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+        if cfg["test_mode"] else ""
+    )
+
+    rows = "".join(
+        f'<tr>'
+        f'<td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;">'
+        f'<span style="font-size:14px;font-weight:600;color:#0f172a;">{s["department"]}</span>'
+        f'<span style="color:#94a3b8;"> / {s["bonus_type_label"]}</span>'
+        f'</td>'
+        f'<td align="right" style="padding:10px 16px;border-bottom:1px solid #f1f5f9;">'
+        f'<span style="display:inline-block;background:#eff6ff;color:#1d4ed8;'
+        f'font-size:14px;font-weight:700;padding:2px 12px;border-radius:999px;">{s["count"]}</span>'
+        f'</td>'
+        f'</tr>'
+        for s in sections
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#1e40af,#2563eb);padding:24px 32px;border-radius:16px 16px 0 0;">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td>
+              <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">BPM</div>
+              <div style="font-size:20px;color:#fff;font-weight:700;margin-top:2px;">Gestion de Prime</div>
+            </td>
+            <td align="right">{env_badge}</td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;">
+          {banner}
+          <p style="margin:0 0 16px;font-size:15px;color:#334155;">{greeting}</p>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
+            Voici le récapitulatif des primes <strong style="color:#0f172a;">en attente de votre validation</strong> :
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;margin:0 0 20px;">
+            {rows}
+          </table>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
+            Merci de valider ces primes afin que le processus puisse se poursuivre.
+          </p>
+          {app_url_button}
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
+          {footer}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    return subject, plain, html
+
+
+async def _prime_reminder_dg_greeting_name() -> str | None:
+    """Nom réel du DG (compte BPM is_dg) pour personnaliser le mail :
+    récupéré sur LDAP (champ cn) si disponible, sinon nom du compte BPM.
+    S'applique même en mode test : le mail est adressé au DG, pas au destinataire."""
+    try:
+        from app.models import User
+        dg = await User.filter(is_dg=True, is_admin=False).order_by("id").first()
+        if not dg or not dg.email:
+            return None
+        name = await asyncio.to_thread(_prime_reminder_greeting_name, dg.email)
+        if name:
+            return name
+        return (dg.name or "").strip() or None
+    except Exception:
+        return None
+
+
+async def send_prime_reminder_email(to_emails: list, sections: list, total: int) -> bool:
+    """Envoie le rappel DG groupé à chaque destinataire résolu.
+
+    Le mail est adressé au DG réel (objet personnalisé avec son nom), quel que
+    soit le destinataire de test configuré."""
+    greeting_name = await _prime_reminder_dg_greeting_name()
+    return await asyncio.to_thread(_send_prime_reminder_email_sync, to_emails, sections, total, greeting_name)
+
+
+def _send_prime_reminder_email_sync(to_emails: list, sections: list, total: int,
+                                    greeting_name: str | None = None) -> bool:
+    try:
+        cfg = _smtp_config()
+        subject, plain, html = render_prime_reminder_email(cfg, sections, total, greeting_name)
+        resolved = [_resolve_email(e) for e in to_emails]
+        sent_any = False
+        for email in resolved:
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
+            msg["To"] = email
+            msg.set_content(plain)
+            msg.add_alternative(html, subtype="html")
+            with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
+                server.starttls()
+                server.login(cfg["user"], cfg["password"])
+                server.send_message(msg)
+            sent_any = True
+        return sent_any
+    except Exception as e:
+        print(f"SMTP error (prime reminder): {e}")
         return False

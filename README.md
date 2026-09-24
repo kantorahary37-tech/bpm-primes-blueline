@@ -57,6 +57,32 @@ docker compose exec backend python -m scripts.send_reminder
 docker compose run --rm backend python -m scripts.send_reminder
 ```
 
+### Rappel DG des primes en cours de validation (résumé groupé)
+
+Après la validation **Directeur**, l'email automatique à la DG n'est plus envoyé
+immédiatement : il est remplacé par un **rappel planifié** qui envoie à la DG
+un récapitulatif **groupé** (département / type de prime => nombre, aucune
+information nominative) des primes encore en cours de validation.
+
+```ini
+PRIME_REMINDER_ENABLED=true       # active le cron du rappel DG
+PRIME_REMINDER_DAYS=15,20         # jours du mois d'envoi
+PRIME_REMINDER_HOURS=8,17         # heures d'envoi dans la journée
+PRIME_REMINDER_RECIPIENT=         # vide = comptes DG (is_dg) non administrateurs ;
+                                  # sinon adresses email séparées par des virgules
+```
+
+L'historique des envois (cron + manuels) est consultable dans l'interface
+(Rappel DG), ainsi que la configuration et un aperçu du template. L'idempotence
+est garantie en base : un même créneau planifié n'est envoyé qu'une seule fois.
+Un créneau avec zéro prime en cours est clôturé sans envoyer d'email.
+
+Envoi manuel (bouton admin ou script) :
+
+```Shell
+docker compose exec backend python -m scripts.send_prime_reminder
+```
+
 ## Commandes utiles
 
 Voir [commands.md](commands.md) (seeds, Docker dev/prod, backup/restore).

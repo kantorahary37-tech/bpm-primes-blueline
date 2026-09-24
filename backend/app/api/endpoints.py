@@ -304,7 +304,9 @@ async def batch_validate_bonuses(
                             user=r, bonus=bonus, sender=user,
                             type=notif_type, message=notif_msg,
                         )
-                        if r.email:
+                        # La notification email à la DG après validation Directeur est
+                        # désormais gérée par le rappel planifié (prime_reminder_service).
+                        if r.email and request.step != "DIRECTEUR":
                             batch_notifs.setdefault(r.id, {"user": r, "items": []})["items"].append({
                                 "employee_name": employee.name,
                                 "type_label": BATCH_TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
@@ -1269,7 +1271,9 @@ async def validate_bonus(
                     user=r, bonus=bonus, sender=user,
                     type=notif_type, message=notif_message,
                 )
-                if r.email:
+                # La notification email à la DG après validation Directeur est
+                # désormais gérée par le rappel planifié (prime_reminder_service).
+                if r.email and step != "DIRECTEUR":
                     asyncio.create_task(send_bonus_notification_email(
                         r.email, r.name, user.name,
                         employee.name, f"Prime validée (étape {step})", bonus_url,

@@ -24,6 +24,23 @@ def connect() -> Connection:
     )
 
 
+def find_by_email(email: str) -> dict | None:
+    """Renvoie l'enregistrement LDAP correspondant à ``email`` (dict d'attributs)
+    ou None si aucun utilisateur / si l'annuaire est indisponible."""
+    try:
+        with connect() as conn:
+            if not conn.search(
+                search_base=LDAP_USER_SEARCH_BASE,
+                search_filter=f'(mail={escape_ldap(email)})',
+                attributes=LDAP_ATTRS,
+            ):
+                return None
+            entry = conn.entries[0]
+            return {attr: first(entry, attr) for attr in LDAP_ATTRS}
+    except Exception:
+        return None
+
+
 def first(entry, attr):
     if attr not in entry or not entry[attr]:
         return None

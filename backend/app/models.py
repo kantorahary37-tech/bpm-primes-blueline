@@ -184,8 +184,8 @@ class Bonus(models.Model):
     start_date = fields.DateField()
     # Date de fin de la période
     end_date = fields.DateField()
-    # Type de prime (mensuel/astreinte/commission)
-    bonus_type = fields.CharEnumField(BonusType, max_length=20)
+    # Type de prime (mensuel/astreinte/commission/...)
+    bonus_type = fields.CharEnumField(BonusType, max_length=30)
     # Score de performance (optionnel)
     performance_score = fields.DecimalField(max_digits=5, decimal_places=2, null=True)
     # Nombre d'absences (optionnel)
@@ -365,3 +365,43 @@ class ConfigSnapshot(models.Model):
     employee_count = fields.IntField(default=0)
     # Date de création
     created_at = fields.DatetimeField(auto_now_add=True)
+
+
+# Modèle Journal des envois du rappel DG des primes en cours (table "primereminderexecution")
+class PrimeReminderExecution(models.Model):
+    """Historique / journal des envois du rappel DG (cron ou manuel).
+
+    Garantit l'idempotence : un même créneau planifié (notification_type +
+    scheduled_for) ne peut être envoyé qu'une seule fois. Un envoi ayant
+    échoué (FAILED) peut être retenté en réutilisant la même ligne.
+    """
+    id = fields.IntField(pk=True)
+    # Type d'exécution (ex: prime_reminder_dg)
+    notification_type = fields.CharField(max_length=50)
+    # Origine : CRON ou MANUAL
+    trigger_type = fields.CharField(max_length=20)
+    # Créneau planifié (date/heure locale) pour les exécutions CRON ;
+    # instant de déclenchement pour les exécutions manuelles.
+    scheduled_for = fields.DatetimeField(null=True)
+    # Destinataire(s) effectif(s) de l'email (séparés par une virgule)
+    recipient = fields.CharField(max_length=1000, default='')
+    # Statut : PENDING / SENDING / SENT / FAILED / MANUAL
+    status = fields.CharField(max_length=20, default='PENDING')
+    # Résumé groupé envoyé (département / type => nombre)
+    summary = fields.JSONField(null=True)
+    # Nombre total de primes en cours concernées
+    total_count = fields.IntField(default=0)
+    # Date effective d'envoi
+    sent_at = fields.DatetimeField(null=True)
+    # Message d'erreur en cas d'échec
+    error_message = fields.TextField(null=True)
+    # Utilisateur ayant déclenché un envoi manuel (null pour CRON / script)
+    created_by = fields.ForeignKeyField('models.User', related_name='prime_reminder_executions', null=True)
+    # Dates de création / mise à jour
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        # Idempotence CRON : un même créneau planifié ne peut être exécuté qu'une fois
+        unique_together = (("notification_type", "scheduled_for"),)
+        table = "primereminderexecution"

@@ -5,6 +5,8 @@ Planificateur :
 - Rappel de la date limite (le 20 du mois) : un email les 5, 10 et 15 du mois à
   08h00 et 17h00 aux N+1, N+2 et Directeurs concernés, listant leurs
   validations encore en attente et la date limite fixée.
+- Rappel DG des primes en cours de validation (résumé groupé) : email aux jours
+  et heures configurés (PRIME_REMINDER_DAYS / PRIME_REMINDER_HOURS).
 - Sauvegarde automatique périodique de la base (dump SQL complet) avec
   rétention des N dernières copies.
 """
@@ -237,6 +239,40 @@ def _next_deadline_slot(now: datetime):
 _last_deadline_sent = None
 
 
+# ---------------------------------------------------------------------------
+# Rappel DG des primes en cours de validation (résumé groupé)
+# ---------------------------------------------------------------------------
+
+_last_prime_reminder_slot = None
+
+
+async def _prime_reminder_loop():
+    global _last_prime_reminder_slot
+    # Import différé pour éviter l'import circulaire (le service référence
+    # TYPE_LABELS de ce module de façon paresseuse).
+    from app.prime_reminder_service import prime_reminder_next_slot, prime_reminder_send_scheduled
+
+    while True:
+        now = datetime.now(_deadline_tz())
+        target, delay = prime_reminder_next_slot(now)
+        if target is None:
+            print("[SCHEDULER] Aucun créneau de rappel DG configuré")
+            await asyncio.sleep(3600)
+            continue
+        slot_key = (target.year, target.month, target.day, target.hour)
+        if delay <= 0 and slot_key != _last_prime_reminder_slot:
+            _last_prime_reminder_slot = slot_key
+            try:
+                print(f"[SCHEDULER] Rappel DG déclenché pour le créneau {slot_key}")
+                await prime_reminder_send_scheduled(target)
+            except Exception as e:
+                print(f"[SCHEDULER] Erreur rappel DG : {e}")
+                await asyncio.sleep(60)
+                continue
+        print(f"[SCHEDULER] Prochain rappel DG dans {delay/3600:.2f} h")
+        await asyncio.sleep(max(delay, 1.0))
+
+
 async def _deadline_reminder_loop():
     global _last_deadline_sent
     while True:
@@ -343,6 +379,12 @@ def start_scheduler():
         tasks.append(asyncio.create_task(_deadline_reminder_loop()))
     else:
         print("[SCHEDULER] Rappel de date limite désactivé")
+
+    if (get_config("PRIME_REMINDER_ENABLED") or "false").lower() == "true":
+        print("[SCHEDULER] Rappel DG des primes en cours activé")
+        tasks.append(asyncio.create_task(_prime_reminder_loop()))
+    else:
+        print("[SCHEDULER] Rappel DG des primes en cours désactivé")
 
     if (get_config("BACKUP_ENABLED") or "true").lower() == "true":
         print("[SCHEDULER] Sauvegardes automatiques activées")
