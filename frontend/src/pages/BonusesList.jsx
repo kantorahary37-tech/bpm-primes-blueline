@@ -99,12 +99,7 @@ const [filterMonth, setFilterMonth] = useState('');
     }
   }, [user?.is_admin, user?.is_dg, user?.is_drh, user?.is_directeur, user?.is_validator_n1, user?.is_validator_n2]);
 
-  // Vue « département » + statut « En attente DG » par défaut pour les DG et DRH
-  useEffect(() => {
-    if (!user) return;
-    if (new URLSearchParams(window.location.search).get('view')) return;
-    if (user.is_dg || user.is_drh) setViewMode('department');
-  }, [user?.is_dg, user?.is_drh]);
+  
 
   // Paramètres de filtrage/tri/recherche envoyés au backend
   const queryParams = useMemo(() => {
@@ -581,9 +576,14 @@ const [filterMonth, setFilterMonth] = useState('');
       {depFilter && filteredBonuses.length > 0 && (
         <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center gap-3">
           <span className="text-sm font-semibold text-blue-700">{depFilter}</span>
-          <span className="text-sm font-bold text-blue-700">
-            Total : {seeAmounts ? formatTotalsAndCountsByCurrency(filteredBonuses) : `${formatCountsByCurrency(filteredBonuses)} prime(s)`}
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm font-bold text-blue-700">
+              {seeAmounts ? formatTotalsAndCountsByCurrency(filteredBonuses) : `${formatCountsByCurrency(filteredBonuses)} prime(s)`}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              {filteredBonuses.length}
+            </span>
+          </div>
         </div>
       )}
       {filteredBonuses.length === 0 ? (
@@ -602,9 +602,14 @@ const [filterMonth, setFilterMonth] = useState('');
         <div key={dept} className="mb-6">
           <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
             <h2 className="font-semibold text-sm">{dept}</h2>
-            <span className="text-sm font-bold text-blue-600 ml-1">
-              {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
-            </span>
+            <div className="ml-4 flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">
+                {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                {items.length}
+              </span>
+            </div>
             <div className="flex gap-1 ml-auto">
               {items.some(b => canSelect(b)) && (
                 <button onClick={() => {
@@ -656,9 +661,14 @@ const [filterMonth, setFilterMonth] = useState('');
               <div key={serviceGroup.name} className="p-3">
                 <div className="flex items-center gap-2 mb-2 px-1">
                   <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">{serviceGroup.name}</span>
-                  <span className="text-xs font-bold text-blue-600 ml-1">
-                    {seeAmounts ? formatTotalsAndCountsByCurrency(serviceGroup.items) : formatCountsByCurrency(serviceGroup.items)}
-                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-600">
+                      {seeAmounts ? formatTotalsAndCountsByCurrency(serviceGroup.items) : formatCountsByCurrency(serviceGroup.items)}
+                    </span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">
+                      {serviceGroup.items.length}
+                    </span>
+                  </div>
                 </div>
                 <BonusTable
                   bonuses={serviceGroup.items}
@@ -725,9 +735,14 @@ const [filterMonth, setFilterMonth] = useState('');
                   </button>
                 </div>
               )}
-              <span className={`text-sm font-bold ${section.highlight ? 'text-white' : 'text-blue-600'}`}>
-                {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
-              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <span className={`text-sm font-medium ${section.highlight ? 'text-white' : 'text-gray-700'}`}>
+                  {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
+                </span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${section.highlight ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                  {items.length}
+                </span>
+              </div>
             </div>
 
             {items.length === 0 ? (
@@ -774,19 +789,25 @@ const [filterMonth, setFilterMonth] = useState('');
           <>
           {visibleGroups.map(({ ym, monthName, bonuses: items }) => {
         const validatedCount = items.filter(b => b.status === 'Prime validée').length;
+        const totalCount = items.length;
         return (
         <div key={ym} className="mb-6">
           <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
             <h2 className="font-semibold text-sm">{monthName}</h2>
+            <div className="ml-4 flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">
+                {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                {totalCount}
+              </span>
+            </div>
             {user?.is_drh && validatedCount > 0 && (
               <button onClick={() => {
                 const [y, m] = ym.split('-')
                 setPayConfirm({ type: 'month', month: m, year: y, monthName, count: validatedCount })
-              }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Traiter ({validatedCount})</button>
+              }} className="ml-auto btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Traiter ({validatedCount})</button>
             )}
-            <span className="text-sm font-bold text-blue-600">
-              {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
-            </span>
           </div>
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
             <BonusTable
