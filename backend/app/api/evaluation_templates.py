@@ -167,7 +167,7 @@ async def apply_service_group_evaluation(
         # « Sans service » : réservé aux rôles globaux et directeurs (périmètre département)
         if not (_is_broad(user) or user.is_directeur):
             raise HTTPException(403, "Acces non autorise pour ce role")
-        query = Employee.filter(is_active=True, service_group_id__isnull=True)
+        query = Employee.filter(is_active=True, is_archived=False, service_group_id__isnull=True)
         if _scoped_director(user):
             query = query.filter(dept_str=user.dept_str)
         employees = await query
@@ -186,7 +186,7 @@ async def apply_service_group_evaluation(
         elif _scoped_director(user) and group.department.name != user.department:
             raise HTTPException(403, "Ce directeur ne peut gérer que les évaluations des services de son département")
 
-        employees = await Employee.filter(is_active=True, service_group=group)
+        employees = await Employee.filter(is_active=True, is_archived=False, service_group=group)
         group_name = group.name
 
     if not employees:
@@ -230,13 +230,13 @@ async def get_all_templates(user: User = Depends(get_current_user)):
         raise HTTPException(403, "Acces reserve aux administrateurs et validateurs")
 
     if _is_broad(user):
-        employees = await Employee.filter(is_active=True).prefetch_related("service_group").order_by("name")
+        employees = await Employee.filter(is_active=True, is_archived=False).prefetch_related("service_group").order_by("name")
     elif user.is_directeur:
-        employees = await Employee.filter(is_active=True, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
+        employees = await Employee.filter(is_active=True, is_archived=False, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
     else:
         # N+1/N+2 : leurs services affectés ; sans affectation → uniquement
         # leur propre fiche employé
-        query = Employee.filter(is_active=True, dept_str=user.dept_str)
+        query = Employee.filter(is_active=True, is_archived=False, dept_str=user.dept_str)
         query = apply_employee_scope(query, await employee_scope(user))
         employees = await query.prefetch_related("service_group").order_by("name")
     result = []

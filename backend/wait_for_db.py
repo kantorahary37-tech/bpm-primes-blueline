@@ -201,6 +201,25 @@ try:
 except Exception as e:
     print(f"employee currency column check skipped: {e}")
 
+print("Ensuring employee archived columns exist...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "is_archived" BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "archived_by_id" INT REFERENCES "user" ("id") ON DELETE SET NULL;
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "archived_at" TIMESTAMPTZ;
+        ALTER TABLE "employee" ADD COLUMN IF NOT EXISTS "archive_reason" VARCHAR(500);
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("employee archived columns OK")
+except Exception as e:
+    print(f"employee archived columns check skipped: {e}")
+
 print("Ensuring employee poste column exists...")
 try:
     import psycopg2

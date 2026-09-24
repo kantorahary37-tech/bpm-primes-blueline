@@ -210,10 +210,10 @@ async def compute_commission_rows(content: bytes):
     if total_idx is None:
         raise HTTPException(400, "Colonne 'total montant' introuvable dans le fichier CSV.")
 
-    # Tous les employés en base, indexés par matricule exact ET par matricule normalisé
+    # Tous les employés en base (hors archivés), indexés par matricule exact ET par matricule normalisé
     # (tolère les zéros initiaux : la base stocke 01814, le CSV 4D fournit 1814).
     employees_db = {}
-    for e in await Employee.all():
+    for e in await Employee.filter(is_archived=False):
         employees_db.setdefault(e.matricule, e)
         norm = normalize_matricule(e.matricule)
         if norm and norm != e.matricule:

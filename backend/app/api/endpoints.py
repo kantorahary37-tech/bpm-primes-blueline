@@ -123,6 +123,13 @@ async def currency_symbol(code):
 async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user)):
     employee = await Employee.get(id=bonus.employee_id)
 
+    # Un employé archivé (départ, retraite...) ne peut plus recevoir de nouvelle prime
+    if employee.is_archived:
+        raise HTTPException(
+            status_code=400,
+            detail=f"L'employé {employee.name} est archivé : impossible de créer une nouvelle prime pour lui.",
+        )
+
     # Périmètre N+1/N+2 : création limitée aux employés de ses services affectés
     # (couvre notamment la prime d'astreinte, sélectionnée côté frontend).
     if not await employee_in_scope(user, employee):

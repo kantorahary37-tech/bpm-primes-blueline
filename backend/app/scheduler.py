@@ -163,7 +163,9 @@ async def collect_deadline_pending_by_actor() -> dict:
         n1s = await User.filter(is_validator_n1=True, is_admin=False, dept_str=emp.dept_str).all()
         for n1 in n1s:
             group_ids = await n1_service_group_ids(n1)
-            if group_ids is not None and emp.service_group_id not in group_ids:
+            # Liste vide ou None = pas de restriction (voit tout son département) ;
+            # liste non vide = restreint à ces services.
+            if group_ids and emp.service_group_id not in group_ids:
                 continue
             _add(n1, bonus, "Validation N+1")
 

@@ -24,7 +24,7 @@ async def list_employees(
     search: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
-    query = Employee.all().filter(is_active=True).prefetch_related('service_group')
+    query = Employee.all().filter(is_active=True, is_archived=False).prefetch_related('service_group')
 
     # Restriction par département : les non-admin ne voient que leur département,
     # et un N+1/N+2 avec des services affectés uniquement les employés de ceux-ci.
@@ -50,7 +50,7 @@ async def export_employees(
     columns: Optional[str] = None,
     user: User = Depends(get_current_user)
 ):
-    query = Employee.all().filter(is_active=True).prefetch_related('manager')
+    query = Employee.all().filter(is_active=True, is_archived=False).prefetch_related('manager')
 
     # Même périmètre que la liste des employés : un N+1/N+2 ne peut exporter
     # que les employés de son département et de ses services affectés.
@@ -121,6 +121,16 @@ async def list_service_department_inconsistencies(user: User = Depends(get_curre
             "service_department": sg_dept_name,
         })
     return {"count": len(items), "items": items}
+@router.get("/archived", response_model=List[dict])
+async def list_archived_employees(user: User = Depends(get_current_user)):
+    """Liste des employés archivés — réservé aux admin / DG / DRH.
+
+    Déclarée AVANT /{emp_id} : sinon « archived » serait interprété comme un id.
+    """
+    if not (user.is_admin or user.is_dg or user.is_drh):
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    employees = await Employee.filter(is_archived=True).prefetch_related('service_group', 'archived_by').order_by('-archived_at')
+    return [await _archived_employee_response(e) for e in employees]
 
 
 @router.get("/{emp_id}", response_model=EmployeeResponse)
@@ -152,6 +162,10 @@ async def update_employee(emp_id: int, data: EmployeeUpdate, user: User = Depend
         if 'currency' in update_data and emp.currency != old_currency:
             await Bonus.filter(employee_id=emp.id).update(currency=emp.currency)
     return await Employee.get(id=emp_id)
+
+
+class ArchiveEmployeeRequest(BaseModel):
+    reason: Optional[str] = None
 
 
 class MoveDepartmentRequest(BaseModel):
@@ -321,4 +335,72 @@ async def align_employees_to_service_departments(user: User = Depends(get_curren
         "checked": len(employees),
         "aligned": aligned,
         "details": details,
+# ------------------------------------------------------------------
+# Archivage interne d'employés (départ, retraite, bug LDAP...)
+# ------------------------------------------------------------------
+
+async def _archived_employee_response(emp: Employee) -> dict:
+    """Réponse détaillée d'un employé archivé (avec traçabilité)."""
+    archived_by = await emp.archived_by if emp.archived_by_id else None
+    return {
+        "id": emp.id,
+        "matricule": emp.matricule,
+        "name": emp.name,
+        "poste": emp.poste,
+        "department": emp.dept_str,
+        "service": emp.service,
+        "currency": emp.currency,
+        "created_at": emp.created_at,
+        "archived_at": emp.archived_at,
+        "archive_reason": emp.archive_reason,
+        "archived_by_name": archived_by.name if archived_by else None,
+    }
+
+
+@router.post("/{emp_id}/archive", response_model=dict)
+async def archive_employee(
+    emp_id: int,
+    data: ArchiveEmployeeRequest,
+    user: User = Depends(get_current_user),
+):
+    """Archive un employé (accessible à tout utilisateur connecté).
+
+    L'employé archivé disparaît de toutes les listes (employés, services,
+    affectations...) mais ses primes et son historique sont conservés.
+    Seul un admin peut le restaurer via /employees/{id}/restore.
+    """
+    emp = await Employee.get_or_none(id=emp_id, is_archived=False)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employé introuvable (ou déjà archivé)")
+    emp.is_archived = True
+    emp.archived_by = user
+    emp.archived_at = datetime.now()
+    emp.archive_reason = (data.reason or '').strip() or None
+    await emp.save()
+    return {
+        "message": f"Employé {emp.name} archivé",
+        "employee_id": emp.id,
+        "archived_at": emp.archived_at,
+    }
+
+
+@router.post("/{emp_id}/restore", response_model=dict)
+async def restore_employee(
+    emp_id: int,
+    user: User = Depends(get_current_user),
+):
+    """Restaure un employé archivé — réservé aux administrateurs."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Seuls les administrateurs peuvent restaurer un employé archivé")
+    emp = await Employee.get_or_none(id=emp_id, is_archived=True)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employé archivé introuvable")
+    emp.is_archived = False
+    emp.archived_by = None
+    emp.archived_at = None
+    emp.archive_reason = None
+    await emp.save()
+    return {
+        "message": f"Employé {emp.name} restauré",
+        "employee_id": emp.id,
     }

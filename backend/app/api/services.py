@@ -41,8 +41,9 @@ async def list_services(
 
     # Un N+1/N+2 restreint ne voit que les services qui lui sont affectés
     # (assignations UsersPage + services gérés via ServicesPage).
+    # Liste vide ou None = pas de restriction (N+1 sans affectation → tout son département).
     sids = await n1_service_group_ids(user)
-    if sids is not None:
+    if sids:
         query = query.filter(id__in=sids)
 
     groups = await query.order_by('name')
@@ -75,9 +76,10 @@ async def create_service(
 
     # Un N+1/N+2 restreint ne voit que ses services affectés : le service qu'il
     # vient de créer lui est automatiquement affecté, sinon il disparaîtrait
-    # aussitôt de sa liste.
+    # aussitôt de sa liste. Un N+1 SANS affectation n'est pas restreint : on ne
+    # l'ajoute pas comme manager, sinon la création le restreindrait à ce service.
     sids = await n1_service_group_ids(user)
-    if sids is not None:
+    if sids:
         await group.managers.add(user)
 
     return {"id": group.id, "name": group.name, "department": dept.name, "employee_count": 0}
@@ -114,8 +116,8 @@ async def delete_service(
         raise HTTPException(status_code=404, detail="Service introuvable.")
     if not can_manage(user, group.department.name):
         raise HTTPException(status_code=403, detail="Vous ne pouvez supprimer que les services de votre département.")
-    # Interdire la suppression si des employés sont encore affectés au service
-    employee_count = await Employee.filter(service_group=group).count()
+    # Interdire la suppression si des employés (non archivés) sont encore affectés au service
+    employee_count = await Employee.filter(service_group=group, is_archived=False).count()
     if employee_count > 0:
         raise HTTPException(
             status_code=409,
@@ -142,7 +144,7 @@ async def assign_employees(
         raise HTTPException(status_code=403, detail="Vous ne pouvez affecter des employés qu'aux services de votre département.")
 
     dept_name = group.department.name
-    employees = await Employee.filter(id__in=data.employee_ids)
+    employees = await Employee.filter(id__in=data.employee_ids, is_archived=False)
     if len(employees) != len(set(data.employee_ids)):
         raise HTTPException(status_code=404, detail="Un ou plusieurs employés sont introuvables.")
     for emp in employees:

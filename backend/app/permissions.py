@@ -1,6 +1,6 @@
 """Helpers de permissions partagées entre les routers API."""
 
-from app.models import User, UserServiceAssignment, Employee
+from app.models import User, UserServiceAssignment
 
 # Rôles avec une portée plus large que celle d'un N+1 : ils ne sont jamais
 # restreints aux services affectés d'un N+1.
@@ -25,11 +25,11 @@ async def n1_service_group_ids(user: User):
 
     Retourne:
       - ``None`` si l'utilisateur n'est pas restreint : rôle plus large
-        (admin/DG/DRH/Directeur) ou utilisateur sans rôle de validateur →
-        accès au département entier (comportement existant).
-      - la liste (possible vide) des IDs de services pour un N+1/N+2 → accès
-        strictement limité à ces services ; un N+1/N+2 sans aucun service
-        affecté ne voit ni employé ni prime.
+        (admin/DG/DRH/Directeur), utilisateur sans rôle de validateur, ou
+        N+1/N+2 sans aucun service affecté → accès au département entier
+        (le filtre département est appliqué par les endpoints).
+      - la liste (non vide) des IDs de services pour un N+1/N+2 affecté →
+        accès strictement limité à ces services.
     """
     if is_broad_role(user):
         return None
@@ -42,39 +42,19 @@ async def n1_service_group_ids(user: User):
     return sorted(sids)
 
 
-async def own_employee(user: User):
-    """Employé correspondant à l'utilisateur lui-même.
-
-    Correspondance (nom, département) exactement comme ``users.employee_lookup``,
-    limité aux employés actifs. Retourne ``None`` si aucun employé ne correspond.
-    """
-    name_key = (user.name or '').strip().lower()
-    if not name_key:
-        return None
-    dept_key = user.department or ''
-    employees = await Employee.filter(dept_str=dept_key, is_active=True).only('id', 'name').order_by('id')
-    for emp in employees:
-        if ((emp.name or '').strip().lower()) == name_key:
-            return emp
-    return None
-
-
 async def employee_scope(user: User):
     """Périmètre d'employés d'un utilisateur : ``(service_group_ids, own_employee_id)``.
 
-    - ``(None, None)`` : pas de restriction (rôle large ou non validateur).
-    - ``([ids], None)`` : restreint aux employés des services affectés.
-    - ``([], id | None)`` : aucun service affecté → uniquement son propre
-      employé (il ne peut créer une prime que pour lui-même) ; ``None`` si
-      aucun employé ne correspond à l'utilisateur → rien du tout.
+    - ``(None, None)`` : pas de restriction — rôle large, non valideur, ou
+      N+1/N+2 sans service affecté (il voit son département entier, le filtre
+      département étant appliqué par les endpoints).
+    - ``([ids], None)`` : N+1/N+2 restreint aux employés de ses services affectés.
     """
     sids = await n1_service_group_ids(user)
-    if sids is None:
+    # None (pas restreint) ou liste vide (N+1/N+2 sans affectation) → département entier
+    if not sids:
         return None, None
-    if sids:
-        return sids, None
-    emp = await own_employee(user)
-    return [], (emp.id if emp else None)
+    return sids, None
 
 
 def apply_employee_scope(query, scope, rel=""):
@@ -83,23 +63,19 @@ def apply_employee_scope(query, scope, rel=""):
     ``rel=''`` pour filtrer une queryset d'employés, ``rel='employee__'``
     pour une queryset de primes. Sans effet si l'utilisateur n'est pas restreint.
     """
-    sids, own_id = scope
-    if sids is None:
+    sids, _own_id = scope
+    if not sids:
         return query
-    if sids:
-        return query.filter(**{f"{rel}service_group_id__in": sids})
-    # Aucun service affecté → uniquement son propre employé
-    return query.filter(**{f"{rel}id": own_id}) if own_id else query.filter(**{f"{rel}id__in": []})
+    return query.filter(**{f"{rel}service_group_id__in": sids})
 
 
 async def employee_in_scope(user: User, employee) -> bool:
     """True si l'employé appartient au périmètre du user.
 
-    - Rôles larges / non validateurs : toujours vrai (le filtre département
-      est appliqué par les endpoints concernés).
+    - Rôles larges / non validateurs / N+1-N+2 sans affectation : toujours
+      vrai (le filtre département est appliqué par les endpoints concernés).
     - N+1/N+2 avec des services affectés : uniquement les employés de ces
       services.
-    - N+1/N+2 sans aucun service affecté : uniquement son propre employé.
     """
     sids, own_id = await employee_scope(user)
     if sids is None:

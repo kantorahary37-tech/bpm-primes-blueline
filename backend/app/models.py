@@ -163,6 +163,13 @@ class Employee(models.Model):
     mensuel_rate = fields.IntField(null=True, default=None)
     # Si l'employé est actif (visible dans les listes)
     is_active = fields.BooleanField(default=True)
+    # Archivage interne (départ, retraite, etc.) : masqué de toutes les listes.
+    # Indépendant de is_active (que la sync LDAP réactive) — restaurable par admin.
+    is_archived = fields.BooleanField(default=False)
+    # Qui a archivé / quand / motif — traçabilité pour la restauration admin
+    archived_by = fields.ForeignKeyField('models.User', related_name='employees_archived', null=True, source_field='archived_by_id')
+    archived_at = fields.DatetimeField(null=True)
+    archive_reason = fields.CharField(max_length=500, null=True)
     # Date de création
     created_at = fields.DatetimeField(auto_now_add=True)
 

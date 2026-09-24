@@ -152,8 +152,8 @@ async def compute_gc_rows(content: bytes):
     if not header['columns']:
         raise HTTPException(400, "Aucune colonne produit (RMS/FMS) trouvée dans le fichier CSV.")
 
-    # Tous les employés en base, indexés par matricule exact ET normalisé
-    employees_all = await Employee.all()
+    # Tous les employés en base (hors archivés), indexés par matricule exact ET normalisé
+    employees_all = await Employee.filter(is_archived=False)
     employees_db = {}
     for e in employees_all:
         employees_db.setdefault(e.matricule, e)

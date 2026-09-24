@@ -392,7 +392,7 @@ async def admin_ldap_employee_search(q: str = "", _admin: User = Depends(require
                 paged_size=30,
             )
 
-            employees_by_matricule = {e.matricule: e async for e in Employee.all()}
+            employees_by_matricule = {e.matricule: e async for e in Employee.all() if not e.is_archived}
             results = []
             for entry in conn.entries:
                 rec = {attr: first(entry, attr) for attr in ['cn', 'mail', 'givenName', 'sn', 'title', 'departmentNumber', 'ou', 'uid', 'employeeNumber', 'manager']}
@@ -407,8 +407,9 @@ async def admin_ldap_employee_search(q: str = "", _admin: User = Depends(require
                     'matricule': m,
                     'department': dept_name(rec),
                     'title': rec.get('title') or '',
-                    'exists': existing is not None,
+                    'exists': existing is not None or (await Employee.filter(matricule=m, is_archived=True).exists()),
                     'employee_id': existing.id if existing else None,
+                    'is_archived': existing is None and (await Employee.filter(matricule=m, is_archived=True).exists()),
                 })
             return results
         finally:
@@ -477,7 +478,10 @@ async def admin_create_employee_from_ldap(req: LdapEmployeeCreateRequest, _admin
         rec = {attr: first(entry, attr) for attr in ['cn', 'mail', 'givenName', 'sn', 'title', 'employeeType', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager']}
 
         m = matricule(rec, email)
-        if await Employee.exists(matricule=m):
+        existing = await Employee.get_or_none(matricule=m)
+        if existing and existing.is_archived:
+            raise HTTPException(status_code=409, detail=f"L'employé {m} est archivé dans BPM — restaurez-le d'abord depuis la page Archive (admin)")
+        if existing:
             raise HTTPException(status_code=409, detail=f"L'employé {m} existe déjà dans BPM")
 
         dept_name_ = dept_name(rec)
@@ -606,7 +610,7 @@ class ConfigSnapshotCreate(BaseModel):
 @router.post("/config-snapshots", status_code=status.HTTP_201_CREATED)
 async def create_config_snapshot(data: ConfigSnapshotCreate, admin: User = Depends(require_admin)):
     """Crée une sauvegarde DB + fichier SQL de l'état actuel des affectations."""
-    employees = await Employee.filter(is_active=True).prefetch_related('service_group')
+    employees = await Employee.filter(is_active=True, is_archived=False).prefetch_related('service_group')
     snapshot_data = []
     for emp in employees:
         sg = emp.service_group

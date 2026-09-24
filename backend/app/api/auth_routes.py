@@ -99,7 +99,7 @@ async def get_my_service_assignments(user: User = Depends(get_current_user)):
     for a in assignments:
         sg = await a.service_group
         dept = await sg.department if sg else None
-        member_count = await Employee.filter(service_group_id=sg.id).count() if sg else 0
+        member_count = await Employee.filter(service_group_id=sg.id, is_archived=False).count() if sg else 0
         n1_user = await a.n1 if a.n1_id else None
         result.append({
             "id": a.id,

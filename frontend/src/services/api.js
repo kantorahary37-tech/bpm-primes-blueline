@@ -82,6 +82,22 @@ export const updateEmployee = async (id, employeeData) => {
   return data;
 };
 
+// --- Archivage interne d'employés (départ, retraite, bug LDAP...) ---
+export const archiveEmployee = async (id, reason = null) => {
+  const { data } = await api.post(`/employees/${id}/archive`, { reason });
+  return data;
+};
+
+export const restoreEmployee = async (id) => {
+  const { data } = await api.post(`/employees/${id}/restore`);
+  return data;
+};
+
+export const getArchivedEmployees = async () => {
+  const { data } = await api.get('/employees/archived');
+  return data;
+};
+
 export const getServices = async (department = null) => {
   const params = department ? { department } : {};
   const { data } = await api.get('/services/', { params });

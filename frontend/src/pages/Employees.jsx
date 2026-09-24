@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies } from '../services/api';
+import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies, archiveEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
@@ -10,6 +10,13 @@ import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XM
 import Modal from '../components/Modal';
 import { useConfirm } from '../components/ConfirmModal';
 import { ldapSyncToast, moveSummaryToast, alignToast, apiErrorToast } from '../utils/toastHelpers';
+
+// Icône boîte d'archive (utilisée dans la barre d'actions et la modale d'archivage)
+const ArchiveBoxIcon = (p) => (
+  <svg {...p} className={`w-4 h-4 ${p?.className || ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m10 6.25h-3.5M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+  </svg>
+);
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -100,6 +107,18 @@ const Employees = () => {
   const [moveTarget, setMoveTarget] = useState('');
   const [moving, setMoving] = useState(false);
   const [aligning, setAligning] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveReason, setArchiveReason] = useState('');
+  const [archiving, setArchiving] = useState(false);
+
+  // Employés actuellement sélectionnés (pour la barre flottante / modales).
+  // Basé sur `employees` (liste chargée) et non sur le filtre de recherche :
+  // une sélection reste visible même si la recherche la masque.
+  const selectedEmployees = useMemo(
+    () => employees.filter(e => selectedEmpIds.has(e.id)),
+    [employees, selectedEmpIds]
+  );
+  const singleSelected = selectedEmployees.length === 1 ? selectedEmployees[0] : null;
 
   const initRef = useRef(false);
 
@@ -384,6 +403,31 @@ const Employees = () => {
     }
   };
 
+  const openArchiveModal = () => {
+    setArchiveReason('');
+    setShowArchiveModal(true);
+  };
+
+  const handleArchiveEmployees = async () => {
+    if (archiving) return;
+    setArchiving(true);
+    try {
+      for (const id of selectedEmpIds) {
+        await archiveEmployee(id, archiveReason.trim() || null);
+      }
+      const n = selectedEmpIds.size;
+      toast.success(`${n} employé(s) archivé(s) — masqué(s) de toutes les listes`);
+      setSelectedEmpIds(new Set());
+      setShowArchiveModal(false);
+      const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
+      setEmployees(emps);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Erreur lors de l\'archivage');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><span className="loading loading-spinner loading-lg" /></div>;
   }
@@ -497,7 +541,7 @@ const Employees = () => {
           ) : null}
         </select>
         <span className="text-xs text-gray-400">{filteredEmployees.length} employé(s)</span>
-        {user?.is_admin && filteredEmployees.length > 0 && (
+        {filteredEmployees.length > 0 && (
           <label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
             <input type="checkbox" checked={filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmpIds.has(e.id))}
               onChange={toggleAllVisible}
@@ -557,12 +601,10 @@ const Employees = () => {
                                       ? 'border-blue-200 bg-blue-50/50'
                                       : 'border-transparent hover:border-blue-200 hover:bg-gray-50'
                                 }`}>
-                                {user?.is_admin && (
-                                  <input type="checkbox" checked={selectedEmpIds.has(emp.id)}
-                                    onChange={() => toggleEmpSelection(emp.id)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600 shrink-0" />
-                                )}
+                                <input type="checkbox" checked={selectedEmpIds.has(emp.id)}
+                                  onChange={() => toggleEmpSelection(emp.id)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600 checked:border-blue-600 shrink-0" />
                                 <button onClick={() => loadEmployeeBonuses(emp)} className="flex-1 flex items-center gap-3 text-left">
                                 <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs shrink-0">
                                   {emp.name.charAt(0).toUpperCase()}
@@ -916,8 +958,8 @@ const Employees = () => {
         </div>
       </Modal>
 
-      {/* Floating action bar for bulk move */}
-      {user?.is_admin && selectedEmpIds.size > 0 && (
+      {/* Floating action bar : déplacer (admin) + archiver (tous) */}
+      {selectedEmpIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
           <div className="flex items-center gap-4 px-6 py-3 bg-gray-900 text-white rounded-2xl shadow-2xl border border-gray-700">
             <div className="flex items-center gap-2">
@@ -929,15 +971,23 @@ const Employees = () => {
               </span>
             </div>
             <div className="w-px h-6 bg-gray-600" />
+            {user?.is_admin && (
+              <button
+                onClick={() => {
+                  const depts = [...new Set(filteredEmployees.filter(e => selectedEmpIds.has(e.id)).map(e => e.department))];
+                  setMoveTarget(depts.length === 1 ? '' : '');
+                  setShowMoveModal(true);
+                }}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                Déplacer vers...
+              </button>
+            )}
             <button
-              onClick={() => {
-                const depts = [...new Set(filteredEmployees.filter(e => selectedEmpIds.has(e.id)).map(e => e.department))];
-                setMoveTarget(depts.length === 1 ? '' : '');
-                setShowMoveModal(true);
-              }}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors"
+              onClick={openArchiveModal}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-xl transition-colors"
             >
-              Déplacer vers...
+              <ArchiveBoxIcon className="w-4 h-4" /> Archiver...
             </button>
             <button
               onClick={() => setSelectedEmpIds(new Set())}
@@ -949,6 +999,46 @@ const Employees = () => {
           </div>
         </div>
       )}
+
+      {/* Archive employee confirmation modal (brève) */}
+      <Modal open={showArchiveModal} onClose={() => setShowArchiveModal(false)} title="Archiver" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Archiver <strong>{singleSelected ? singleSelected.name : `${selectedEmpIds.size} employés`}</strong> ?
+            {singleSelected && singleSelected.matricule && (
+              <span className="text-gray-400 text-xs"> ({singleSelected.matricule})</span>
+            )}
+          </p>
+          {!singleSelected && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+              {selectedEmployees.map(e => (
+                <div key={e.id} className="text-sm text-gray-700 py-0.5 truncate">
+                  <span className="font-medium">{e.name}</span>
+                  <span className="text-gray-400 text-xs"> — {e.matricule}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-gray-500">
+            L'employé sera masqué de toutes les listes (services, primes...) mais son historique est conservé.
+            Restauration possible par un admin depuis la page <strong>Archive → Employés</strong>.
+          </p>
+          <div className="form-control">
+            <input type="text" value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)}
+              placeholder="Motif (optionnel) — démission, retraite..."
+              className="input input-bordered input-sm w-full"
+              autoFocus />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <button onClick={() => setShowArchiveModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+            <button onClick={handleArchiveEmployees} disabled={archiving}
+              className="btn btn-sm bg-amber-600 hover:bg-amber-700 text-white border-0">
+              {archiving ? <span className="loading loading-spinner loading-xs" /> : null}
+              Archiver
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Move to department modal */}
       <Modal open={showMoveModal} onClose={() => setShowMoveModal(false)} title="Déplacer vers un département" size="sm">
