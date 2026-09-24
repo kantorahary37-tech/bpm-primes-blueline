@@ -671,7 +671,10 @@ async def list_bonuses(
     _block_gc_request(user, bonus_type)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
     if start_date: query = query.filter(start_date__gte=start_date)
-    if end_date: query = query.filter(end_date__lte=end_date)
+    # Une prime appartient à la période où elle DÉBUTE (cohérent avec le
+    # regroupement par mois côté front) — sinon une prime à cheval sur deux
+    # mois (ex : 31/08 → 29/09) disparaissait du filtre « août 2026 ».
+    if end_date: query = query.filter(start_date__lte=end_date)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if department:
         if not (user.is_admin or user.is_dg or user.is_drh) and department != user.department:
