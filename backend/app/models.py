@@ -222,6 +222,9 @@ class Bonus(models.Model):
     n2_user = fields.ForeignKeyField('models.User', related_name='n2_bonuses', null=True)
     # Statut de validation de la prime
     status = fields.CharEnumField(ValidationStatus, default=ValidationStatus.INITIALISE)
+    # Devise de la prime (copie de employee.currency à la création — l'employé
+    # peut changer de devise plus tard, la prime garde sa devise d'émission)
+    currency = fields.CharField(max_length=10, default='Ar', index=True)
     # Créateur de la prime (relation vers User)
     created_by = fields.ForeignKeyField('models.User', related_name='bonuses')
     # Date de création

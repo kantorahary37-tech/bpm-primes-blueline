@@ -157,6 +157,9 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
                        f"'{bonus.bonus_type.value}' dans le département '{employee.dept_str}'."
             )
 
+    # Devise de la prime : copiée de l'employé au moment de la création
+    bonus_currency = emp_currency_code(employee)
+
     existing = await Bonus.filter(
         employee_id=bonus.employee_id,
         bonus_type=bonus.bonus_type,
@@ -170,6 +173,7 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
         )
     initial_status = ValidationStatus.EN_ATTENTE_DIRECTEUR if user.is_directeur else ValidationStatus.INITIALISE
     create_data = bonus.dict()
+    create_data.pop('currency', None)
     n2_user_id = create_data.pop('n2_user_id', None)
     pass_to_n2 = create_data.pop('pass_to_n2', False)
     n2_user_obj = None
@@ -177,7 +181,7 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
         n2_user_obj = await User.get_or_none(id=n2_user_id)
         if not n2_user_obj or not n2_user_obj.is_validator_n2:
             raise HTTPException(status_code=400, detail="L'utilisateur N+2 sélectionné est invalide.")
-    obj = await Bonus.create(**create_data, created_by_id=user.id, status=initial_status,
+    obj = await Bonus.create(**create_data, currency=bonus_currency, created_by_id=user.id, status=initial_status,
                              pass_to_n2=pass_to_n2, n2_user=n2_user_obj)
     return await Bonus.get(id=obj.id).prefetch_related('employee')
 
@@ -670,10 +674,10 @@ async def list_bonuses(
     if employee_id: query = query.filter(employee_id=employee_id)
     _block_gc_request(user, bonus_type)
     if bonus_type: query = query.filter(bonus_type=bonus_type)
-    if start_date: query = query.filter(start_date__gte=start_date)
     # Une prime appartient à la période où elle DÉBUTE (cohérent avec le
     # regroupement par mois côté front) — sinon une prime à cheval sur deux
     # mois (ex : 31/08 → 29/09) disparaissait du filtre « août 2026 ».
+    if start_date: query = query.filter(start_date__gte=start_date)
     if end_date: query = query.filter(start_date__lte=end_date)
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if department:
@@ -795,10 +799,14 @@ async def export_bonuses(
         query = query.filter(paid_at__isnull=False)
 
     bonuses = await query.order_by('-start_date')
+    # Les primes en euro sont rejetées à la fin de l'export : elles ne doivent
+    # jamais être additionnées aux montants en Ariary. Tri stable : l'ordre par
+    # date est conservé à l'intérieur de chaque groupe de devise.
+    bonuses = sorted(bonuses, key=lambda b: 1 if emp_currency_code(b.employee) == 'EUR' else 0)
 
     all_columns = [
         "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "Montant", "Montant total",
+        "DateDebut", "DateFin", "Montant", "Montant total", "Devise",
         "Montant Autres", "Montant Evaluation", "Statut",
         "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation", "Descriptions"
     ]
@@ -811,6 +819,7 @@ async def export_bonuses(
         "Matricule": lambda b, vent=None: b.employee.matricule,
         "Nom": lambda b, vent=None: b.employee.name,
         "Departement": lambda b, vent=None: b.employee.department if b.employee.department else '',
+        "Devise": lambda b, vent=None: emp_currency_code(b.employee),
         "TypePrime": lambda b, vent=None: b.bonus_type.value,
         "DateDebut": lambda b, vent=None: b.start_date.isoformat(),
         "DateFin": lambda b, vent=None: b.end_date.isoformat(),
@@ -831,7 +840,14 @@ async def export_bonuses(
     writer.writerow(selected)
     for b in bonuses:
         vent = bonus_ventilation(b)
-        writer.writerow([extractors[col](b, vent) for col in selected])
+        row = [extractors[col](b, vent) for col in selected]
+        # Les montants en euro sont suffixés « EUR » dans le CSV pour rester
+        # explicitement en € (et ne jamais être additionnés aux Ar dans Excel).
+        if emp_currency_code(b.employee) == 'EUR':
+            for i, col in enumerate(selected):
+                if col in ("Montant", "Montant total", "Montant Autres", "Montant Evaluation") and row[i] not in ('', None):
+                    row[i] = f"{row[i]} EUR"
+        writer.writerow(row)
 
     output.seek(0)
     return StreamingResponse(
@@ -909,10 +925,13 @@ async def export_bonuses_xlsx(
 
     _block_gc_request(user, bonus_type)
     bonuses = await query.order_by('-start_date')
+    # Les primes en euro sont rejetées à la fin : jamais additionnées aux Ar
+    # (tri stable, l'ordre par date est conservé dans chaque groupe).
+    bonuses = sorted(bonuses, key=lambda b: 1 if emp_currency_code(b.employee) == 'EUR' else 0)
 
     all_columns = [
         "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "Montant", "Montant total",
+        "DateDebut", "DateFin", "Montant", "Montant total", "Devise",
         "Montant Autres", "Montant Evaluation", "Statut",
         "DejaRejete", "MarqueePayeeLe", "CreePar", "DateCreation", "Descriptions"
     ]
@@ -925,6 +944,7 @@ async def export_bonuses_xlsx(
         "Matricule": lambda b, vent=None: b.employee.matricule,
         "Nom": lambda b, vent=None: b.employee.name,
         "Departement": lambda b, vent=None: b.employee.department,
+        "Devise": lambda b, vent=None: emp_currency_code(b.employee),
         "TypePrime": lambda b, vent=None: b.bonus_type.value,
         "DateDebut": lambda b, vent=None: b.start_date.isoformat(),
         "DateFin": lambda b, vent=None: b.end_date.isoformat(),
@@ -947,7 +967,13 @@ async def export_bonuses_xlsx(
     alt_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
 
     dept_groups = {}
+    eur_bonuses = []
     for b in bonuses:
+        # Les primes en euro vont dans une feuille dédiée : elles ne doivent
+        # jamais être mélangées (ni sommées) avec les montants en Ariary.
+        if emp_currency_code(b.employee) == 'EUR':
+            eur_bonuses.append(b)
+            continue
         dept = b.employee.department if b.employee.department else 'N/A'
         if dept not in dept_groups:
             dept_groups[dept] = []
@@ -967,7 +993,11 @@ async def export_bonuses_xlsx(
                 cell = ws.cell(row=row_idx, column=col_idx, value=val)
                 cell.font = number_font
                 if col_name in ("Montant", "Montant total", "Montant Autres", "Montant Evaluation") and isinstance(val, (int, float)):
-                    cell.number_format = '#,##0'
+                    # Format dédié euro : le symbole € s'affiche dans Excel
+                    if extractors.get("Devise") and extractors["Devise"](b) == 'EUR':
+                        cell.number_format = '#,##0\ "€"'
+                    else:
+                        cell.number_format = '#,##0'
                 if row_idx % 2 == 0:
                     cell.fill = alt_fill
         for col_idx in range(1, len(selected) + 1):
@@ -985,6 +1015,11 @@ async def export_bonuses_xlsx(
         ws = wb.create_sheet()
         write_sheet(ws, dept[:31], dept_groups[dept])
 
+    # Feuille dédiée aux primes en euro (séparées des montants en Ariary)
+    if eur_bonuses:
+        ws_eur = wb.create_sheet()
+        write_sheet(ws_eur, "Euros", eur_bonuses)
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
@@ -1001,14 +1036,17 @@ async def export_bonuses_xlsx(
 @router.get("/bonuses/export/sage")
 async def export_sage():
     bonuses = await Bonus.filter(status=ValidationStatus.VALIDE).prefetch_related('employee')
+    # Les primes en euro sont rejetées à la fin : jamais additionnées aux Ar côté paie.
+    bonuses = sorted(bonuses, key=lambda b: 1 if emp_currency_code(b.employee) == 'EUR' else 0)
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=';')
     writer.writerow([
         "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "Montant", "Statut"
+        "DateDebut", "DateFin", "Montant", "Devise", "Statut"
     ])
     for b in bonuses:
+        is_eur = emp_currency_code(b.employee) == 'EUR'
         writer.writerow([
             b.employee.matricule,
             b.employee.name,
@@ -1016,7 +1054,9 @@ async def export_sage():
             b.bonus_type.value,
             b.start_date.isoformat(),
             b.end_date.isoformat(),
-            str(int(b.total_amount)),
+            # Euro : suffixé explicitement pour rester en € (et non converti/lu en Ar)
+            f"{int(b.total_amount)} EUR" if is_eur else str(int(b.total_amount)),
+            'EUR' if is_eur else 'Ar',
             b.status.value
         ])
 
@@ -1041,7 +1081,7 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None, user
 
     common = [
         "Matricule", "Nom", "Departement", "TypePrime",
-        "DateDebut", "DateFin", "MontantTotal", "Statut",
+        "DateDebut", "DateFin", "MontantTotal", "Devise", "Statut",
         "DejaRejete", "CreePar", "DateCreation"
     ]
     type_cols = {
@@ -1068,7 +1108,10 @@ async def export_bonus_detail(bonus_id: int, columns: Optional[str] = None, user
         "TypePrime": lambda b: b.bonus_type.value,
         "DateDebut": lambda b: b.start_date.isoformat(),
         "DateFin": lambda b: b.end_date.isoformat(),
-        "MontantTotal": lambda b: str(int(b.total_amount)),
+        "MontantTotal": lambda b: (
+            f"{int(b.total_amount)} EUR" if emp_currency_code(b.employee) == 'EUR' else str(int(b.total_amount))
+        ),
+        "Devise": lambda b: emp_currency_code(b.employee),
         "Statut": lambda b: b.status.value,
         "DejaRejete": lambda b: "Oui" if b.was_rejected else "Non",
         "CreePar": lambda b: b.created_by.name if b.created_by else '',

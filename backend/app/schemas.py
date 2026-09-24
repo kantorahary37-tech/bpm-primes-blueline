@@ -181,6 +181,9 @@ class BonusResponse(BonusBase):
     created_at: datetime
     updated_at: datetime
     employee: Optional[EmployeeResponse] = None
+    # Devise de la prime (copie de employee.currency) : évite au front de charger
+    # l'objet employee complet juste pour séparer les totaux Ar / EUR.
+    currency: Optional[str] = None
     class Config: from_attributes = True
 
 # Schéma de création de validation
