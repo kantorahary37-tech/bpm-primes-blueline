@@ -39,6 +39,27 @@ export const formatTotalsByCurrency = (items, getCurrency) =>
     .join(' · ');
 
 /**
+ * Ligne combinée « montant puis compteur » par devise :
+ * « 5 458 600 Ar 31 · 500 € 1 ».
+ * Chaque devise affiche son total suivi du nombre de primes, Ar d'abord.
+ * Les compteurs ne révélant aucun montant, la ligne reste lisible même
+ * filtrée sans seeAmounts (voir formatCountsByCurrency).
+ */
+export const formatTotalsAndCountsByCurrency = (items, getCurrency) => {
+  const totals = {};
+  const counts = {};
+  (items || []).forEach((b) => {
+    const cur = (getCurrency ? getCurrency(b) : b?.employee?.currency) || 'Ar';
+    totals[cur] = (totals[cur] || 0) + (parseFloat(b?.total_amount) || 0);
+    counts[cur] = (counts[cur] || 0) + 1;
+  });
+  return Object.keys(totals)
+    .sort((a, b) => (a === 'Ar' ? -1 : b === 'Ar' ? 1 : a.localeCompare(b)))
+    .map((currency) => `${formatCurrencyTotal(totals[currency], currency)} ${counts[currency]}`)
+    .join(' · ');
+};
+
+/**
  * Nombre de primes par devise : [{ currency, count }, ...] (Ar d'abord).
  */
 export const countByCurrency = (items, getCurrency) => {
