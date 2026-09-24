@@ -716,11 +716,23 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
                                 greeting_name: str | None = None) -> tuple:
     """
     Construit (subject, texte_brut, html) du rappel DG. Les sections sont des
-    dicts {department, bonus_type_label, count}. Le résumé ne contient AUCUNE
-    information nominative des primes (uniquement département / type / nombre) ;
-    l'objet de l'email est personnalisé avec le nom réel du DG (LDAP, sinon
-    compte BPM) et inclut l'URL de l'application (FRONTEND_URL, config auth).
+    dicts {department, bonus_type_label, count}, regroupées PAR DÉPARTEMENT à
+    l'affichage (ex : « Direction Commerciale : Prime mensuelle (1), ... »).
+    Le résumé ne contient AUCUNE information nominative des primes (uniquement
+    département / type / nombre) ; l'objet de l'email est personnalisé avec le
+    nom réel du DG (LDAP, sinon compte BPM) et inclut l'URL de l'application
+    (FRONTEND_URL, config auth).
     """
+    # Regroupement des sections par département (ordre alphabétique conservé)
+    dept_groups = []
+    index = {}
+    for s in sections:
+        key = s["department"]
+        if key not in index:
+            index[key] = {"department": key, "entries": [], "count": 0}
+            dept_groups.append(index[key])
+        index[key]["entries"].append((s["bonus_type_label"], s["count"]))
+        index[key]["count"] += s["count"]
     env_label = _env_label(cfg)
     prefix = _test_subject_prefix(cfg)
     subject = f"{prefix}Rappel : {total} prime(s) en attente de votre validation | BPM"
@@ -744,8 +756,9 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
         if app_url else ""
     )
 
-    def line_plain(s):
-        return f"- {s['department']} / {s['bonus_type_label']} : {s['count']}"
+    def dept_line_plain(g):
+        entries = ", ".join(f"{label} ({c})" for label, c in g["entries"])
+        return f"- {g['department']} : {entries}"
 
     plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
     app_url_line = (
@@ -757,7 +770,7 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
         f"{plain_env}"
         f"{greeting}\n\n"
         f"Voici le récapitulatif des primes en attente de votre validation :\n\n"
-        + "\n".join(line_plain(s) for s in sections)
+        + "\n".join(dept_line_plain(g) for g in dept_groups)
         + f"\n\nMerci de valider ces primes afin que le processus puisse se poursuivre.\n\n"
         + app_url_line
         + f"Cordialement,\nBPM | Gestion de Prime"
@@ -773,16 +786,24 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
 
     rows = "".join(
         f'<tr>'
-        f'<td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;">'
-        f'<span style="font-size:14px;font-weight:600;color:#0f172a;">{s["department"]}</span>'
-        f'<span style="color:#94a3b8;"> / {s["bonus_type_label"]}</span>'
+        f'<td style="padding:12px 16px 2px;">'
+        f'<span style="font-size:14px;font-weight:700;color:#0f172a;">{g["department"]}</span>'
         f'</td>'
-        f'<td align="right" style="padding:10px 16px;border-bottom:1px solid #f1f5f9;">'
+        f'<td align="right" style="padding:12px 16px 2px;">'
         f'<span style="display:inline-block;background:#eff6ff;color:#1d4ed8;'
-        f'font-size:14px;font-weight:700;padding:2px 12px;border-radius:999px;">{s["count"]}</span>'
+        f'font-size:14px;font-weight:700;padding:2px 12px;border-radius:999px;">{g["count"]}</span>'
         f'</td>'
         f'</tr>'
-        for s in sections
+        f'<tr>'
+        f'<td colspan="2" style="padding:2px 16px 12px;border-bottom:1px solid #f1f5f9;line-height:1.9;">'
+        + "&nbsp;&nbsp;".join(
+            f'<span style="font-size:13px;color:#2563eb;">{label}</span>'
+            f'<span style="font-size:13px;color:#64748b;">&nbsp;({c})</span>'
+            for label, c in g["entries"]
+        )
+        + f'</td>'
+        f'</tr>'
+        for g in dept_groups
     )
 
     html = f"""<!DOCTYPE html>
