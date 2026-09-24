@@ -43,8 +43,20 @@ function visibleAdminItems(user) {
   return adminNavItems.filter(item => item.roles.some(r => user?.[r]))
 }
 
+// Tous les chemins de navigation, pour résoudre les chevauchements (ex: /bonuses vs /bonuses/flows)
+const allNavPaths = [...mainNavItems, ...serviceNavItems, ...adminNavItems].map(item => item.path)
+
+function pathMatches(pathname, path) {
+  return pathname === path || pathname.startsWith(path + '/')
+}
+
+// Le préfixe le plus long (le plus spécifique) gagne :
+// sur /bonuses/flows seul « Flux » est actif, « Primes » ne s'allume plus.
 function isActive(pathname, path) {
-  return pathname === path || (path !== '/' && pathname.startsWith(path))
+  const matches = allNavPaths.filter(p => pathMatches(pathname, p))
+  if (matches.length === 0) return false
+  const best = matches.reduce((a, b) => (b.length > a.length ? b : a))
+  return best === path
 }
 
 function userRole(user) {
