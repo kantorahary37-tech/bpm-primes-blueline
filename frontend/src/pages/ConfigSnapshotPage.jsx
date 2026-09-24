@@ -10,6 +10,7 @@ import {
 } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { ArchiveIcon, DownloadIcon, TrashIcon } from '../components/Icons';
+import { useConfirm } from '../components/ConfirmModal';
 import Modal from '../components/Modal';
 
 const formatDate = (d) =>
@@ -23,6 +24,7 @@ const formatDate = (d) =>
 
 export default function ConfigSnapshotPage() {
   const { user } = useAuth();
+  const { confirm, confirmElement } = useConfirm();
   const [snapshots, setSnapshots] = useState([]);
   const [sqlFiles, setSqlFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,11 +88,17 @@ export default function ConfigSnapshotPage() {
   };
 
   const handleRestore = async (snapshot) => {
-    if (!window.confirm(
-      `Restaurer la configuration « ${snapshot.label} » ?\n\n` +
-      `Cela remplacera les affectations actuelles de ${snapshot.employee_count} employé(s) ` +
-      `par celles enregistrées dans cette sauvegarde.`
-    )) return;
+    const ok = await confirm({
+      title: 'Restaurer la configuration',
+      message: `Restaurer la configuration « ${snapshot.label} » ?`,
+      details: [
+        `Cela remplacera les affectations actuelles de ${snapshot.employee_count} employé(s).`,
+        'Les affectations seront remplacées par celles enregistrées dans cette sauvegarde.',
+      ],
+      confirmText: 'Restaurer',
+      tone: 'warning',
+    });
+    if (!ok) return;
 
     setRestoring(true);
     try {
@@ -108,7 +116,14 @@ export default function ConfigSnapshotPage() {
   };
 
   const handleDelete = async (snapshot) => {
-    if (!window.confirm(`Supprimer la sauvegarde « ${snapshot.label} » ?`)) return;
+    const ok = await confirm({
+      title: 'Supprimer la sauvegarde',
+      message: `Supprimer la sauvegarde « ${snapshot.label} » ?`,
+      details: ['Cette action est définitive.'],
+      confirmText: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteConfigSnapshot(snapshot.id);
       toast.success('Sauvegarde supprimée');
@@ -140,6 +155,7 @@ export default function ConfigSnapshotPage() {
 
   return (
     <div>
+      {confirmElement}
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -269,10 +285,14 @@ export default function ConfigSnapshotPage() {
                     </button>
                     <button
                       onClick={async () => {
-                        if (!window.confirm(
-                          `Restaurer depuis le fichier « ${f.filename} » ?\n\n` +
-                          `Cela exécutera le fichier SQL et remplacera les affectations actuelles.`
-                        )) return;
+                        const ok = await confirm({
+                          title: 'Restaurer depuis un fichier',
+                          message: `Restaurer depuis le fichier « ${f.filename} » ?`,
+                          details: ['Cela exécutera le fichier SQL et remplacera les affectations actuelles.'],
+                          confirmText: 'Restaurer',
+                          tone: 'warning',
+                        });
+                        if (!ok) return;
                         setRestoring(true);
                         try {
                           const result = await restoreFromSqlFile(f.filename);

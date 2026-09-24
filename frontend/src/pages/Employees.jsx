@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment } from '../services/api';
+import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
@@ -8,6 +8,8 @@ import { useCurrencies } from '../contexts/CurrenciesContext';
 import { Link } from 'react-router-dom';
 import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon, SearchIcon, DatabaseIcon } from '../components/Icons';
 import Modal from '../components/Modal';
+import { useConfirm } from '../components/ConfirmModal';
+import { ldapSyncToast, moveSummaryToast, alignToast, apiErrorToast } from '../utils/toastHelpers';
 
 const typeIcons = {
   mensuel: CalendarIcon,
@@ -56,6 +58,7 @@ const EXPORT_EMP_BONUS_COLUMNS = ["Matricule", "Nom", "Departement", "TypePrime"
 
 const Employees = () => {
   const { user } = useAuth();
+  const { confirm, confirmElement } = useConfirm();
   const { canSeeAmounts } = useSystemConfig();
   const seeAmounts = canSeeAmounts(user);
   const { departments } = useDepartments();
@@ -96,6 +99,7 @@ const Employees = () => {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [moveTarget, setMoveTarget] = useState('');
   const [moving, setMoving] = useState(false);
+  const [aligning, setAligning] = useState(false);
 
   const initRef = useRef(false);
 
@@ -125,18 +129,29 @@ const Employees = () => {
   }, [departmentFilter, user]);
 
   const handleLdapSync = async () => {
+    const ok = await confirm({
+      title: 'Synchronisation LDAP',
+      message: 'Voulez-vous lancer la synchronisation LDAP ?',
+      details: [
+        'Cette opération créera uniquement les nouveaux employés.',
+        'Les employés existants ne seront pas modifiés.',
+      ],
+      confirmText: 'Synchroniser',
+      tone: 'primary',
+    });
+    if (!ok) return;
     setSyncing(true);
     try {
       const result = await adminLdapSyncEmployees();
       if (result.success) {
         const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
         setEmployees(emps);
-        toast.success('Synchronisation LDAP des employés terminée');
+        ldapSyncToast(result);
       } else {
         toast.error('Erreur lors de la synchronisation LDAP');
       }
-    } catch {
-      toast.error('Erreur de connexion lors de la synchronisation');
+    } catch (err) {
+      apiErrorToast(err, 'Erreur de connexion lors de la synchronisation');
     } finally {
       setSyncing(false);
     }
@@ -160,7 +175,7 @@ const Employees = () => {
     try {
       const results = await adminLdapEmployeeSearch(q);
       setLdapResults(Array.isArray(results) ? results : []);
-      if (!results || results.length === 0) toast.info('Aucun résultat trouvé dans l\'annuaire LDAP');
+      if (!results || results.length === 0) toast('Aucun résultat trouvé dans l\'annuaire LDAP');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Erreur lors de la recherche LDAP');
     } finally {
@@ -168,8 +183,15 @@ const Employees = () => {
     }
   };
 
-  const addEmployeeFromLdap = async (email) => {
-    if (!window.confirm('Ajouter cet employé depuis l\'annuaire LDAP ?')) return;
+  const addEmployeeFromLdap = async (email, rec) => {
+    const ok = await confirm({
+      title: 'Ajouter depuis LDAP',
+      message: `Ajouter ${rec?.name || 'cet employé'} (${rec?.matricule || email}) depuis l'annuaire LDAP ?`,
+      details: ['Une fiche employé sera créée avec les données de l\'annuaire.'],
+      confirmText: 'Ajouter',
+      tone: 'primary',
+    });
+    if (!ok) return;
     setLdapAdding(true);
     try {
       await adminCreateEmployeeFromLdap(email);
@@ -257,7 +279,14 @@ const Employees = () => {
   };
 
   const deleteExistingCurrency = async (code) => {
-    if (!window.confirm(`Supprimer la devise « ${code} » ?`)) return;
+    const ok = await confirm({
+      title: 'Supprimer la devise',
+      message: `Supprimer la devise « ${code} » ?`,
+      details: ['Cette action est définitive.'],
+      confirmText: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteCurrency(code);
       toast.success(`Devise ${code} supprimée`);
@@ -265,7 +294,7 @@ const Employees = () => {
       const all = await getCurrencies(false);
       setAllCurrencies(Array.isArray(all) ? all : []);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Erreur lors de la suppression');
+      apiErrorToast(err, 'Erreur lors de la suppression');
     }
   };
 
@@ -307,20 +336,49 @@ const Employees = () => {
     });
   };
 
+  const handleAlignServiceDepartments = async () => {
+    const preview = await getServiceDepartmentInconsistencies().catch(() => ({ count: 0, items: [] }));
+    const ok = await confirm({
+      title: 'Auto-fix services / départements',
+      message: preview.count > 0
+        ? `${preview.count} employé(s) ont un département différent de celui de leur service.`
+        : 'Réaligner les employés sur le département de leur service ?',
+      details: [
+        ...preview.items.slice(0, 5).map(i => `${i.name} (${i.matricule}) : ${i.department} → ${i.service_department}`),
+        ...(preview.items.length > 5 ? [`… ${preview.items.length - 5} autre(s)`] : []),
+        'Les employés cohérents et ceux sans service ne sont pas modifiés.',
+      ],
+      confirmText: 'Réaligner',
+      tone: 'warning',
+    });
+    if (!ok) return;
+    setAligning(true);
+    try {
+      const result = await alignEmployeesServiceDepartments();
+      alignToast(result);
+      const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
+      setEmployees(emps);
+    } catch (err) {
+      apiErrorToast(err, 'Erreur lors du réalignement');
+    } finally {
+      setAligning(false);
+    }
+  };
+
   const handleMoveEmployees = async () => {
     if (!moveTarget) { toast.error('Sélectionnez un département cible'); return; }
     setMoving(true);
     try {
       const ids = Array.from(selectedEmpIds);
       const result = await moveEmployeesDepartment(ids, moveTarget);
-      toast.success(`${result.moved} employé(s) déplacé(s) vers « ${result.target_department} »${result.manager ? ` — manager : ${result.manager}` : ''}`);
+      moveSummaryToast(result);
       setSelectedEmpIds(new Set());
       setShowMoveModal(false);
       setMoveTarget('');
       const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
       setEmployees(emps);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Erreur lors du déplacement');
+      apiErrorToast(err, 'Erreur lors du déplacement');
     } finally {
       setMoving(false);
     }
@@ -332,11 +390,12 @@ const Employees = () => {
 
   return (
     <div>
+      {confirmElement}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Employés</h1>
         <div className="flex items-center gap-2">
         {user?.is_admin && (
-          <button onClick={handleLdapSync} disabled={syncing} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5" title="Met à jour les informations des employés déjà présents dans BPM depuis l'annuaire LDAP. N'ajoute jamais de nouveaux employés : pour cela utilisez « Ajouter employé (LDAP) ».">
+          <button onClick={handleLdapSync} disabled={syncing} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5" title="Crée uniquement les nouveaux employés depuis l'annuaire LDAP. Les employés existants ne sont jamais modifiés.">
             {syncing ? <span className="loading loading-spinner loading-xs"></span> : null}
             <DatabaseIcon className="w-4 h-4" /> Synchroniser avec LDAP
           </button>
@@ -349,6 +408,14 @@ const Employees = () => {
         {canManageCurrencies && (
           <button onClick={openCurrencyModal} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5" title="Ajouter ou supprimer des devises">
             Gérer les devises
+          </button>
+        )}
+        {user?.is_admin && (
+          <button onClick={handleAlignServiceDepartments} disabled={aligning}
+            className="btn bg-white border border-amber-300 hover:bg-amber-50 text-amber-700 btn-sm flex items-center gap-1.5"
+            title="Rattache au département de leur service les employés dont le département diffère de celui du service (ex : héritage des anciennes synchronisations LDAP)">
+            {aligning ? <span className="loading loading-spinner loading-xs"></span> : null}
+            Réaligner services/départements
           </button>
         )}
         <button onClick={() => {
@@ -398,7 +465,7 @@ const Employees = () => {
                     <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700 shrink-0" title="Aucun département dans l'annuaire LDAP">Sans département</span>
                   ) : (
                     <button
-                      onClick={() => addEmployeeFromLdap(r.email)}
+                      onClick={() => addEmployeeFromLdap(r.email, r)}
                       disabled={ldapAdding}
                       className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0 shrink-0"
                     >
@@ -900,9 +967,12 @@ const Employees = () => {
             ))}
           </select>
           {moveTarget && (
-            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 space-y-1">
               <p className="text-xs text-emerald-700">
                 {selectedEmpIds.size} employé(s) seront déplacés vers « {moveTarget} »
+              </p>
+              <p className="text-[11px] text-amber-700">
+                Les employés affectés à un service d'un autre département ne seront pas déplacés : retirez-les d'abord de leur service.
               </p>
             </div>
           )}

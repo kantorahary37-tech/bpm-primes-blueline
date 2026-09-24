@@ -2,10 +2,12 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import { getServices, createService, renameService, deleteService, assignEmployees, unassignEmployee, getEmployees } from '../services/api';
+import { getServices, createService, renameService, deleteService, assignEmployees, unassignEmployee, getEmployees, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies } from '../services/api';
+import { useConfirm } from '../components/ConfirmModal';
+import { alignToast, apiErrorToast } from '../utils/toastHelpers';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
-import { ArrowLeftIcon, PlusIcon, TrashIcon, EditIcon, CheckIcon, XCircleIcon, ChevronDownIcon, SearchIcon } from '../components/Icons';
+import { ArrowLeftIcon, PlusIcon, TrashIcon, EditIcon, CheckIcon, XCircleIcon, ChevronDownIcon, SearchIcon, ExclamationIcon } from '../components/Icons';
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
@@ -19,6 +21,7 @@ const FULL_SCOPE = ['is_admin', 'is_dg', 'is_drh'];
 const ServicesPage = () => {
   const { user } = useAuth();
   const { departments } = useDepartments();
+  const { confirm, confirmElement } = useConfirm();
   const [services, setServices] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,9 @@ const ServicesPage = () => {
   const [assignSearch, setAssignSearch] = useState({});
   const [deleting, setDeleting] = useState(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  // Employés incohérents (dept ≠ département du service) : compteur + auto-fix
+  const [inconsistencies, setInconsistencies] = useState({ count: 0, items: [] });
+  const [aligning, setAligning] = useState(false);
 
   const isFullScope = FULL_SCOPE.some(r => user?.[r]);
   const visibleDepts = useMemo(() =>
@@ -43,6 +49,10 @@ const ServicesPage = () => {
       const [s, e] = await Promise.all([getServices(), getEmployees()]);
       setServices(s);
       setEmployees(e);
+      // Le compteur d'incohérences n'a de sens que pour les rôles autorisés
+      if (isFullScope) {
+        getServiceDepartmentInconsistencies().then(setInconsistencies).catch(() => {});
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -70,8 +80,15 @@ const ServicesPage = () => {
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [services]);
 
+  // Membres = employés rattachés au service. On n'exige PAS department ===
+  // group.department : un employé incohérent (dept ≠ département du service,
+  // ex : héritage des anciennes syncs LDAP) reste visible, avec un badge
+  // d'avertissement, pour pouvoir le corriger via l'auto-fix.
   const membersOf = (group) =>
-    employees.filter(e => e.department === group.department && (e.service ?? null) === group.name);
+    employees.filter(e => (e.service ?? null) === group.name);
+
+  const isDeptMismatch = (emp, group) =>
+    emp.department !== group.department;
 
   const availableFor = (group) =>
     employees.filter(e => e.department === group.department && !e.service);
@@ -157,6 +174,38 @@ const ServicesPage = () => {
     setExpanded({ ...expanded, [group.id]: next });
   };
 
+  // Auto-fix : rattache au département de leur service les employés dont le
+  // département diffère de celui du service (le déplacement manuel est bloqué
+  // par le backend tant qu'ils sont dans le service).
+  const handleAutoFix = async () => {
+    const n = inconsistencies.count || 0;
+    const ok = await confirm({
+      title: 'Auto-fix services / départements',
+      message: n > 0
+        ? `${n} employé(s) ont un département différent de celui de leur service.`
+        : 'Vérifier et réaligner les employés sur le département de leur service ?',
+      details: [
+        ...inconsistencies.items.slice(0, 5).map(i => `${i.name} (${i.matricule}) : ${i.department} → ${i.service_department}`),
+        ...(inconsistencies.items.length > 5 ? [`… ${inconsistencies.items.length - 5} autre(s)`] : []),
+        'Ils seront rattachés au département du service (manager du département appliqué).',
+        'Les employés cohérents et ceux sans service ne sont pas modifiés.',
+      ],
+      confirmText: 'Réaligner',
+      tone: 'warning',
+    });
+    if (!ok) return;
+    setAligning(true);
+    try {
+      const result = await alignEmployeesServiceDepartments();
+      alignToast(result);
+      load();
+    } catch (err) {
+      apiErrorToast(err, 'Erreur lors du réalignement');
+    } finally {
+      setAligning(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-48"><span className="loading loading-spinner loading-md" /></div>;
   }
@@ -171,6 +220,7 @@ const ServicesPage = () => {
 
   return (
     <div className="max-w-6xl mx-auto">
+      {confirmElement}
       <div className="mb-4 flex items-center gap-3">
         <Link to="/" className="p-2 rounded-lg hover:bg-gray-100"><ArrowLeftIcon className="w-5 h-5 text-gray-500" /></Link>
         <div>
@@ -179,6 +229,19 @@ const ServicesPage = () => {
             Affectez chaque employé d'un département à un service pour faciliter la validation des primes.
           </p>
         </div>
+        {isFullScope && (
+          <button
+            onClick={handleAutoFix}
+            disabled={aligning}
+            className={`btn btn-sm ml-auto flex items-center gap-1.5 ${inconsistencies.count > 0
+              ? 'bg-amber-500 hover:bg-amber-600 text-white border-0 animate-pulse'
+              : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+            title="Rattache au département de leur service les employés dont le département diffère de celui du service."
+          >
+            {aligning ? <span className="loading loading-spinner loading-xs"></span> : <ExclamationIcon className="w-4 h-4" />}
+            Auto-fix services/départements{inconsistencies.count > 0 ? ` (${inconsistencies.count})` : ''}
+          </button>
+        )}
       </div>
 
       {canManage && (
@@ -277,10 +340,15 @@ const ServicesPage = () => {
                           ) : (
                             <ul className="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                               {members.map(emp => (
-                                <li key={emp.id} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
+                                <li key={emp.id} className={`flex items-center gap-2 bg-white border rounded-lg px-3 py-2 ${isDeptMismatch(emp, group) ? 'border-amber-300' : 'border-gray-200'}`}>
                                   <div className="min-w-0 flex-1">
                                     <p className="text-sm font-medium text-gray-800 truncate">{emp.name}</p>
                                     <p className="text-[11px] text-gray-400 font-mono">{emp.matricule}{emp.poste ? ` · ${emp.poste}` : ''}</p>
+                                    {isDeptMismatch(emp, group) && (
+                                      <p className="text-[10px] text-amber-700 mt-0.5" title="Utilisez l'auto-fix pour le rattacher au département du service">
+                                        ⚠ Département actuel : {emp.department || 'aucun'}
+                                      </p>
+                                    )}
                                   </div>
                                   {canManage && (
                                   <button

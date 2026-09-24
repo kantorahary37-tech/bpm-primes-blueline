@@ -367,6 +367,34 @@ class ConfigSnapshot(models.Model):
     created_at = fields.DatetimeField(auto_now_add=True)
 
 
+# Modèle Journal des synchronisations LDAP (table "ldapyncexecution")
+class LdapSyncExecution(models.Model):
+    """Historique / journal des synchronisations LDAP (create-only)."""
+    id = fields.IntField(pk=True)
+    # Origine : CRON ou MANUAL
+    trigger_type = fields.CharField(max_length=20)
+    # Statut : RUNNING / COMPLETED / FAILED
+    status = fields.CharField(max_length=20, default='RUNNING')
+    # Compteurs
+    ldap_found = fields.IntField(default=0)
+    created_count = fields.IntField(default=0)
+    already_existing_count = fields.IntField(default=0)
+    skipped_count = fields.IntField(default=0)
+    errors_count = fields.IntField(default=0)
+    # Détails : listes created / skipped / errors (JSON)
+    result_details = fields.JSONField(null=True)
+    # Durée en secondes
+    duration_seconds = fields.DecimalField(max_digits=10, decimal_places=3, null=True)
+    # Utilisateur ayant déclenché la synchronisation (null pour CRON / script)
+    created_by = fields.ForeignKeyField('models.User', related_name='ldap_sync_executions', null=True)
+    # Dates
+    started_at = fields.DatetimeField(null=True)
+    finished_at = fields.DatetimeField(null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "ldapyncexecution"
+
 # Modèle Journal des envois du rappel DG des primes en cours (table "primereminderexecution")
 class PrimeReminderExecution(models.Model):
     """Historique / journal des envois du rappel DG (cron ou manuel).

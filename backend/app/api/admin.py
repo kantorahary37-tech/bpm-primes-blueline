@@ -251,33 +251,63 @@ async def admin_delete_user_service_assignment(user_id: int, assignment_id: int,
     return {"message": "Assignation supprimée"}
 
 
-def _run_ldap_sync(scope: str):
-    import subprocess
-    result = subprocess.run(
-        ["python", "-m", "scripts.sync_ldap", "--scope", scope],
-        capture_output=True, text=True, timeout=60,
-        cwd="/app"
-    )
+async def _run_ldap_sync(scope: str, trigger_type: str, admin: User):
+    """Lance la synchronisation LDAP create-only dans le process courant.
+
+    Ne crée que les employés absents de BPM ; les employés existants ne sont
+    jamais modifiés. Retourne un résumé lisible (aucune donnée sensible).
+    """
+    from app.ldap_sync_service import run_ldap_sync
+
+    try:
+        result = await run_ldap_sync(
+            trigger_type=trigger_type,
+            created_by=admin,
+            scope=scope,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de synchronisation LDAP : {e}")
+    return _ldap_sync_summary(result)
+
+
+def _ldap_sync_summary(result: dict) -> dict:
+    """Résumé lisible pour l'administrateur (aucune donnée sensible)."""
     return {
-        "success": result.returncode == 0,
-        "output": result.stdout[-2000:] if result.stdout else "",
-        "errors": result.stderr[-1000:] if result.stderr else "",
+        "success": result.get("status") == "COMPLETED",
+        "status": result.get("status"),
+        "ldap_found": result.get("ldap_found", 0),
+        "created": result.get("created", 0),
+        "already_existing": result.get("already_existing", 0),
+        "skipped": result.get("skipped", 0),
+        "errors": result.get("errors", 0),
+        "duration_seconds": result.get("duration_seconds"),
+        "created_list": result.get("created_list", []),
+        "skipped_list": result.get("skipped_list", []),
+        "error_list": result.get("error_list", []),
     }
 
 
 @router.post("/ldap-sync")
-async def admin_ldap_sync(_admin: User = Depends(require_admin)):
-    return _run_ldap_sync("all")
+async def admin_ldap_sync(admin: User = Depends(require_admin)):
+    """Synchronisation LDAP create-only (nouveaux employés uniquement)."""
+    return await _run_ldap_sync("employees", "MANUAL", admin)
 
 
 @router.post("/ldap-sync-departments")
-async def admin_ldap_sync_departments(_admin: User = Depends(require_admin)):
-    return _run_ldap_sync("departments")
+async def admin_ldap_sync_departments(admin: User = Depends(require_admin)):
+    """Crée uniquement les départements LDAP manquants (aucun employé touché)."""
+    from app.ldap_sync_service import run_department_sync
+    try:
+        result = await run_department_sync(trigger_type="MANUAL", created_by=admin)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de synchronisation LDAP : {e}")
+    return _ldap_sync_summary(result)
 
 
 @router.post("/ldap-sync-employees")
-async def admin_ldap_sync_employees(_admin: User = Depends(require_admin)):
-    return _run_ldap_sync("employees")
+async def admin_ldap_sync_employees(admin: User = Depends(require_admin)):
+    """Synchronisation LDAP des employés (create-only)."""
+    return await _run_ldap_sync("employees", "MANUAL", admin)
 
 
 @router.get("/ldap-search")

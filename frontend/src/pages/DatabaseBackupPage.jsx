@@ -9,6 +9,7 @@ import {
 } from '../services/api';
 import { ArchiveIcon, DownloadIcon, TrashIcon } from '../components/Icons';
 import Modal from '../components/Modal';
+import { useConfirm } from '../components/ConfirmModal';
 
 const formatDate = (d) =>
   new Date(d).toLocaleDateString('fr-FR', {
@@ -20,6 +21,7 @@ const formatDate = (d) =>
   });
 
 export default function DatabaseBackupPage() {
+  const { confirm, confirmElement } = useConfirm();
   const [dumps, setDumps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -61,11 +63,17 @@ export default function DatabaseBackupPage() {
   };
 
   const handleRestore = async (f) => {
-    if (!window.confirm(
-      `Restaurer la base ENTIÈRE depuis « ${f.filename} » ?\n\n` +
-      `⚠️ ATTENTION : toutes les tables existantes seront supprimées puis recréées ` +
-      `avec les données de cette sauvegarde. Cette opération est irréversible.`
-    )) return;
+    const ok = await confirm({
+      title: 'Restaurer toute la base',
+      message: `Restaurer la base ENTIÈRE depuis « ${f.filename} » ?`,
+      details: [
+        '⚠️ ATTENTION : toutes les tables existantes seront supprimées puis recréées avec les données de cette sauvegarde.',
+        'Cette opération est irréversible.',
+      ],
+      confirmText: 'Restaurer',
+      tone: 'danger',
+    });
+    if (!ok) return;
 
     setRestoring(true);
     try {
@@ -82,7 +90,14 @@ export default function DatabaseBackupPage() {
   };
 
   const handleDelete = async (f) => {
-    if (!window.confirm(`Supprimer la sauvegarde « ${f.filename} » ?`)) return;
+    const ok = await confirm({
+      title: 'Supprimer la sauvegarde',
+      message: `Supprimer la sauvegarde « ${f.filename} » ?`,
+      details: ['Cette action est définitive.'],
+      confirmText: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteDatabaseDump(f.filename);
       toast.success('Sauvegarde supprimée');
@@ -108,6 +123,7 @@ export default function DatabaseBackupPage() {
 
   return (
     <div>
+      {confirmElement}
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>

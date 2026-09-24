@@ -419,4 +419,35 @@ try:
 except Exception as e:
     print(f"primereminderexecution table check skipped: {e}")
 
+print("Ensuring ldapyncexecution table exists (journal des synchronisations LDAP)...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "ldapyncexecution" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "trigger_type" VARCHAR(20) NOT NULL,
+            "status" VARCHAR(20) NOT NULL DEFAULT 'RUNNING',
+            "ldap_found" INT NOT NULL DEFAULT 0,
+            "created_count" INT NOT NULL DEFAULT 0,
+            "already_existing_count" INT NOT NULL DEFAULT 0,
+            "skipped_count" INT NOT NULL DEFAULT 0,
+            "errors_count" INT NOT NULL DEFAULT 0,
+            "result_details" JSONB,
+            "duration_seconds" DECIMAL(10,3),
+            "created_by_id" INT REFERENCES "user" ("id"),
+            "started_at" TIMESTAMPTZ,
+            "finished_at" TIMESTAMPTZ,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("ldapyncexecution table OK")
+except Exception as e:
+    print(f"ldapyncexecution table check skipped: {e}")
+
 print("Starting application...")

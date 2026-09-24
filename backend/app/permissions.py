@@ -12,6 +12,10 @@ def is_broad_role(user: User) -> bool:
     return any(getattr(user, r) for r in BROAD_ROLES)
 
 
+# Note : il n'existe volontairement aucune permission de création manuelle
+# d'employé — les employés sont créés uniquement via LDAP (admin seul).
+
+
 async def n1_service_group_ids(user: User):
     """IDs des services affectés à un N+1 / N+2.
 

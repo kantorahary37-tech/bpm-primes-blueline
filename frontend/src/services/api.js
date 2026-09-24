@@ -67,8 +67,13 @@ export const moveEmployeesDepartment = async (employeeIds, targetDepartment) => 
   return data;
 };
 
-export const createEmployee = async (employeeData) => {
-  const { data } = await api.post('/employees/', employeeData);
+export const alignEmployeesServiceDepartments = async () => {
+  const { data } = await api.post('/employees/align-service-departments');
+  return data;
+};
+
+export const getServiceDepartmentInconsistencies = async () => {
+  const { data } = await api.get('/employees/service-department-inconsistencies');
   return data;
 };
 

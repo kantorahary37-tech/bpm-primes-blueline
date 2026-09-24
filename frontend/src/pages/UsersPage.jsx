@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getUsers, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment } from '../services/api'
 import Modal from '../components/Modal'
+import { useConfirm } from '../components/ConfirmModal'
+import { ldapSyncToast, apiErrorToast } from '../utils/toastHelpers'
 import toast from 'react-hot-toast'
 import { EditIcon, TrashIcon, SearchIcon, PlusIcon, UsersIcon, ChevronLeftIcon, ChevronDownIcon } from '../components/Icons'
 
@@ -9,6 +11,7 @@ const PAGE_SIZE = 15
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth()
+  const { confirm, confirmElement } = useConfirm()
   const [users, setUsers] = useState([])
   const isScopedDirector = currentUser?.is_directeur && !currentUser?.is_admin && !currentUser?.is_dg && !currentUser?.is_drh
   const visibleUsers = isScopedDirector ? users.filter(u => u.department === currentUser?.department) : users
@@ -224,17 +227,28 @@ export default function UsersPage() {
   }
 
   const handleLdapSync = async () => {
+    const ok = await confirm({
+      title: 'Synchronisation LDAP',
+      message: 'Voulez-vous lancer la synchronisation LDAP ?',
+      details: [
+        'Cette opération créera uniquement les nouveaux employés.',
+        'Les employés existants ne seront pas modifiés.',
+      ],
+      confirmText: 'Synchroniser',
+      tone: 'primary',
+    })
+    if (!ok) return
     setSyncing(true)
     try {
       const result = await adminLdapSync()
       if (result.success) {
         await loadUsers()
-        toast.success('Synchronisation LDAP terminée avec succès')
+        ldapSyncToast(result)
       } else {
         toast.error('Erreur lors de la synchronisation LDAP')
       }
-    } catch {
-      toast.error('Erreur de connexion lors de la synchronisation')
+    } catch (e) {
+      apiErrorToast(e, 'Erreur de connexion lors de la synchronisation')
     } finally {
       setSyncing(false)
     }
@@ -267,6 +281,7 @@ export default function UsersPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
+      {confirmElement}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -282,7 +297,7 @@ export default function UsersPage() {
           <button onClick={() => setShowLdap(true)} className="btn btn-outline btn-sm gap-1 border-blue-200 text-blue-600 hover:bg-blue-50">
             <PlusIcon className="w-4 h-4" /> Ajouter
           </button>
-          {!isScopedDirector && (
+          {currentUser?.is_admin && (
             <button onClick={handleLdapSync} className={`btn btn-outline btn-sm gap-1 ${syncing ? 'loading' : ''}`} disabled={syncing}>
               {syncing ? <span className="loading loading-spinner loading-sm"></span> : null}
               Sync LDAP
