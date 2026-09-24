@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 import BonusTable from '../components/BonusTable';
+import { formatTotalsAndCountsByCurrency, formatCountsByCurrency } from '../utils/currencyTotals';
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
@@ -581,9 +582,8 @@ const [filterMonth, setFilterMonth] = useState('');
         <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center gap-3">
           <span className="text-sm font-semibold text-blue-700">{depFilter}</span>
           <span className="text-sm font-bold text-blue-700">
-            Total : {seeAmounts ? `${filteredBonuses.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+            Total : {seeAmounts ? formatTotalsAndCountsByCurrency(filteredBonuses) : `${formatCountsByCurrency(filteredBonuses)} prime(s)`}
           </span>
-          <span className="text-xs text-blue-500">{filteredBonuses.length} prime(s)</span>
         </div>
       )}
       {filteredBonuses.length === 0 ? (
@@ -602,9 +602,8 @@ const [filterMonth, setFilterMonth] = useState('');
         <div key={dept} className="mb-6">
           <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
             <h2 className="font-semibold text-sm">{dept}</h2>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
             <span className="text-sm font-bold text-blue-600 ml-1">
-              {seeAmounts ? `${items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+              {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
             </span>
             <div className="flex gap-1 ml-auto">
               {items.some(b => canSelect(b)) && (
@@ -657,9 +656,8 @@ const [filterMonth, setFilterMonth] = useState('');
               <div key={serviceGroup.name} className="p-3">
                 <div className="flex items-center gap-2 mb-2 px-1">
                   <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">{serviceGroup.name}</span>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{serviceGroup.items.length}</span>
                   <span className="text-xs font-bold text-blue-600 ml-1">
-                    {seeAmounts ? `${serviceGroup.items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+                    {seeAmounts ? formatTotalsAndCountsByCurrency(serviceGroup.items) : formatCountsByCurrency(serviceGroup.items)}
                   </span>
                 </div>
                 <BonusTable
@@ -728,10 +726,7 @@ const [filterMonth, setFilterMonth] = useState('');
                 </div>
               )}
               <span className={`text-sm font-bold ${section.highlight ? 'text-white' : 'text-blue-600'}`}>
-                {seeAmounts ? `${items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
-              </span>
-              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${section.highlight ? 'bg-white text-blue-700' : 'bg-gray-300 text-gray-700'}`}>
-                {items.length}
+                {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
               </span>
             </div>
 
@@ -790,9 +785,8 @@ const [filterMonth, setFilterMonth] = useState('');
               }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Traiter ({validatedCount})</button>
             )}
             <span className="text-sm font-bold text-blue-600">
-              {seeAmounts ? `${items.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+              {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
             </span>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{items.length}</span>
           </div>
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
             <BonusTable

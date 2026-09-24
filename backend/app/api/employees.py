@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from tortoise.expressions import Q
-from app.models import Employee, User, Department
+from app.models import Employee, User, Department, Bonus
 from app.schemas import *
 from app.auth import get_current_user
 from app.permissions import employee_in_scope, employee_scope, apply_employee_scope
@@ -144,8 +144,13 @@ async def update_employee(emp_id: int, data: EmployeeUpdate, user: User = Depend
         raise HTTPException(status_code=403, detail="Vous ne pouvez modifier que les employés de vos services affectés")
     update_data = data.dict(exclude_unset=True)
     if update_data:
+        old_currency = emp.currency
         await emp.update_from_dict(update_data)
         await emp.save()
+        # Changement de devise : les primes de l'employé suivent (un employé
+        # payé en EUR a toutes ses primes en EUR — jamais de mélange Ar/EUR).
+        if 'currency' in update_data and emp.currency != old_currency:
+            await Bonus.filter(employee_id=emp.id).update(currency=emp.currency)
     return await Employee.get(id=emp_id)
 
 

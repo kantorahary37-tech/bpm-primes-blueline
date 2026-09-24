@@ -5,6 +5,7 @@ import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { getBonuses, getUsers } from '../services/api';
 import { ArrowLeftIcon, DownloadIcon, ChevronLeftIcon } from '../components/Icons';
 import BonusTable from '../components/BonusTable';
+import { formatTotalsAndCountsByCurrency, formatCountsByCurrency } from '../utils/currencyTotals';
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
@@ -128,9 +129,8 @@ const ArchivePage = () => {
               <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
                 <h3 className="font-semibold text-sm">{monthName}</h3>
                 <span className="text-sm font-bold text-blue-600">
-                  {seeAmounts ? `${groupItems.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0).toLocaleString('fr-FR')} Ar` : '••••••'}
+                  {seeAmounts ? formatTotalsAndCountsByCurrency(groupItems) : formatCountsByCurrency(groupItems)}
                 </span>
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">{groupItems.length}</span>
               </div>
               <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
                 <BonusTable

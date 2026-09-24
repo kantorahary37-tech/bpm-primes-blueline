@@ -359,6 +359,26 @@ try:
 except Exception as e:
     print(f"configsnapshot table check skipped: {e}")
 
+print("Ensuring bonus currency column exists (with backfill)...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("""
+        ALTER TABLE bonus ADD COLUMN IF NOT EXISTS "currency" VARCHAR(10) NOT NULL DEFAULT 'Ar';
+        CREATE INDEX IF NOT EXISTS bonus_currency_idx ON bonus (currency);
+        -- Backfill : chaque prime existante reprend la devise de son employé
+        UPDATE bonus b SET currency = e.currency
+        FROM employee e WHERE b.employee_id = e.id AND b.currency = 'Ar' AND e.currency <> 'Ar';
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("bonus currency column OK (backfill employee)")
+except Exception as e:
+    print(f"bonus currency column check skipped: {e}")
+
 print("Ensuring N+2 role columns exist...")
 try:
     import psycopg2
