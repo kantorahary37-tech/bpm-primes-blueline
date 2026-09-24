@@ -144,11 +144,16 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
         others_list = details.get('others', []) if isinstance(details, dict) else []
         others_total = sum(float(o.get('montant', 0) or 0) for o in others_list)
         eval_amount = float(bonus.total_amount) - others_total
-        if primemax and eval_amount > primemax.amount:
+        # Plafond effectif : le taux spécial mensuel de l'employé (s'il existe)
+        # remplace totalement le plafond global du département.
+        cap = primemax.amount if primemax else None
+        if bonus.bonus_type == BonusType.MENSUEL and employee.mensuel_rate is not None:
+            cap = employee.mensuel_rate
+        if cap is not None and eval_amount > cap:
             raise HTTPException(
                 status_code=400,
                 detail=f"Le montant de l'évaluation ({eval_amount} {emp_symbol}) dépasse le plafond "
-                       f"autorisé ({primemax.amount} {emp_symbol}) pour "
+                       f"autorisé ({cap} {emp_symbol}) pour "
                        f"'{bonus.bonus_type.value}' dans le département '{employee.dept_str}'."
             )
 
@@ -364,8 +369,13 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
         others_list = details.get('others', []) if isinstance(details, dict) else []
         others_total = sum(float(o.get('montant', 0) or 0) for o in others_list)
         eval_amount = float(update_data['total_amount']) - others_total
-        if primemax and eval_amount > primemax.amount:
-            raise HTTPException(400, f"Le montant de l'évaluation dépasse le plafond autorisé ({primemax.amount} {emp_symbol})")
+        # Plafond effectif : le taux spécial mensuel de l'employé (s'il existe)
+        # remplace totalement le plafond global du département.
+        cap = primemax.amount if primemax else None
+        if data.bonus_type == BonusType.MENSUEL and employee.mensuel_rate is not None:
+            cap = employee.mensuel_rate
+        if cap is not None and eval_amount > cap:
+            raise HTTPException(400, f"Le montant de l'évaluation dépasse le plafond autorisé ({cap} {emp_symbol})")
     if 'employee_id' in update_data:
         del update_data['employee_id']
 
