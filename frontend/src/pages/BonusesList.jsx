@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import toast from 'react-hot-toast';
-import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon } from '../components/Icons';
+import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon, ChevronDownIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 import BonusTable from '../components/BonusTable';
 import { formatTotalsAndCountsByCurrency, formatCountsByCurrency } from '../utils/currencyTotals';
@@ -80,6 +80,7 @@ const [filterMonth, setFilterMonth] = useState('');
   const [paying, setPaying] = useState(false);
   const [datePage, setDatePage] = useState(1);
   const [sectionExpand, setSectionExpand] = useState({});
+  const [collapsedGroups, setCollapsedGroups] = useState({});
   const [initiatorMap, setInitiatorMap] = useState(new Map());
   const [sortBy, setSortBy] = useState('start_date');
   const [sortDir, setSortDir] = useState('desc');
@@ -412,6 +413,25 @@ const [filterMonth, setFilterMonth] = useState('');
     });
   }, [bonuses]);
 
+  // Repli/dépli des groupes (départements, services, statuts, mois) pour éviter
+  // de longues pages à faire défiler. Clés : 'dept:<n>', 'svc:<dept>:<service>', 'status:<key>', 'month:<ym>'
+  const isGroupCollapsed = (key) => !!collapsedGroups[key];
+  const toggleGroupCollapsed = (key) => setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const groupKeys = useMemo(() => {
+    if (viewMode === 'department') return deptGroups.map((g) => `dept:${g.dept}`);
+    if (viewMode === 'status') return sections.filter((s) => (grouped[s.key] || []).length > 0).map((s) => `status:${s.key}`);
+    return monthGroups.map((g) => `month:${g.ym}`);
+  }, [viewMode, deptGroups, sections, grouped, monthGroups]);
+
+  const allGroupsCollapsed = groupKeys.length > 0 && groupKeys.every((k) => collapsedGroups[k]);
+  const toggleAllGroups = () =>
+    setCollapsedGroups((prev) => {
+      const next = { ...prev };
+      groupKeys.forEach((k) => { next[k] = !allGroupsCollapsed; });
+      return next;
+    });
+
   const canSelect = (bonus) => {
     const step = getValidStep(bonus);
     if (step) return true;
@@ -560,7 +580,15 @@ const [filterMonth, setFilterMonth] = useState('');
             Réinitialiser
           </button>
         )}
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex gap-1 items-center">
+          {groupKeys.length > 0 && (
+            <button onClick={toggleAllGroups}
+              title={allGroupsCollapsed ? 'Déplier tous les groupes' : 'Replier tous les groupes'}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 flex items-center gap-1">
+              <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${allGroupsCollapsed ? '-rotate-90' : ''}`} />
+              {allGroupsCollapsed ? 'Tout déplier' : 'Tout replier'}
+            </button>
+          )}
           <button onClick={() => setViewMode('status')}
             className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'status' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
             Statut
@@ -598,14 +626,20 @@ const [filterMonth, setFilterMonth] = useState('');
             </button>
           )}
         </div>
-      ) : viewMode === 'department' ? deptGroups.map(({ dept, items, services }) => (
+      ) : viewMode === 'department' ? deptGroups.map(({ dept, items, services }) => {
+        const deptKey = `dept:${dept}`;
+        const deptCollapsed = isGroupCollapsed(deptKey);
+        return (
         <div key={dept} className="mb-6">
-          <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
+          <div onClick={() => toggleGroupCollapsed(deptKey)}
+            title={deptCollapsed ? 'Déplier le département' : 'Replier le département'}
+            className={`flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-900 cursor-pointer select-none hover:bg-gray-200/60 transition-colors ${deptCollapsed ? 'rounded-xl' : 'rounded-t-xl'}`}>
+            <ChevronDownIcon className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${deptCollapsed ? '-rotate-90' : ''}`} />
             <h2 className="font-semibold text-sm">{dept}</h2>
             <span className="text-sm font-bold text-blue-600 ml-1">
               {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
             </span>
-            <div className="flex gap-1 ml-auto">
+            <div className="flex gap-1 ml-auto" onClick={(e) => e.stopPropagation()}>
               {items.some(b => canSelect(b)) && (
                 <button onClick={() => {
                   const selectable = items.filter(b => canSelect(b));
@@ -651,15 +685,23 @@ const [filterMonth, setFilterMonth] = useState('');
               })()}
             </div>
           </div>
+          {!deptCollapsed && (
           <div className="bg-white rounded-b-xl border border-t-0 border-gray-200 divide-y divide-gray-100">
-            {services.map((serviceGroup) => (
+            {services.map((serviceGroup) => {
+              const svcKey = `svc:${dept}:${serviceGroup.name}`;
+              const svcCollapsed = isGroupCollapsed(svcKey);
+              return (
               <div key={serviceGroup.name} className="p-3">
-                <div className="flex items-center gap-2 mb-2 px-1">
+                <div onClick={() => toggleGroupCollapsed(svcKey)}
+                  title={svcCollapsed ? 'Déplier le service' : 'Replier le service'}
+                  className="flex items-center gap-2 mb-2 px-1 cursor-pointer select-none">
+                  <ChevronDownIcon className={`w-3.5 h-3.5 text-blue-400 shrink-0 transition-transform ${svcCollapsed ? '-rotate-90' : ''}`} />
                   <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">{serviceGroup.name}</span>
                   <span className="text-xs font-bold text-blue-600 ml-1">
                     {seeAmounts ? formatTotalsAndCountsByCurrency(serviceGroup.items) : formatCountsByCurrency(serviceGroup.items)}
                   </span>
                 </div>
+                {!svcCollapsed && (
                 <BonusTable
                   bonuses={serviceGroup.items}
                   getValidStep={getValidStep}
@@ -679,24 +721,31 @@ const [filterMonth, setFilterMonth] = useState('');
                   sortDir={sortDir}
                   onSort={handleTableSort}
                 />
+                )}
               </div>
-            ))}
+            );})}
           </div>
+          )}
         </div>
-      )) : viewMode === 'status' ? sections.map((section) => {
+      );}) : viewMode === 'status' ? sections.map((section) => {
         const items = grouped[section.key] || [];
         if (items.length === 0 && section.key !== 'myValidation') return null;
         const showAll = sectionExpand[section.key];
         const limit = 12;
         const visible = showAll ? items : items.slice(0, limit);
         const remaining = items.length - limit;
+        const statusKey = `status:${section.key}`;
+        const sectionCollapsed = isGroupCollapsed(statusKey);
 
         return (
           <div key={section.key} className="mb-6">
-            <div className={`flex items-center gap-2 px-4 py-3 rounded-t-xl ${section.highlight ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+            <div onClick={() => toggleGroupCollapsed(statusKey)}
+              title={sectionCollapsed ? 'Déplier' : 'Replier'}
+              className={`flex items-center gap-2 px-4 py-3 cursor-pointer select-none transition-colors ${section.highlight ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-900 hover:bg-gray-200/60'} ${sectionCollapsed ? 'rounded-xl' : 'rounded-t-xl'}`}>
+              <ChevronDownIcon className={`w-4 h-4 shrink-0 transition-transform ${sectionCollapsed ? '-rotate-90' : ''} ${section.highlight ? 'text-white/70' : 'text-gray-400'}`} />
               <h2 className="font-semibold">{section.title}</h2>
               {(section.key === 'myValidation' || section.key === 'initialised' || section.key === 'pendingDirector' || section.key === 'pendingDG' || section.key === 'validated') && items.length > 0 && (
-                <div className="flex gap-1">
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   <button onClick={(e) => {
                     e.stopPropagation();
                     selectSection(items);
@@ -714,7 +763,7 @@ const [filterMonth, setFilterMonth] = useState('');
                 </div>
               )}
               {section.key === 'validated' && user?.is_drh && items.length > 0 && (
-                <div className="flex gap-1">
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   <button onClick={(e) => {
                     e.stopPropagation();
                     const allIds = items.filter(b => b.status === 'Prime validée').map(b => b.id);
@@ -730,7 +779,7 @@ const [filterMonth, setFilterMonth] = useState('');
               </span>
             </div>
 
-            {items.length === 0 ? (
+            {sectionCollapsed ? null : items.length === 0 ? (
               <div className="p-6 text-center text-gray-400 bg-white rounded-b-xl border border-t-0 border-gray-200">
                 Aucune prime à valider
               </div>
@@ -774,12 +823,18 @@ const [filterMonth, setFilterMonth] = useState('');
           <>
           {visibleGroups.map(({ ym, monthName, bonuses: items }) => {
         const validatedCount = items.filter(b => b.status === 'Prime validée').length;
+        const monthKey = `month:${ym}`;
+        const monthCollapsed = isGroupCollapsed(monthKey);
         return (
         <div key={ym} className="mb-6">
-          <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-gray-100 text-gray-900">
+          <div onClick={() => toggleGroupCollapsed(monthKey)}
+            title={monthCollapsed ? 'Déplier le mois' : 'Replier le mois'}
+            className={`flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-900 cursor-pointer select-none hover:bg-gray-200/60 transition-colors ${monthCollapsed ? 'rounded-xl' : 'rounded-t-xl'}`}>
+            <ChevronDownIcon className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${monthCollapsed ? '-rotate-90' : ''}`} />
             <h2 className="font-semibold text-sm">{monthName}</h2>
             {user?.is_drh && validatedCount > 0 && (
-              <button onClick={() => {
+              <button onClick={(e) => {
+                e.stopPropagation();
                 const [y, m] = ym.split('-')
                 setPayConfirm({ type: 'month', month: m, year: y, monthName, count: validatedCount })
               }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Traiter ({validatedCount})</button>
@@ -788,6 +843,7 @@ const [filterMonth, setFilterMonth] = useState('');
               {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
             </span>
           </div>
+          {!monthCollapsed && (
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
             <BonusTable
               bonuses={items}
@@ -809,6 +865,7 @@ const [filterMonth, setFilterMonth] = useState('');
               onSort={handleTableSort}
             />
           </div>
+          )}
         </div>
       );
       })}

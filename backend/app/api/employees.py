@@ -335,6 +335,7 @@ async def align_employees_to_service_departments(user: User = Depends(get_curren
         "checked": len(employees),
         "aligned": aligned,
         "details": details,
+    }
 # ------------------------------------------------------------------
 # Archivage interne d'employés (départ, retraite, bug LDAP...)
 # ------------------------------------------------------------------
