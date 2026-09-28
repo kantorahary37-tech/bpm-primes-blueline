@@ -95,6 +95,12 @@ export default function BonusForm() {
     return emp?.astreinte_rate ?? astreinteConfig.weeklyMax
   }
 
+  // Symbole de la devise d'un employé d'une ligne (astreinte) — sinon celui de la prime
+  const getEmpSymbol = (empId) => {
+    const emp = employees.find(e => e.id === empId)
+    return emp ? symbolFor(emp.currency) : formCurrency
+  }
+
   const getMensuelRate = (empId) => {
     const emp = employees.find(e => e.id === empId)
     return emp?.mensuel_rate ?? null
@@ -114,7 +120,8 @@ export default function BonusForm() {
   const [serviceAssignments, setServiceAssignments] = useState([])
   const [selectedEmp, setSelectedEmp] = useState(null)
   const formCurrency = symbolFor(selectedEmp?.currency)
-  const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} Ar` : '••••••'
+  // Tous les montants du formulaire sont dans la devise de l'employé de la prime (Ar par défaut, € sinon)
+  const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} ${formCurrency}` : '••••••'
   const maskForm = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} ${formCurrency}` : '••••••'
 
   const [employee, setEmployee] = useState({
@@ -1243,7 +1250,7 @@ export default function BonusForm() {
           {editType === 'astreinte' ? (
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime max / semaine (Ar)</label>
+                <label className="block text-sm font-medium text-base-content/70 mb-0.5">Prime max / semaine ({formCurrency})</label>
                 <input type="number" value={astreinteConfig.weeklyMax} readOnly
                   className="w-full px-3 py-2 rounded-lg border border-base-200 bg-base-100 text-base-content/60 cursor-not-allowed" />
                 <p className="text-[11px] text-base-content/40 mt-0.5">Modifiable dans la page Plafonds</p>
@@ -1962,7 +1969,7 @@ export default function BonusForm() {
                         {(parseFloat(d.nombre) || 0) > rowMax && <span className="text-red-500 text-xs block">max {rowMax}{d.mode === 'jour' ? ' j' : ' sem'}</span>}
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
-                        {seeAmounts ? ((parseFloat(d.nombre) || 0) * (d.mode === 'jour' ? astreinteConfig.weeklyMax / 7 : getRate(d.employee_id))).toLocaleString('fr-FR') : '••••••'}
+                        {seeAmounts ? `${((parseFloat(d.nombre) || 0) * (d.mode === 'jour' ? astreinteConfig.weeklyMax / 7 : getRate(d.employee_id))).toLocaleString('fr-FR')} ${getEmpSymbol(d.employee_id)}` : '••••••'}
                       </td>
                       <td className="py-1 px-2 text-center">
                         <button type="button" onClick={() => removeDispoRow(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
@@ -1986,7 +1993,7 @@ export default function BonusForm() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h2 className="font-semibold text-base-content text-sm">Interventions</h2>
-                <p className="text-xs text-base-content/50">Taux : {seeAmounts ? `${Number(astreinteConfig.interventionRate).toLocaleString('fr-FR')} Ar` : '••••••'} / intervention</p>
+                <p className="text-xs text-base-content/50">Taux : {seeAmounts ? `${Number(astreinteConfig.interventionRate).toLocaleString('fr-FR')} ${formCurrency}` : '••••••'} / intervention</p>
               </div>
               <div className="flex gap-2 items-center">
                 {importedFileName && <span className="text-xs text-base-content/70 flex items-center gap-1 bg-base-200 px-2 py-1 rounded"><span className="truncate max-32">{importedFileName}</span><button type="button" onClick={clearImported} className="text-red-500 hover:text-red-700 text-sm leading-none">✕</button></span>}
@@ -2060,7 +2067,7 @@ export default function BonusForm() {
                           className="w-24 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm" placeholder="N° ticket" />
                       </td>
                       <td className="py-1 px-2 text-right font-medium">
-                        {iv.employee_id ? (seeAmounts ? Number(astreinteConfig.interventionRate).toLocaleString('fr-FR') : '••••••') : '—'}
+                        {iv.employee_id ? (seeAmounts ? `${Number(astreinteConfig.interventionRate).toLocaleString('fr-FR')} ${formCurrency}` : '••••••') : '—'}
                       </td>
                       <td className="py-1 px-2 text-center">
                         <button type="button" onClick={() => removeIntervRow(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
@@ -2106,7 +2113,7 @@ export default function BonusForm() {
                       <td className="py-2 px-2 text-right">{maskAr(e.interv)}</td>
                       <td className="py-2 px-2 text-right">{maskAr(e.exceptionnelle)}</td>
                       <td className="py-2 px-2 text-right">{maskAr(e.ponctuelle)}</td>
-                      <td className="py-2 px-2 text-right font-semibold">{seeAmounts ? `${(e.dispo + e.interv + e.exceptionnelle + e.ponctuelle).toLocaleString('fr-FR')} Ar` : '••••••'}</td>
+                      <td className="py-2 px-2 text-right font-semibold">{seeAmounts ? `${(e.dispo + e.interv + e.exceptionnelle + e.ponctuelle).toLocaleString('fr-FR')} ${formCurrency}` : '••••••'}</td>
                     </tr>
                     )
                   })}

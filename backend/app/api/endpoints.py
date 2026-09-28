@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.permissions import employee_in_scope, employee_scope, apply_employee_scope
 from app.api.commission_gc import can_access_gc, COMMISSION_GC_DEPARTMENT
 from app.email_service import send_bonus_notification_email, send_bonus_batch_notification_email
+from app.currency_format import format_amount_with_currency
 from app.schemas import *
 from fastapi import HTTPException
 import io
@@ -321,7 +322,7 @@ async def batch_validate_bonuses(
                             batch_notifs.setdefault(r.id, {"user": r, "items": []})["items"].append({
                                 "employee_name": employee.name,
                                 "type_label": BATCH_TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
-                                "amount": f"{int(bonus.total_amount):,}".replace(",", " ") + " Ar",
+                                "amount": await format_amount_with_currency(bonus.total_amount, employee),
                                 "url": bonus_url,
                             })
                 except Exception:

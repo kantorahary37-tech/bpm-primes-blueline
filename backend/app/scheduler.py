@@ -18,6 +18,7 @@ from app.auth import get_current_user
 from app.api.admin import require_admin
 from app.api.database_dump import create_database_dump_file, cleanup_old_dumps
 from app.email_service import send_validation_reminder_email, send_deadline_reminder_email
+from app.currency_format import format_amount_with_currency
 from app.config import get_config
 from app.permissions import n1_service_group_ids
 
@@ -57,11 +58,12 @@ async def collect_pending_by_actor() -> dict:
             emp = bonus.employee
             query = User.filter(is_admin=False, **role_filter)
             validators = await (query.filter(dept_str=emp.dept_str).all() if dept_scoped else query.all())
+            amount = await format_amount_with_currency(bonus.total_amount, emp)
             for v in validators:
                 actors.setdefault(v.id, {"user": v, "items": []})["items"].append({
                     "employee_name": emp.name,
                     "type_label": TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
-                    "amount": f"{int(bonus.total_amount):,}".replace(",", " ") + " Ar",
+                    "amount": amount,
                     "status_label": label,
                     "url": f"{get_config('FRONTEND_URL')}/bonuses/{bonus.id}",
                 })
@@ -145,12 +147,18 @@ async def collect_deadline_pending_by_actor() -> dict:
     """
     actors = {}
 
-    def _add(user: User, bonus: Bonus, status_label: str):
+    amount_cache = {}
+
+    async def _add(user: User, bonus: Bonus, status_label: str):
         emp = bonus.employee
+        # Un même bonus peut être ajouté pour plusieurs validateurs : le montant
+        # (et sa devise) est formaté une seule fois par prime.
+        if bonus.id not in amount_cache:
+            amount_cache[bonus.id] = await format_amount_with_currency(bonus.total_amount, emp)
         actors.setdefault(user.id, {"user": user, "items": []})["items"].append({
             "employee_name": emp.name,
             "type_label": TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
-            "amount": f"{int(bonus.total_amount):,}".replace(",", " ") + " Ar",
+            "amount": amount_cache[bonus.id],
             "status_label": status_label,
             "url": f"{get_config('FRONTEND_URL')}/bonuses/{bonus.id}",
         })
@@ -167,7 +175,7 @@ async def collect_deadline_pending_by_actor() -> dict:
             # liste non vide = restreint à ces services.
             if group_ids and emp.service_group_id not in group_ids:
                 continue
-            _add(n1, bonus, "Validation N+1")
+            await _add(n1, bonus, "Validation N+1")
 
     # N+2 : primes en attente N+2 (validateur désigné)
     for bonus in await Bonus.filter(
@@ -175,7 +183,7 @@ async def collect_deadline_pending_by_actor() -> dict:
     ).prefetch_related("employee"):
         n2 = await User.get_or_none(id=bonus.n2_user_id) if bonus.n2_user_id else None
         if n2 and n2.is_validator_n2 and not n2.is_admin:
-            _add(n2, bonus, "Validation N+2")
+            await _add(n2, bonus, "Validation N+2")
 
     # Directeurs : primes en attente Directeur
     for bonus in await Bonus.filter(
@@ -184,7 +192,7 @@ async def collect_deadline_pending_by_actor() -> dict:
         emp = bonus.employee
         directeurs = await User.filter(is_directeur=True, is_admin=False, dept_str=emp.dept_str).all()
         for d in directeurs:
-            _add(d, bonus, "Validation Directeur")
+            await _add(d, bonus, "Validation Directeur")
 
     return actors
 

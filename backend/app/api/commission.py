@@ -11,6 +11,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.models import Bonus, BonusType, CommissionConfig, Employee, User, ValidationStatus
+from app.currency_format import employee_currency_code
 from app.auth import get_current_user
 from app.schemas import (
     CommissionConfigCreate,
@@ -373,6 +374,9 @@ async def create_commission_bonuses(employees, start_date, end_date, user):
             status=initial_status,
             total_amount=total,
             commission_amount=total,
+            # Devise copiée de l'employé (sinon défaut Ar : une prime en euro
+            # serait comptabilisée en Ar partout — affichage, exports, emails).
+            currency=employee_currency_code(emp),
             created_by_id=user.id,
             details={
                 'sales': sales,

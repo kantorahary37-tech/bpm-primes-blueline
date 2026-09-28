@@ -18,6 +18,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.models import Bonus, BonusType, CommissionGCConfig, Employee, User, ValidationStatus
+from app.currency_format import employee_currency_code
 from app.auth import get_current_user
 from app.schemas import (
     CommissionGCConfigCreate,
@@ -406,6 +407,9 @@ async def create_gc_bonuses(employees, config, start_date, end_date, user):
             commission_amount=total,
             ca_realise=calc['mrc'] if calc['mrc'] > 0 else None,
             ca_objectif=calc['mrc_objective'] if calc['mrc_objective'] > 0 else None,
+            # Devise copiée de l'employé (sinon défaut Ar : une prime en euro
+            # serait comptabilisée en Ar partout — affichage, exports, emails).
+            currency=employee_currency_code(emp),
             created_by_id=user.id,
             details={
                 'mrc_actual': calc['mrc'],
