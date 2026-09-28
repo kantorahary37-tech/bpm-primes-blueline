@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon, ChevronDownIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 import BonusTable from '../components/BonusTable';
-import { formatTotalsAndCountsByCurrency, formatCountsByCurrency } from '../utils/currencyTotals';
+import CurrencyTotals from '../components/CurrencyTotals';
 
 const ChevronRightIcon = (p) => <svg {...p} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
 
@@ -610,7 +610,7 @@ const [filterMonth, setFilterMonth] = useState('');
         <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center gap-3">
           <span className="text-sm font-semibold text-blue-700">{depFilter}</span>
           <span className="text-sm font-bold text-blue-700">
-            Total : {seeAmounts ? formatTotalsAndCountsByCurrency(filteredBonuses) : `${formatCountsByCurrency(filteredBonuses)} prime(s)`}
+            Total : <CurrencyTotals items={filteredBonuses} seeAmounts={seeAmounts} />{!seeAmounts && ' prime(s)'}
           </span>
         </div>
       )}
@@ -636,9 +636,7 @@ const [filterMonth, setFilterMonth] = useState('');
             className={`flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-900 cursor-pointer select-none hover:bg-gray-200/60 transition-colors ${deptCollapsed ? 'rounded-xl' : 'rounded-t-xl'}`}>
             <ChevronDownIcon className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${deptCollapsed ? '-rotate-90' : ''}`} />
             <h2 className="font-semibold text-sm">{dept}</h2>
-            <span className="text-sm font-bold text-blue-600 ml-1">
-              {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
-            </span>
+            <CurrencyTotals items={items} seeAmounts={seeAmounts} className="ml-1" />
             <div className="flex gap-1 ml-auto" onClick={(e) => e.stopPropagation()}>
               {items.some(b => canSelect(b)) && (
                 <button onClick={() => {
@@ -697,9 +695,7 @@ const [filterMonth, setFilterMonth] = useState('');
                   className="flex items-center gap-2 mb-2 px-1 cursor-pointer select-none">
                   <ChevronDownIcon className={`w-3.5 h-3.5 text-blue-400 shrink-0 transition-transform ${svcCollapsed ? '-rotate-90' : ''}`} />
                   <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">{serviceGroup.name}</span>
-                  <span className="text-xs font-bold text-blue-600 ml-1">
-                    {seeAmounts ? formatTotalsAndCountsByCurrency(serviceGroup.items) : formatCountsByCurrency(serviceGroup.items)}
-                  </span>
+                  <CurrencyTotals items={serviceGroup.items} seeAmounts={seeAmounts} size="sm" className="ml-1" />
                 </div>
                 {!svcCollapsed && (
                 <BonusTable
@@ -774,9 +770,7 @@ const [filterMonth, setFilterMonth] = useState('');
                   </button>
                 </div>
               )}
-              <span className={`text-sm font-bold ${section.highlight ? 'text-white' : 'text-blue-600'}`}>
-                {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
-              </span>
+              <CurrencyTotals items={items} seeAmounts={seeAmounts} highlight={section.highlight} />
             </div>
 
             {sectionCollapsed ? null : items.length === 0 ? (
@@ -839,9 +833,7 @@ const [filterMonth, setFilterMonth] = useState('');
                 setPayConfirm({ type: 'month', month: m, year: y, monthName, count: validatedCount })
               }} className="ml-1 btn btn-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">Traiter ({validatedCount})</button>
             )}
-            <span className="text-sm font-bold text-blue-600">
-              {seeAmounts ? formatTotalsAndCountsByCurrency(items) : formatCountsByCurrency(items)}
-            </span>
+            <CurrencyTotals items={items} seeAmounts={seeAmounts} />
           </div>
           {!monthCollapsed && (
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
