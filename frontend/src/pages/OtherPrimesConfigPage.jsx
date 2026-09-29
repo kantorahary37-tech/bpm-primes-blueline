@@ -10,7 +10,9 @@ export default function OtherPrimesConfigPage() {
   const { canSeeAmounts } = useSystemConfig()
   const { symbolFor } = useCurrencies()
   const seeAmounts = canSeeAmounts(user)
-  const formCurrency = symbolFor(user?.currency)
+  // Les montants fixes des types sont toujours en Ariary (devise de référence de la
+  // configuration) : les employés payés en euro saisissent un montant libre au formulaire.
+  const formCurrency = symbolFor('Ar')
 
   const [types, setTypes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -294,7 +296,7 @@ export default function OtherPrimesConfigPage() {
       <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
         <p className="text-xs text-blue-700">
           <strong>Note :</strong> Ces types apparaissent dans la liste de sélection « Autres primes » du formulaire de prime mensuelle.
-          Le montant est automatiquement appliqué et bloqué lors de la sélection.
+          Le montant fixe (en Ar) est automatiquement appliqué et bloqué lors de la sélection ; pour un employé payé en euro, le montant reste librement saisissable.
           Seuls les types « Actifs » sont visibles dans le formulaire.
         </p>
       </div>

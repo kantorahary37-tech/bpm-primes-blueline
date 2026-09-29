@@ -120,6 +120,9 @@ export default function BonusForm() {
   const [serviceAssignments, setServiceAssignments] = useState([])
   const [selectedEmp, setSelectedEmp] = useState(null)
   const formCurrency = symbolFor(selectedEmp?.currency)
+  // Employé en euro : les montants fixes des types d'« autres primes » (configurés
+  // en Ar) ne s'appliquent pas — le montant reste libre à la saisie.
+  const eurFreeAmount = String(selectedEmp?.currency || 'Ar').toUpperCase() === 'EUR'
   // Tous les montants du formulaire sont dans la devise de l'employé de la prime (Ar par défaut, € sinon)
   const maskAr = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} ${formCurrency}` : '••••••'
   const maskForm = (v, opts) => seeAmounts ? `${v.toLocaleString('fr-FR', opts)} ${formCurrency}` : '••••••'
@@ -246,6 +249,12 @@ export default function BonusForm() {
   useEffect(() => {
     if (hasFreeAmountType && teamSelections.length > 0) setTeamSelections([])
   }, [hasFreeAmountType])
+
+  // Changement de l'employé sélectionné en haut : le modèle change (département
+  // et devise potentiellement différents), on vide les employés pré-sélectionnés.
+  useEffect(() => {
+    if (teamSelections.length > 0) setTeamSelections([])
+  }, [selectedEmp?.id])
 
   const handleImportExcel = async (e) => {
     const file = e.target.files?.[0]
@@ -425,8 +434,14 @@ export default function BonusForm() {
 
   // « Appliquer ce modèle à » : pour un N+1/N+2 avec des services affectés, on
   // ne propose que les employés de ses services (comme le sélecteur principal).
+  // On ne propose que les employés du même département ET de la même devise que
+  // l'employé sélectionné : un modèle saisi en Ar ne s'applique pas à un employé
+  // payé en € (et inversement) — les montants du modèle seraient faux.
   const sameDeptEmployees = selectedEmp
-    ? selectableEmployees.filter(e => e.department === selectedEmp.department && e.id !== selectedEmp.id)
+    ? selectableEmployees.filter(e =>
+        e.department === selectedEmp.department &&
+        e.id !== selectedEmp.id &&
+        String(e.currency || 'Ar').toUpperCase() === String(selectedEmp.currency || 'Ar').toUpperCase())
     : []
 
   useEffect(() => {
@@ -2496,8 +2511,9 @@ export default function BonusForm() {
                       if (selected) {
                         updateOther(o.key, 'selectedTypeId', selected.id)
                         updateOther(o.key, 'libelle', `${selected.libelle} - ${selected.category}`)
-                        // Type à montant libre : on ne pré-remplit pas, l'utilisateur saisit son montant
-                        updateOther(o.key, 'montant', selected.free_amount ? 0 : selected.amount)
+                        // Type à montant libre (ou employé en €) : on ne pré-remplit pas,
+                        // l'utilisateur saisit son montant
+                        updateOther(o.key, 'montant', (selected.free_amount || eurFreeAmount) ? 0 : selected.amount)
                       } else {
                         updateOther(o.key, 'selectedTypeId', '')
                         updateOther(o.key, 'libelle', '')
@@ -2519,11 +2535,11 @@ export default function BonusForm() {
                 </div>
                 <div className="w-full sm:w-40 shrink-0">
                   <label className="block text-[10px] font-medium text-gray-600 mb-0.5">
-                    Montant ({formCurrency}){o.selectedTypeId && !otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount ? '' : ' (libre)'}
+                    Montant ({formCurrency}){o.selectedTypeId && !(otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount || eurFreeAmount) ? '' : ' (libre)'}
                   </label>
                   <input type="number" min="0" value={otherTotal(o)} onChange={(e) => updateOther(o.key, 'montant', (parseFloat(e.target.value) || 0) / otherJour(o))}
                     title={o.selectedTypeId
-                      ? (otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount
+                      ? ((otherPrimesTypes.find(t => t.id === o.selectedTypeId)?.free_amount || eurFreeAmount)
                         ? `Montant libre — total = montant saisi × ${otherJour(o)} jour(s)`
                         : `Montant pré-rempli depuis la config, modifiable — total = montant × ${otherJour(o)} jour(s)`)
                       : `Montant total = montant de base × ${otherJour(o)} jour(s)`}
@@ -2635,7 +2651,7 @@ export default function BonusForm() {
                 {!selectedEmp ? (
                   <p className="text-xs text-base-content/40">Sélectionnez d'abord un employé.</p>
                 ) : sameDeptEmployees.length === 0 ? (
-                  <p className="text-xs text-base-content/40">Aucun autre employé dans le même département.</p>
+                  <p className="text-xs text-base-content/40">Aucun autre employé du même département et de la même devise.</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {sameDeptEmployees.map(e => (
