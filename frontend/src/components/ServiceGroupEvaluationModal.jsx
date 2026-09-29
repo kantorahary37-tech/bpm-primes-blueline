@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getServices, applyServiceGroupTemplates } from '../services/api'
 import Modal from './Modal'
-import toast from 'react-hot-toast'
+import toast from '../utils/toast'
 
 const totalCoeff = (list) => list.reduce((s, c) => s + (parseFloat(c.coeff) || 0), 0)
 

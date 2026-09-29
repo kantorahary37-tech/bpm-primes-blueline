@@ -179,7 +179,16 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
             status_code=409,
             detail=f"Une prime de type '{bonus.bonus_type.value}' existe déjà sur cette période pour cet employé."
         )
-    initial_status = ValidationStatus.EN_ATTENTE_DIRECTEUR if user.is_directeur else ValidationStatus.INITIALISE
+    # Statut d'entrée selon le rôle du créateur :
+    #   - Directeur → En attente Directeur (son étape)
+    #   - DRH       → En attente DRH (flux propre : DRH → DG → Prime validée → traitement)
+    #   - sinon     → Initialisé (flux classique N+1 / N+2 / Directeur / DG)
+    if user.is_drh:
+        initial_status = ValidationStatus.EN_ATTENTE_DRH
+    elif user.is_directeur:
+        initial_status = ValidationStatus.EN_ATTENTE_DIRECTEUR
+    else:
+        initial_status = ValidationStatus.INITIALISE
     create_data = bonus.dict()
     create_data.pop('currency', None)
     n2_user_id = create_data.pop('n2_user_id', None)
@@ -200,7 +209,7 @@ BATCH_TYPE_LABELS = {
     "intervention": "Intervention", "ponctuelle": "Ponctuelle", "exceptionnel": "Exceptionnelle",
 }
 
-STEP_LABELS = {"N1": "N+1", "N2": "N+2", "DIRECTEUR": "Directeur", "DG": "DG"}
+STEP_LABELS = {"N1": "N+1", "N2": "N+2", "DIRECTEUR": "Directeur", "DG": "DG", "DRH": "DRH"}
 
 
 # Route POST pour validation par lot
@@ -223,6 +232,11 @@ async def batch_validate_bonuses(
                     results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Employé hors de votre périmètre (services affectés)"))
                     continue
 
+            # Étape DRH réservée aux comptes DRH (flux des primes créées par un DRH)
+            if request.step == "DRH" and not (user.is_drh or user.is_admin):
+                results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Seuls les comptes DRH peuvent valider cette étape."))
+                continue
+
             if bonus.status == ValidationStatus.VALIDE:
                 results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Déjà validée"))
                 continue
@@ -241,6 +255,7 @@ async def batch_validate_bonuses(
                     "N1": ValidationStatus.INITIALISE,
                     "DIRECTEUR": ValidationStatus.EN_ATTENTE_DIRECTEUR,
                     "DG": ValidationStatus.EN_ATTENTE_DG,
+                    "DRH": ValidationStatus.EN_ATTENTE_DRH,
                 }.get(request.step)
 
                 if not expected_status:
@@ -268,7 +283,8 @@ async def batch_validate_bonuses(
                     "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
                     "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
                     "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
-                    "DG": ValidationStatus.VALIDE
+                    "DG": ValidationStatus.VALIDE,
+                    "DRH": ValidationStatus.EN_ATTENTE_DG,
                 }[request.step]
 
                 if bonus.status == ValidationStatus.VALIDE:
@@ -302,7 +318,7 @@ async def batch_validate_bonuses(
                         directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                         if directeur and directeur.id != user.id:
                             notif_recipients.append(directeur)
-                    elif request.step == "DIRECTEUR":
+                    elif request.step in ("DIRECTEUR", "DRH"):
                         dg = await User.filter(is_dg=True, is_admin=False).first()
                         if dg and dg.id != user.id:
                             notif_recipients.append(dg)
@@ -329,7 +345,8 @@ async def batch_validate_bonuses(
                     pass
 
             elif request.action == "REJETER":
-                bonus.status = ValidationStatus.INITIALISE
+                # Rejet à l'étape DRH : la prime reste dans le flux DRH (En attente DRH)
+                bonus.status = ValidationStatus.EN_ATTENTE_DRH if request.step == "DRH" else ValidationStatus.INITIALISE
                 bonus.was_rejected = True
 
             await bonus.save()
@@ -412,6 +429,9 @@ async def update_bonus(bonus_id: int, data: BonusCreate, user: User = Depends(ge
     if can_edit_any and bonus.status != ValidationStatus.INITIALISE:
         if user.is_dg:
             update_data['status'] = ValidationStatus.EN_ATTENTE_DG
+        elif user.is_drh and bonus.status == ValidationStatus.EN_ATTENTE_DRH:
+            # Prime créée par un DRH : elle reste dans son flux (En attente DRH)
+            update_data['status'] = ValidationStatus.EN_ATTENTE_DRH
         elif user.is_directeur:
             update_data['status'] = ValidationStatus.EN_ATTENTE_DIRECTEUR
         else:
@@ -635,7 +655,7 @@ async def list_bonuses(
         # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
         # Chaque rôle ne voit que les primes au statut qu'il doit traiter :
         #   - DG : en attente DG
-        #   - DRH : primes validées
+        #   - DRH : primes créées par un DRH (en attente DRH) + primes validées
         #   - Directeur : en attente Directeur
         #   - N+1 : initialisées
         #   - Admin : tous les statuts
@@ -648,7 +668,7 @@ async def list_bonuses(
         elif user.is_dg:
             default_statuses = [ValidationStatus.EN_ATTENTE_DG]
         elif user.is_drh:
-            default_statuses = [ValidationStatus.VALIDE]
+            default_statuses = [ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE]
         elif user.is_directeur:
             default_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
         elif user.is_validator_n2:
@@ -767,7 +787,7 @@ async def export_bonuses(
     elif user.is_dg:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
     elif user.is_drh:
-        allowed_statuses = [ValidationStatus.VALIDE]
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE]
     elif user.is_directeur:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
     elif user.is_validator_n2:
@@ -895,7 +915,7 @@ async def export_bonuses_xlsx(
     elif user.is_dg:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
     elif user.is_drh:
-        allowed_statuses = [ValidationStatus.VALIDE]
+        allowed_statuses = [ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE]
     elif user.is_directeur:
         allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
     elif user.is_validator_n2:
@@ -1169,7 +1189,7 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
     elif user.is_dg:
         allowed = {ValidationStatus.EN_ATTENTE_DG}
     elif user.is_drh:
-        allowed = {ValidationStatus.VALIDE}
+        allowed = {ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE}
     elif user.is_directeur:
         allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
     elif user.is_validator_n2:
@@ -1232,12 +1252,17 @@ async def validate_bonus(
     # Vérification : si déjà validé, ON BLOQUE
     if bonus.status == ValidationStatus.VALIDE:
         raise HTTPException(status_code=400, detail="Bonus déjà validé - aucune action possible")
+
+    # Étape DRH réservée aux comptes DRH (flux des primes créées par un DRH)
+    if step == "DRH" and not (user.is_drh or user.is_admin):
+        raise HTTPException(status_code=403, detail="Seuls les comptes DRH peuvent valider cette étape.")
     
     # Validation du workflow : chaque étape n'est possible que si le statut actuel correspond
     expected_status_map = {
         "N1": ValidationStatus.INITIALISE,
         "DIRECTEUR": ValidationStatus.EN_ATTENTE_DIRECTEUR,
         "DG": ValidationStatus.EN_ATTENTE_DG,
+        "DRH": ValidationStatus.EN_ATTENTE_DRH,
     }
     # N+2 peut valider les primes INITIALISE (comme N+1) OU EN_ATTENTE_N2
     if step == "N2":
@@ -1275,7 +1300,8 @@ async def validate_bonus(
             "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
             "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
             "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
-            "DG": ValidationStatus.VALIDE
+            "DG": ValidationStatus.VALIDE,
+            "DRH": ValidationStatus.EN_ATTENTE_DG,
         }[step]
         
         # Clôture automatique si DG valide
@@ -1311,7 +1337,7 @@ async def validate_bonus(
                 directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                 if directeur and directeur.id != user.id:
                     notif_recipients.append(directeur)
-            elif step == "DIRECTEUR":
+            elif step in ("DIRECTEUR", "DRH"):
                 dg = await User.filter(is_dg=True, is_admin=False).first()
                 if dg and dg.id != user.id:
                     notif_recipients.append(dg)
@@ -1336,7 +1362,8 @@ async def validate_bonus(
             pass
 
     elif validation.action == "REJETER":
-        bonus.status = ValidationStatus.INITIALISE
+        # Rejet à l'étape DRH : la prime reste dans le flux DRH (En attente DRH)
+        bonus.status = ValidationStatus.EN_ATTENTE_DRH if step == "DRH" else ValidationStatus.INITIALISE
         bonus.was_rejected = True
         await AuditLog.create(
             bonus_id=bonus.id,

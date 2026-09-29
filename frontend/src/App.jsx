@@ -76,7 +76,7 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter>
-      <Toaster position="top-right" toastOptions={{ duration: 3000, style: { fontSize: '14px', borderRadius: '10px', padding: '12px 16px' } }} />
+      <Toaster position="top-center" toastOptions={{ duration: 3000, style: { fontSize: '14px', borderRadius: '10px', padding: '12px 16px' } }} />
       <AuthProvider>
         <SystemConfigProvider>
           <DepartmentsProvider>

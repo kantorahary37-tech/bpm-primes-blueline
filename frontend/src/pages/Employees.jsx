@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment, moveEmployeesService, getServices, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies, archiveEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
@@ -42,6 +42,7 @@ const getBadgeClass = (status) => {
   const map = {
     'Initialisé': 'bg-orange-100 text-orange-700',
     'En attente Directeur': 'bg-purple-100 text-purple-700',
+    'En attente DRH': 'bg-sky-100 text-sky-700',
     'En attente DG': 'bg-amber-100 text-amber-700',
     'Prime validée': 'bg-emerald-100 text-emerald-700',
     'Prime rejetée': 'bg-red-100 text-red-700',
@@ -732,6 +733,7 @@ const Employees = () => {
                       <option value="">Tous les statuts</option>
                       <option value="Initialisé">Initialisé</option>
                       <option value="En attente Directeur">En attente Directeur</option>
+                      <option value="En attente DRH">En attente DRH</option>
                       <option value="En attente DG">En attente DG</option>
                       <option value="Prime validée">Validée</option>
                       <option value="Prime rejetée">Rejetée</option>

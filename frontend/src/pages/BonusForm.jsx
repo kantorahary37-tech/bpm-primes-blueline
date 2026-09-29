@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
-import toast from 'react-hot-toast'
+import toast from '../utils/toast'
 import Modal from '../components/Modal'
 import SftpFilePicker from '../components/SftpFilePicker'
 

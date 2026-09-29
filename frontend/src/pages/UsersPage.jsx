@@ -4,7 +4,7 @@ import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, ad
 import Modal from '../components/Modal'
 import { useConfirm } from '../components/ConfirmModal'
 import { ldapSyncToast, apiErrorToast } from '../utils/toastHelpers'
-import toast from 'react-hot-toast'
+import toast from '../utils/toast'
 import { EditIcon, TrashIcon, SearchIcon, PlusIcon, UsersIcon, ChevronLeftIcon, ChevronDownIcon } from '../components/Icons'
 
 const PAGE_SIZE = 15

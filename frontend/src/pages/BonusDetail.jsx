@@ -4,7 +4,7 @@ import { getBonus, getBonusValidations, getAuditLogs, validateBonus, deleteBonus
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
 import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon, LockIcon, PaperclipIcon, TrashIcon } from '../components/Icons';
@@ -112,7 +112,11 @@ const BonusDetail = () => {
     if (!motifRejet.trim()) return;
     try {
       await validateBonus(bonus.id, { action: 'REJETER', motif_rejet: motifRejet }, getValidStep(bonus.status));
-      toast.success('Prime rejetée — retour au statut Initialisé');
+      toast.success(
+        getValidStep(bonus.status) === 'DRH'
+          ? 'Prime rejetée — retour au statut En attente DRH'
+          : 'Prime rejetée — retour au statut Initialisé'
+      );
       setShowRejectModal(false);
       setMotifRejet('');
       const [b, v] = await Promise.all([getBonus(id), getBonusValidations(id)]);
@@ -149,6 +153,7 @@ const BonusDetail = () => {
     if (!user) return null;
     if (user.is_validator_n2 && (status === 'Initialisé' || status === 'En attente N+2')) return 'N2';
     if (user.is_validator_n1 && status === 'Initialisé') return 'N1';
+    if (user.is_drh && status === 'En attente DRH') return 'DRH';
     if (user.is_directeur && status === 'En attente Directeur') return 'DIRECTEUR';
     if (user.is_dg && status === 'En attente DG') return 'DG';
     return null;
@@ -165,6 +170,7 @@ const BonusDetail = () => {
         'Initialisé': 'bg-orange-100 text-orange-700',
         'En attente N+2': 'bg-teal-100 text-teal-700',
         'En attente Directeur': 'bg-purple-100 text-purple-700',
+        'En attente DRH': 'bg-sky-100 text-sky-700',
         'En attente DG': 'bg-amber-100 text-amber-700',
         'Prime validée': 'bg-emerald-100 text-emerald-700',
         'Prime rejetée': 'bg-red-100 text-red-700',
@@ -741,7 +747,7 @@ const BonusDetail = () => {
                 <CheckIcon className="w-4 h-4" /> Valider
               </button>
             )}
-            {(user?.is_dg || user?.is_admin) && (
+            {(user?.is_dg || user?.is_admin || (user?.is_drh && step === 'DRH')) && (
               <button className="btn bg-red-500 hover:bg-red-600 text-white border-0" onClick={() => setShowRejectModal(true)}>
                 <XCircleIcon className="w-4 h-4" /> Rejeter
               </button>
@@ -752,7 +758,9 @@ const BonusDetail = () => {
 
       <Modal open={showRejectModal} onClose={() => setShowRejectModal(false)} title="Rejeter la prime" size="md">
         <p className="text-sm text-gray-500 mb-4">
-          La prime sera remise au statut <strong>Initialisé</strong> et le validateur N+1 pourra la modifier.
+          {getValidStep(bonus.status) === 'DRH'
+            ? <>La prime sera remise au statut <strong>En attente DRH</strong> et restera dans le flux DRH pour correction.</>
+            : <>La prime sera remise au statut <strong>Initialisé</strong> et le validateur N+1 pourra la modifier.</>}
         </p>
         <textarea
           className="textarea textarea-bordered w-full min-h-[100px]"

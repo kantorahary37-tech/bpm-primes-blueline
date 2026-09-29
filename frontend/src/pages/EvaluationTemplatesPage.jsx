@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getAllEvaluationTemplates, saveEvaluationTemplates, deleteEvaluationTemplate } from '../services/api'
 import Modal from '../components/Modal'
 import ServiceGroupEvaluationModal from '../components/ServiceGroupEvaluationModal'
-import toast from 'react-hot-toast'
+import toast from '../utils/toast'
 
 export default function EvaluationTemplatesPage() {
   const { user: currentUser } = useAuth()

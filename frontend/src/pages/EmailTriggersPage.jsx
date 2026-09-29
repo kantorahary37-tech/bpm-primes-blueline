@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import Modal from '../components/Modal';
 import {
   MailIcon, ClockIcon, CalendarIcon, EyeIcon, CheckBadgeIcon,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import toast from 'react-hot-toast'
+import toast from '../utils/toast'
 import { getAllOtherPrimesTypes, createOtherPrimeType, updateOtherPrimeType, deleteOtherPrimeType } from '../services/api'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import Modal from '../components/Modal';
 import { getServices, createService, renameService, deleteService, assignEmployees, unassignEmployee, getEmployees, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies } from '../services/api';
 import { useConfirm } from '../components/ConfirmModal';

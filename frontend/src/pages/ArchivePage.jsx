@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { getBonuses, getUsers, getArchivedEmployees, restoreEmployee } from '../services/api';
@@ -19,6 +19,7 @@ const getBadgeClass = (status) => {
     'Initialisé': 'bg-orange-100 text-orange-700',
     'En attente N+2': 'bg-teal-100 text-teal-700',
     'En attente Directeur': 'bg-purple-100 text-purple-700',
+    'En attente DRH': 'bg-sky-100 text-sky-700',
     'En attente DG': 'bg-amber-100 text-amber-700',
     'Prime validée': 'bg-emerald-100 text-emerald-700',
     'Prime rejetée': 'bg-red-100 text-red-700',

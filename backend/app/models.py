@@ -29,6 +29,9 @@ class ValidationStatus(str, Enum):
     EN_ATTENTE_N2 = "En attente N+2"
     EN_ATTENTE_DIRECTEUR = "En attente Directeur"
     EN_ATTENTE_DG = "En attente DG"
+    # Flux spécifique aux primes créées par un DRH : le DRH valide lui-même,
+    # puis la prime part au DG et revient en « Prime validée » pour traitement.
+    EN_ATTENTE_DRH = "En attente DRH"
     VALIDE = "Prime validée"
     REJETE = "Prime rejetée"
 

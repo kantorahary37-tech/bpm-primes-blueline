@@ -6,7 +6,7 @@ import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
 import { ArrowLeftIcon } from '../components/Icons';
 
-const STATUS_COLUMNS = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DG', 'Prime validée'];
+const STATUS_COLUMNS = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DRH', 'En attente DG', 'Prime validée'];
 
 const typeLabels = {
   mensuel: 'Mensuelle',
@@ -25,6 +25,7 @@ const getBadgeClass = (status) => {
     'Initialisé': 'bg-orange-100 text-orange-700',
     'En attente N+2': 'bg-teal-100 text-teal-700',
     'En attente Directeur': 'bg-purple-100 text-purple-700',
+    'En attente DRH': 'bg-sky-100 text-sky-700',
     'En attente DG': 'bg-amber-100 text-amber-700',
     'Prime validée': 'bg-emerald-100 text-emerald-700',
   };
@@ -35,6 +36,7 @@ const columnColor = {
   'Initialisé': 'border-t-orange-400',
   'En attente N+2': 'border-t-teal-400',
   'En attente Directeur': 'border-t-purple-400',
+  'En attente DRH': 'border-t-sky-400',
   'En attente DG': 'border-t-amber-400',
   'Prime validée': 'border-t-emerald-400',
 };
@@ -57,6 +59,7 @@ const BonusKanban = () => {
 
   const myStatuses = user?.is_admin ? []
     : user?.is_dg ? ['En attente DG']
+    : user?.is_drh ? ['En attente DRH', 'Prime validée']
     : user?.is_directeur ? ['En attente Directeur']
     : user?.is_validator_n2 ? ['Initialisé', 'En attente N+2']
     : user?.is_validator_n1 ? ['Initialisé']

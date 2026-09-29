@@ -61,11 +61,12 @@ def _service_name(emp) -> str | None:
 
 
 # Statut bloquant → (libellé de l'étape, filtre sur le rôle responsable)
-# Étapes Directeur et DRH (traitement).
+# Étapes Directeur, validation DRH (primes créées par un DRH) et DRH (traitement).
 # NB : l'étape DG est volontairement absente — les comptes DG sont couverts
 # par le dédié « Rappel DG » (synthèse groupée des primes en attente DG).
 STEPS = {
     ValidationStatus.EN_ATTENTE_DIRECTEUR: ("Validation Directeur", {"is_directeur": True}, True),
+    ValidationStatus.EN_ATTENTE_DRH: ("Validation DRH", {"is_drh": True}, False),
     ValidationStatus.VALIDE: ("Traitement DRH", {"is_drh": True}, False),
 }
 

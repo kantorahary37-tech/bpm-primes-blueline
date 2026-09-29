@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon, ChevronDownIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 import BonusTable from '../components/BonusTable';
@@ -25,15 +25,15 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
-const ALL_STATUSES = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DG', 'Prime validée', 'Prime rejetée'];
+const ALL_STATUSES = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DRH', 'En attente DG', 'Prime validée', 'Prime rejetée'];
 
 // Statuts proposés dans le filtre : chaque rôle ne filtre que sur son flux :
-// Directeur : En attente Directeur · DRH : En attente DG (défaut) / Prime validée · N+1 : Initialisé · N+2 : Initialisé / En attente N+2 · DG : En attente DG · Admin : tous
+// Directeur : En attente Directeur · DRH : En attente DRH (créées par un DRH) / Prime validée · N+1 : Initialisé · N+2 : Initialisé / En attente N+2 · DG : En attente DG · Admin : tous
 const roleStatuses = (user) => {
   if (!user) return [];
   if (user.is_admin) return ALL_STATUSES;
   if (user.is_dg) return ['En attente DG'];
-  if (user.is_drh) return ['Prime validée'];
+  if (user.is_drh) return ['En attente DRH', 'Prime validée'];
   if (user.is_directeur) return ['En attente Directeur'];
   if (user.is_validator_n2) return ['Initialisé', 'En attente N+2'];
   if (user.is_validator_n1) return ['Initialisé'];
@@ -44,7 +44,9 @@ const defaultStatusFor = (user) => {
   if (!user) return '';
   if (user.is_admin) return '';
   if (user.is_dg) return 'En attente DG';
-  if (user.is_drh) return 'Prime validée';
+  // DRH : aucun filtre par défaut → voit d'un coup la file « En attente DRH »
+  // (primes créées par un DRH) et les « Prime validée » à traiter.
+  if (user.is_drh) return '';
   if (user.is_directeur) return 'En attente Directeur';
   if (user.is_validator_n2) return 'En attente N+2';
   if (user.is_validator_n1) return 'Initialisé';
@@ -296,6 +298,7 @@ const [filterMonth, setFilterMonth] = useState('');
     if (!user) return null;
     if (user.is_validator_n2 && (bonus.status === 'Initialisé' || bonus.status === 'En attente N+2')) return 'N2';
     if (user.is_validator_n1 && bonus.status === 'Initialisé') return 'N1';
+    if (user.is_drh && bonus.status === 'En attente DRH') return 'DRH';
     if (user.is_directeur && bonus.status === 'En attente Directeur') return 'DIRECTEUR';
     if (user.is_dg && bonus.status === 'En attente DG') return 'DG';
     return null;
@@ -311,6 +314,7 @@ const [filterMonth, setFilterMonth] = useState('');
       'Initialisé': 'bg-orange-100 text-orange-700',
       'En attente N+2': 'bg-teal-100 text-teal-700',
       'En attente Directeur': 'bg-purple-100 text-purple-700',
+      'En attente DRH': 'bg-sky-100 text-sky-700',
       'En attente DG': 'bg-amber-100 text-amber-700',
       'Prime validée': 'bg-emerald-100 text-emerald-700',
       'Prime rejetée': 'bg-red-100 text-red-700',
@@ -323,6 +327,7 @@ const [filterMonth, setFilterMonth] = useState('');
 
     if (user.is_drh) {
       return [
+        { key: 'pendingDRH', title: 'À valider (DRH)', highlight: true, filter: (b) => b.status === 'En attente DRH' },
         { key: 'validated', title: 'Validées', highlight: false, filter: (b) => b.status === 'Prime validée' || b.status === 'Validé' },
       ];
     }
@@ -900,7 +905,7 @@ const [filterMonth, setFilterMonth] = useState('');
                     className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">
                     {depFilter ? `Valider ${depFilter}` : 'Valider'} ({selectedBonuses.size})
                   </button>
-                  {(user?.is_dg || user?.is_admin) && (
+                  {(user?.is_dg || user?.is_admin || (user?.is_drh && step === 'DRH')) && (
                     <button onClick={() => setBatchReject('')}
                       className="btn btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200">
                       {depFilter ? `Rejeter ${depFilter}` : 'Rejeter'}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { getSystemConfig, bulkUpdateSystemConfig } from '../services/api';
 import { SettingsIcon, CheckIcon, MailIcon, BuildingIcon, FolderIcon, KeyIcon, BellIcon, DatabaseIcon, EyeIcon, EyeOffIcon, ServerIcon, ArchiveIcon } from '../components/Icons';
 

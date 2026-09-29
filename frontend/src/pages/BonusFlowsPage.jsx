@@ -14,6 +14,7 @@ const STATUS_STYLES = {
   'Initialisé': { label: 'Initialisé', color: '#f59e0b' },
   'En attente N+2': { label: 'En attente N+2', color: '#3b82f6' },
   'En attente Directeur': { label: 'En attente Directeur', color: '#8b5cf6' },
+  'En attente DRH': { label: 'En attente DRH', color: '#0ea5e9' },
   'En attente DG': { label: 'En attente DG', color: '#f97316' },
   'Prime validée': { label: 'Prime validée', color: '#10b981' },
   'Prime rejetée': { label: 'Prime rejetée', color: '#ef4444' },
@@ -68,6 +69,19 @@ const N2_FLOW = `flowchart TD
   style C fill:#ffedd5,stroke:#f97316,color:#7c2d12
   style D fill:#d1fae5,stroke:#10b981,color:#064e3b
   style E fill:#ecfdf5,stroke:#059669,color:#064e3b`;
+
+const DRH_FLOW = `flowchart TD
+  A["🟦 En attente DRH"] -->|"DRH · Valider"| C["🟠 En attente DG"]
+  C -->|"DG · Valider"| D["🟢 Prime validée"]
+  D -->|"DRH · Traitement / Paiement"| E["✅ Payée / Traitée"]
+  A -.->|"DRH · Rejeter"| R["🔴 Rejet → retour En attente DRH"]
+  R -.-> A
+
+  style A fill:#e0f2fe,stroke:#0ea5e9,color:#0c4a6e
+  style C fill:#ffedd5,stroke:#f97316,color:#7c2d12
+  style D fill:#d1fae5,stroke:#10b981,color:#064e3b
+  style E fill:#ecfdf5,stroke:#059669,color:#064e3b
+  style R fill:#fee2e2,stroke:#ef4444,color:#7f1d1d`;
 
 const MODIFICATION_FLOW = `flowchart LR
   D["🟢 Prime validée"] -->|"DG modifie"| C["🟠 En attente DG"]
@@ -186,6 +200,12 @@ export default function BonusFlowsPage() {
           subtitle="Prime mensuelle — option « passer par un N+2 »"
           chart={N2_FLOW}
           legend="Si l'option pass_to_n2 est active, après la validation N+1 la prime passe en « En attente N+2 ». Le N+2 peut aussi valider directement une prime Initialisé (comme un N+1)."
+        />
+        <FlowCard
+          title="Flux des primes créées par un DRH"
+          subtitle="Réservé aux comptes DRH — pas d'étape N+1 / Directeur"
+          chart={DRH_FLOW}
+          legend="Une prime créée par un compte DRH démarre directement en « En attente DRH » : le DRH valide lui-même, la prime part au DG, puis revient en « Prime validée » pour le traitement DRH. Un rejet à l'étape DRH la ramène en « En attente DRH ». Les primes créées par les autres rôles suivent le flux standard."
         />
         <FlowCard
           title="Flux de modification"

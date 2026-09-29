@@ -1,4 +1,4 @@
-import toast from 'react-hot-toast';
+import toast from './toast';
 
 /**
  * Notifications enrichies — cartes structurées au lieu d'une simple ligne.

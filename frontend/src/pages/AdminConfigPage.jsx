@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { useSearchParams } from 'react-router-dom';
 import PlafondsPage from './PlafondsPage';
 import CommissionConfigPage from './CommissionConfigPage';
