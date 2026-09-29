@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.models import User, Employee, EvaluationTemplate, ServiceGroup
 from app.auth import get_current_user
-from app.permissions import employee_scope, apply_employee_scope, employee_in_scope
+from app.permissions import (
+    employee_scope,
+    apply_employee_scope,
+    apply_department_scope,
+    employee_in_scope,
+)
 from app.schemas import (
     EvaluationTemplateSaveRequest,
     EvaluationTemplateResponse,
@@ -63,10 +68,13 @@ def _can_view_evaluation(user: User) -> bool:
 async def _can_edit_employee_evaluation(user: User, emp: Employee) -> bool:
     """Périmètre d'édition d'un employé : comme la consultation des primes.
     - admin/DG/DRH : tous ;
+    - manager de l'employé : oui, même dans un autre département ;
     - directeur : son département ;
     - N+1/N+2 : les employés de leurs services affectés dans leur département,
       ou uniquement leur propre fiche employé s'ils n'ont aucun service affecté."""
     if _is_broad(user):
+        return True
+    if emp.manager_id == user.id:
         return True
     if user.is_directeur:
         return emp.department == user.department
@@ -180,7 +188,7 @@ async def apply_service_group_evaluation(
         # Périmètre : N+1/N+2 limités à leurs services affectés (sans
         # affectation, aucun service n'est accessible), directeur à son département
         if (user.is_validator_n1 or user.is_validator_n2) and not _is_broad(user):
-            sg_ids, _ = await employee_scope(user)
+            sg_ids, _, _ = await employee_scope(user)
             if not sg_ids or group.id not in sg_ids:
                 raise HTTPException(403, "Vous ne pouvez évaluer que vos services affectés")
         elif _scoped_director(user) and group.department.name != user.department:
@@ -234,9 +242,10 @@ async def get_all_templates(user: User = Depends(get_current_user)):
     elif user.is_directeur:
         employees = await Employee.filter(is_active=True, is_archived=False, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
     else:
-        # N+1/N+2 : leurs services affectés ; sans affectation → uniquement
-        # leur propre fiche employé
-        query = Employee.filter(is_active=True, is_archived=False, dept_str=user.dept_str)
+        # N+1/N+2 : leurs services affectés (+ les employés dont ils sont le
+        # manager, même hors département) ; sans affectation → son département
+        query = Employee.filter(is_active=True, is_archived=False)
+        query = apply_department_scope(query, user)
         query = apply_employee_scope(query, await employee_scope(user))
         employees = await query.prefetch_related("service_group").order_by("name")
     result = []

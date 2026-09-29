@@ -92,6 +92,10 @@ class EmployeeUpdate(BaseModel):
     astreinte_rate: Optional[int] = None
     mensuel_rate: Optional[int] = None
     is_active: Optional[bool] = None
+    # Réaffectation du manager (User) — reserved aux Admin/DG/DRH, cf. update_employee.
+    # Le manager ainsi désigné peut voir et créer des primes pour cet employé,
+    # même s'il ne fait pas partie du même département.
+    manager_id: Optional[int] = None
 
 # Schéma de réponse employé
 class EmployeeResponse(EmployeeBase):

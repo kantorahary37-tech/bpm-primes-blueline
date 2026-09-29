@@ -6,7 +6,13 @@ from enum import Enum
 from tortoise.expressions import Q
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
-from app.permissions import employee_in_scope, employee_scope, apply_employee_scope
+from app.permissions import (
+    employee_in_scope,
+    employee_scope,
+    apply_employee_scope,
+    apply_department_scope,
+    managed_employee_ids,
+)
 from app.api.commission_gc import can_access_gc, COMMISSION_GC_DEPARTMENT
 from app.email_service import send_bonus_notification_email, send_bonus_batch_notification_email
 from app.currency_format import format_amount_with_currency
@@ -642,14 +648,14 @@ async def list_bonuses(
     if archive_mode:
         query = query.filter(status=ValidationStatus.VALIDE)
     else:
-        # Filtre par département selon le rôle
+        # Filtre par département selon le rôle (+ les employés dont il est manager)
         if not (user.is_admin or user.is_dg or user.is_drh):
-            if user.department:
-                query = query.filter(employee__dept_str=user.department)
+            query = apply_department_scope(query, user, rel="employee__")
 
         # Un N+1/N+2 restreint ne voit que les primes de son périmètre : ses
-        # services affectés, ou sa seule personne s'il n'a aucun service
-        # affecté — cohérent avec la restriction appliquée à la validation.
+        # services affectés (plus les employés dont il est le manager), ou sa
+        # seule personne s'il n'a aucun service affecté — cohérent avec la
+        # restriction appliquée à la validation.
         query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
 
         # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
@@ -710,7 +716,16 @@ async def list_bonuses(
     if was_rejected is not None: query = query.filter(was_rejected=was_rejected)
     if department:
         if not (user.is_admin or user.is_dg or user.is_drh) and department != user.department:
-            raise HTTPException(status_code=403, detail="Vous ne pouvez consulter que les primes de votre département")
+            # Un manager peut aussi consulter les primes d'un autre département,
+            # mais uniquement pour les employés dont il est le manager.
+            managed_ids = await managed_employee_ids(user)
+            managed_in_dept = (
+                await Employee.filter(id__in=managed_ids, dept_str=department).exists()
+                if managed_ids
+                else False
+            )
+            if not managed_in_dept:
+                raise HTTPException(status_code=403, detail="Vous ne pouvez consulter que les primes de votre département")
         query = query.filter(employee__dept_str=department)
     if search:
         query = query.filter(
@@ -773,10 +788,9 @@ async def export_bonuses(
     query = Bonus.all().prefetch_related('employee', 'created_by', 'employee__service_group')
     query = _apply_gc_filter(query, user)
 
-    # Filtre département selon le rôle
+    # Filtre département selon le rôle (+ les employés dont il est manager)
     if not (user.is_admin or user.is_dg or user.is_drh):
-        if user.department:
-            query = query.filter(employee__dept_str=user.department)
+        query = apply_department_scope(query, user, rel="employee__")
 
     # Filtre périmètre pour un N+1/N+2 restreint (cohérent avec /bonuses/)
     query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
@@ -901,10 +915,9 @@ async def export_bonuses_xlsx(
     query = Bonus.all().prefetch_related('employee', 'created_by', 'employee__service_group')
     query = _apply_gc_filter(query, user)
 
-    # Filtre département selon le rôle
+    # Filtre département selon le rôle (+ les employés dont il est manager)
     if not (user.is_admin or user.is_dg or user.is_drh):
-        if user.department:
-            query = query.filter(employee__dept_str=user.department)
+        query = apply_department_scope(query, user, rel="employee__")
 
     # Filtre périmètre pour un N+1/N+2 restreint (cohérent avec /bonuses/)
     query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
@@ -1178,9 +1191,10 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
     if bonus.bonus_type == BonusType.COMMISSION_GC and not _can_see_gc(user):
         raise HTTPException(status_code=404, detail="Bonus introuvable")
 
-    # Vérifier le département (sauf admin/DG/DRH)
+    # Vérifier le département (sauf admin/DG/DRH). Un manager accède en plus aux
+    # primes des employés qu'il manage, même s'ils sont dans un autre département.
     if not (user.is_admin or user.is_dg or user.is_drh):
-        if bonus.employee.dept_str != user.department:
+        if bonus.employee.dept_str != user.department and bonus.employee.manager_id != user.id:
             raise HTTPException(status_code=404, detail="Bonus introuvable")
 
     # Vérifier que le statut est autorisé pour le rôle

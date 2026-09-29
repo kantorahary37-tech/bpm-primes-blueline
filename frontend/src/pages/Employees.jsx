@@ -98,7 +98,7 @@ const Employees = () => {
   const [empBonusExportColumns, setEmpBonusExportColumns] = useState(EXPORT_EMP_BONUS_COLUMNS);
   const [syncing, setSyncing] = useState(false);
   const [editEmp, setEditEmp] = useState(null);
-  const [editForm, setEditForm] = useState({ currency: 'Ar', astreinte_rate: '', mensuel_rate: '' });
+  const [editForm, setEditForm] = useState({ currency: 'Ar', astreinte_rate: '', mensuel_rate: '', manager_id: '' });
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [currencyForm, setCurrencyForm] = useState({ code: '', symbol: '', label: '' });
   const [allCurrencies, setAllCurrencies] = useState([]);
@@ -163,6 +163,15 @@ const Employees = () => {
     };
     fetchData();
   }, [departmentFilter, user]);
+
+  // Manager sélectionnable pour un employé : tous les utilisateurs du système
+  // sauf les administrateurs (le backend les refuse comme manager). L'employé
+  // lui-même est exclu pour éviter qu'il se become son propre manager.
+  const selectableManagers = useMemo(() => (managers || [])
+    .filter(m => !m.is_admin && m.id !== editEmp?.id)
+    .slice()
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+  [managers, editEmp?.id]);
 
   const handleLdapSync = async () => {
     const ok = await confirm({
@@ -251,7 +260,11 @@ const Employees = () => {
     setFilterMonth('');
     setFilterYear('');
     setBonusStatusFilter('');
-    if (!user?.is_admin && !user?.is_dg && !user?.is_drh && user?.department && emp.department !== user.department) {
+    // Un manager peut consulter les primes des employés qu'il manage, même
+    // s'ils relèvent d'un autre département.
+    const isTheirManager = emp.manager_id === user?.id;
+    if (!user?.is_admin && !user?.is_dg && !user?.is_drh && !isTheirManager
+        && user?.department && emp.department !== user.department) {
       setEmpBonuses([]);
       setBonusesLoading(false);
       return;
@@ -270,15 +283,26 @@ const Employees = () => {
   const saveEmployeeProfile = async () => {
     if (!editEmp) return;
     try {
-      await updateEmployee(editEmp.id, {
+      const payload = {
         currency: editForm.currency,
         astreinte_rate: editForm.astreinte_rate !== '' ? parseInt(editForm.astreinte_rate) : null,
         mensuel_rate: editForm.mensuel_rate !== '' ? parseInt(editForm.mensuel_rate) : null,
-      });
+      };
+      // Le manager n'est envoyé que s'il a réellement changé. On ne peut pas
+      // « dé-assigner » un manager (colonne NOT NULL) : un champ vide ne
+      // signifie donc « pas de changement ».
+      const newManagerId = editForm.manager_id !== '' ? parseInt(editForm.manager_id) : null;
+      if (newManagerId !== null && newManagerId !== (editEmp.manager_id ?? null)) {
+        payload.manager_id = newManagerId;
+      }
+      const updated = await updateEmployee(editEmp.id, payload);
       const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
       setEmployees(emps);
-      setSelectedEmp((prev) => prev && prev.id === editEmp.id ? { ...prev, ...editForm } : prev);
+      setSelectedEmp((prev) => prev && prev.id === editEmp.id
+        ? { ...prev, ...editForm, manager_id: newManagerId ?? prev.manager_id }
+        : prev);
       setEditEmp(null);
+      setSelectedEmp((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
       toast.success('Profil mis à jour');
     } catch (err) {
       alert(err.response?.data?.detail || 'Erreur lors de la mise à jour');
@@ -688,8 +712,9 @@ const Employees = () => {
                       currency: selectedEmp.currency || 'Ar',
                       astreinte_rate: selectedEmp.astreinte_rate != null ? String(selectedEmp.astreinte_rate) : '',
                       mensuel_rate: selectedEmp.mensuel_rate != null ? String(selectedEmp.mensuel_rate) : '',
+                      manager_id: selectedEmp.manager_id != null ? String(selectedEmp.manager_id) : '',
                     });
-                  }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600" title="Modifier le profil (devise)">
+                  }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600" title="Modifier le profil (devise, manager)">
                     Modifier profil
                   </button>
                 )}
@@ -805,7 +830,7 @@ const Employees = () => {
         </div>
       )}
 
-      <Modal open={!!editEmp} onClose={() => setEditEmp(null)} title={`Profil — ${editEmp?.name || ''}`} size="sm">
+      <Modal open={!!editEmp} onClose={() => setEditEmp(null)} title={`Profil — ${editEmp?.name || ''}`} size="md">
         <div className="space-y-4">
           <div className="form-control">
             <label className="label"><span className="label-text">Devise / Profil de l'employé</span></label>
@@ -813,6 +838,21 @@ const Employees = () => {
               {currencyOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
             <span className="text-[11px] text-gray-400 mt-1">Ar = Ariary par défaut, EUR = Euro pour les employés étrangers, ou toute devise définie par l'admin / le DG / la DRH.</span>
+          </div>
+          <div className="form-control">
+            <label className="label"><span className="label-text">Manager de l'employé</span></label>
+            <select className="select select-bordered w-full" value={editForm.manager_id}
+              onChange={(e) => setEditForm({ ...editForm, manager_id: e.target.value })}>
+              <option value="">— Sélectionner un manager —</option>
+              {selectableManagers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}{m.department ? ` (${m.department})` : ''}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-gray-400 mt-1">
+              Le manager désigné peut voir et créer des primes pour cet employé, même s'il ne fait pas partie du même département. Son rôle reste inchangé pour la validation.
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="form-control">

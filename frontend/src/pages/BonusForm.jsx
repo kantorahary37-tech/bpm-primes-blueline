@@ -404,7 +404,10 @@ export default function BonusForm() {
       if (connectedUser?.is_admin || connectedUser?.is_dg || connectedUser?.is_drh) {
         setEmployees(all)
       } else {
-        setEmployees(all.filter(e => e.department === connectedUser?.department))
+        // Son département, plus les employés dont il est le manager — même si
+        // ces derniers relèvent d'un autre département (le backend les renvoie).
+        setEmployees(all.filter(e =>
+          e.department === connectedUser?.department || e.manager_id === connectedUser?.id))
       }
     }).catch(() => {})
 
@@ -429,8 +432,11 @@ export default function BonusForm() {
   const selectableEmployees = useMemo(() => {
     if (!restrictedToAssignedServices) return employees
     const names = new Set(serviceAssignments.map(a => a.service_group_name).filter(Boolean))
-    return employees.filter(e => names.has(e.service))
-  }, [restrictedToAssignedServices, employees, serviceAssignments])
+    // Les employés dont il est le manager restent sélectionnables même s'ils
+    // ne font pas partie des services affectés.
+    const managerId = connectedUser?.id
+    return employees.filter(e => names.has(e.service) || e.manager_id === managerId)
+  }, [restrictedToAssignedServices, employees, serviceAssignments, connectedUser?.id])
 
   // « Appliquer ce modèle à » : pour un N+1/N+2 avec des services affectés, on
   // ne propose que les employés de ses services (comme le sélecteur principal).

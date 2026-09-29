@@ -8,7 +8,13 @@ from tortoise.expressions import Q
 from app.models import Employee, User, Department, Bonus, ServiceGroup
 from app.schemas import *
 from app.auth import get_current_user
-from app.permissions import employee_in_scope, employee_scope, apply_employee_scope, n1_service_group_ids
+from app.permissions import (
+    employee_in_scope,
+    employee_scope,
+    apply_employee_scope,
+    apply_department_scope,
+    n1_service_group_ids,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -26,13 +32,14 @@ async def list_employees(
 ):
     query = Employee.all().filter(is_active=True, is_archived=False).prefetch_related('service_group')
 
-    # Restriction par département : les non-admin ne voient que leur département,
+    # Restriction par département : les non-admin ne voient que leur département
+    # (plus les employés dont ils sont le manager, même hors département),
     # et un N+1/N+2 avec des services affectés uniquement les employés de ceux-ci.
     if user.is_admin or user.is_dg or user.is_drh:
         if department:
             query = query.filter(dept_str=department)
     else:
-        query = query.filter(dept_str=user.department)
+        query = apply_department_scope(query, user)
         # N+1/N+2 : ses services affectés ; sans affectation → uniquement sa propre fiche
         query = apply_employee_scope(query, await employee_scope(user))
 
@@ -53,12 +60,13 @@ async def export_employees(
     query = Employee.all().filter(is_active=True, is_archived=False).prefetch_related('manager')
 
     # Même périmètre que la liste des employés : un N+1/N+2 ne peut exporter
-    # que les employés de son département et de ses services affectés.
+    # que les employés de son département (plus ceux qu'il manage) et de ses
+    # services affectés.
     if user.is_admin or user.is_dg or user.is_drh:
         if department:
             query = query.filter(dept_str=department)
     else:
-        query = query.filter(dept_str=user.department)
+        query = apply_department_scope(query, user)
         # N+1/N+2 : ses services affectés ; sans affectation → uniquement sa propre fiche
         query = apply_employee_scope(query, await employee_scope(user))
     employees = await query
@@ -153,6 +161,27 @@ async def update_employee(emp_id: int, data: EmployeeUpdate, user: User = Depend
     if not await employee_in_scope(user, emp):
         raise HTTPException(status_code=403, detail="Vous ne pouvez modifier que les employés de vos services affectés")
     update_data = data.dict(exclude_unset=True)
+
+    # Réaffectation du manager : réservée aux Admin/DG/DRH, car elle change
+    # qui peut voir et créer des primes pour cet employé.
+    if 'manager_id' in update_data:
+        # La colonne est NOT NULL : un manager ne peut pas être retiré.
+        if update_data['manager_id'] is None:
+            update_data.pop('manager_id')
+        elif not (user.is_admin or user.is_dg or user.is_drh):
+            raise HTTPException(
+                status_code=403,
+                detail="Seuls les administrateurs, le DG ou la DRH peuvent modifier le manager d'un employé",
+            )
+        else:
+            manager = await User.get_or_none(id=update_data['manager_id'])
+            if not manager:
+                raise HTTPException(status_code=404, detail="Manager introuvable")
+            if manager.is_admin:
+                raise HTTPException(status_code=400, detail="Un administrateur ne peut pas être manager d'un employé")
+            if manager.id == emp.id:
+                raise HTTPException(status_code=400, detail="Un employé ne peut pas être son propre manager")
+
     if update_data:
         old_currency = emp.currency
         await emp.update_from_dict(update_data)
