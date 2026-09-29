@@ -5,10 +5,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from tortoise.expressions import Q
-from app.models import Employee, User, Department, Bonus
+from app.models import Employee, User, Department, Bonus, ServiceGroup
 from app.schemas import *
 from app.auth import get_current_user
-from app.permissions import employee_in_scope, employee_scope, apply_employee_scope
+from app.permissions import employee_in_scope, employee_scope, apply_employee_scope, n1_service_group_ids
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -265,6 +265,92 @@ async def move_employees_department(
         "kept_in_service": len(kept),
         "kept_details": kept,
         "target_department": target,
+        "manager": new_manager.name if new_manager else None,
+    }
+
+
+class MoveServiceRequest(BaseModel):
+    employee_ids: List[int]
+    target_service_group_id: int
+
+
+@router.post("/move-service")
+async def move_employees_service(
+    data: MoveServiceRequest,
+    user: User = Depends(get_current_user),
+):
+    """Transfère un ou plusieurs employés vers un service cible.
+
+    Le département et le manager de l'employé suivent le service cible
+    (règle métier : un employé affecté à un service appartient au
+    département de ce service — le manager est celui du département cible,
+    Directeur sinon N+1, sinon DG, comme pour un changement de département).
+
+    Périmètres :
+      - admin / DG / DRH : tous les services.
+      - N+1 / N+2 : uniquement depuis et vers leurs services affectés
+        (user_service_assignment + services gérés). Un validateur ne peut
+        ni transférer un employé hors de son périmètre, ni cibler un
+        service qui ne lui est pas affecté.
+    """
+    if not data.employee_ids:
+        raise HTTPException(status_code=400, detail="Aucun employé sélectionné")
+
+    if user.is_admin or user.is_dg or user.is_drh:
+        scope_ids = None
+    else:
+        if not (user.is_validator_n1 or user.is_validator_n2):
+            raise HTTPException(status_code=403, detail="Réservé aux admin / DG / DRH et aux validateurs N+1 / N+2")
+        scope_ids = await n1_service_group_ids(user)
+        if not scope_ids:
+            raise HTTPException(status_code=403, detail="Aucun service ne vous est affecté : transfert impossible")
+        if data.target_service_group_id not in scope_ids:
+            raise HTTPException(status_code=403, detail="Le service cible ne fait pas partie de vos services affectés")
+
+    target = await ServiceGroup.get_or_none(id=data.target_service_group_id).prefetch_related('department')
+    if not target:
+        raise HTTPException(status_code=404, detail="Service cible introuvable")
+    target_dept = target.department
+    target_dept_name = target_dept.name if target_dept else None
+
+    employees = await Employee.filter(id__in=data.employee_ids, is_active=True).prefetch_related(
+        'service_group', 'service_group__department'
+    )
+    new_manager = await _department_manager(target_dept_name) if target_dept_name else None
+
+    moved = 0
+    skipped: list[dict] = []
+    for emp in employees:
+        sg = emp.service_group
+        if sg and sg.id == target.id:
+            skipped.append({
+                "employee_id": emp.id,
+                "name": emp.name,
+                "service": sg.name,
+                "reason": "Déjà affecté à ce service",
+            })
+            continue
+        if scope_ids and (not sg or sg.id not in scope_ids):
+            skipped.append({
+                "employee_id": emp.id,
+                "name": emp.name,
+                "service": sg.name if sg else None,
+                "reason": "Employé hors de vos services affectés",
+            })
+            continue
+        emp.service_group = target
+        emp.dept = target_dept
+        emp.dept_str = target_dept_name
+        if new_manager:
+            emp.manager = new_manager
+        await emp.save()
+        moved += 1
+
+    return {
+        "moved": moved,
+        "skipped": skipped,
+        "target_service": target.name,
+        "target_department": target_dept_name,
         "manager": new_manager.name if new_manager else None,
     }
 

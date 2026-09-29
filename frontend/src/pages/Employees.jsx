@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies, archiveEmployee } from '../services/api';
+import { getEmployees, getBonuses, updateEmployee, getUsers, adminLdapSyncEmployees, adminLdapEmployeeSearch, adminCreateEmployeeFromLdap, getCurrencies, createCurrency, deleteCurrency, moveEmployeesDepartment, moveEmployeesService, getServices, alignEmployeesServiceDepartments, getServiceDepartmentInconsistencies, archiveEmployee } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { PlusIcon, EyeIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, XMarkIcon, DownloadIcon, SearchIcon, DatabaseIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 import { useConfirm } from '../components/ConfirmModal';
-import { ldapSyncToast, moveSummaryToast, alignToast, apiErrorToast } from '../utils/toastHelpers';
+import { ldapSyncToast, moveSummaryToast, moveServiceToast, alignToast, apiErrorToast } from '../utils/toastHelpers';
 
 // Icône boîte d'archive (utilisée dans la barre d'actions et la modale d'archivage)
 const ArchiveBoxIcon = (p) => (
@@ -106,6 +106,12 @@ const Employees = () => {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [moveTarget, setMoveTarget] = useState('');
   const [moving, setMoving] = useState(false);
+  const [showMoveServiceModal, setShowMoveServiceModal] = useState(false);
+  const [moveServiceTarget, setMoveServiceTarget] = useState('');
+  const [movingService, setMovingService] = useState(false);
+  // Services proposés dans la modale de transfert (déjà scopés côté serveur :
+  // N+1/N+2 → leurs services affectés, admin → tous).
+  const [myServices, setMyServices] = useState([]);
   const [aligning, setAligning] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [archiveReason, setArchiveReason] = useState('');
@@ -120,6 +126,14 @@ const Employees = () => {
   );
   const singleSelected = selectedEmployees.length === 1 ? selectedEmployees[0] : null;
 
+  // Services proposables au transfert : on exclut les services où figurent
+  // déjà les employés sélectionnés (le backend ignorerait de toute façon
+  // un transfert vers le service actuel de l'employé).
+  const transferableServices = useMemo(
+    () => myServices.filter(s => !selectedEmployees.some(e => e.service === s.name && e.department === s.department)),
+    [myServices, selectedEmployees]
+  );
+
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -132,12 +146,14 @@ const Employees = () => {
     initRef.current = true;
     const fetchData = async () => {
       try {
-        const [emps, users] = await Promise.all([
+        const [emps, users, services] = await Promise.all([
           departmentFilter ? getEmployees(departmentFilter) : getEmployees(),
           getUsers(),
+          getServices(),
         ]);
         setEmployees(emps);
         setManagers(Array.isArray(users) ? users : []);
+        setMyServices(Array.isArray(services) ? services : []);
       } catch (err) {
         console.error(err);
       } finally {
@@ -400,6 +416,25 @@ const Employees = () => {
       apiErrorToast(err, 'Erreur lors du déplacement');
     } finally {
       setMoving(false);
+    }
+  };
+
+  const handleMoveServiceEmployees = async () => {
+    if (!moveServiceTarget) { toast.error('Sélectionnez un service cible'); return; }
+    setMovingService(true);
+    try {
+      const ids = Array.from(selectedEmpIds);
+      const result = await moveEmployeesService(ids, parseInt(moveServiceTarget, 10));
+      moveServiceToast(result);
+      setSelectedEmpIds(new Set());
+      setShowMoveServiceModal(false);
+      setMoveServiceTarget('');
+      const emps = departmentFilter ? await getEmployees(departmentFilter) : await getEmployees();
+      setEmployees(emps);
+    } catch (err) {
+      apiErrorToast(err, 'Erreur lors du transfert');
+    } finally {
+      setMovingService(false);
     }
   };
 
@@ -983,6 +1018,17 @@ const Employees = () => {
                 Déplacer vers...
               </button>
             )}
+            {/* Transfert de service : réservé aux validateurs N+1/N+2
+                (l'admin/DG/DRH utilise « Déplacer vers... » pour les départements
+                et gère les services depuis la page Services). */}
+            {(user?.is_validator_n1 || user?.is_validator_n2) && (
+              <button
+                onClick={() => { setMoveServiceTarget(''); setShowMoveServiceModal(true); }}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                Transférer de service...
+              </button>
+            )}
             <button
               onClick={openArchiveModal}
               className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-xl transition-colors"
@@ -1075,6 +1121,54 @@ const Employees = () => {
             >
               {moving ? <span className="loading loading-spinner loading-xs" /> : null}
               Déplacer {selectedEmpIds.size} employé(s)
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Transfert de service modal (N+1 / N+2) */}
+      <Modal open={showMoveServiceModal} onClose={() => setShowMoveServiceModal(false)} title="Transférer vers un service" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Transférer <strong>{selectedEmpIds.size} employé(s)</strong> vers le service :
+          </p>
+          <select
+            value={moveServiceTarget}
+            onChange={(e) => setMoveServiceTarget(e.target.value)}
+            className="select select-bordered w-full"
+          >
+            <option value="">— Choisir un service —</option>
+            {transferableServices.map((s) => (
+              <option key={s.id} value={s.id}>{s.name} ({s.department})</option>
+            ))}
+            {transferableServices.length === 0 && (
+              <option value="" disabled>
+                {myServices.length === 0
+                  ? 'Aucun service ne vous est affecté'
+                  : 'Tous vos services contiennent déjà les employés sélectionnés'}
+              </option>
+            )}
+          </select>
+          {moveServiceTarget && (() => {
+            const target = myServices.find(s => String(s.id) === String(moveServiceTarget));
+            return (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 space-y-1">
+                <p className="text-xs text-indigo-700">
+                  {selectedEmpIds.size} employé(s) seront transférés vers « {target?.name} » ({target?.department}).
+                  Le département et le manager suivent le service cible.
+                </p>
+              </div>
+            );
+          })()}
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <button onClick={() => setShowMoveServiceModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
+            <button
+              onClick={handleMoveServiceEmployees}
+              disabled={movingService || !moveServiceTarget}
+              className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0"
+            >
+              {movingService ? <span className="loading loading-spinner loading-xs" /> : null}
+              Transférer {selectedEmpIds.size} employé(s)
             </button>
           </div>
         </div>

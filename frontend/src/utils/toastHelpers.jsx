@@ -102,6 +102,21 @@ export const moveSummaryToast = (result) => {
   showCountToast('success', `Déplacement vers « ${result.target_department} »`, stats, details);
 };
 
+export const moveServiceToast = (result) => {
+  const skipped = result.skipped ?? [];
+  const stats = [
+    { label: 'Transférés', value: result.moved ?? 0, tone: 'success' },
+    { label: 'Ignorés', value: skipped.length, tone: skipped.length > 0 ? 'warning' : 'muted' },
+  ];
+  const details = skipped.map(
+    k => `${k.name} : ${k.reason}`
+  );
+  const target = result.target_service
+    ? `Transfert vers « ${result.target_service} »${result.target_department ? ` (${result.target_department})` : ''}`
+    : 'Transfert de service';
+  showCountToast('success', target, stats, details);
+};
+
 /**
  * Résumé d'auto-fix services/départements.
  */
