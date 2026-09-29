@@ -615,6 +615,37 @@ export const deleteOtherPrimeType = async (id) => {
   return data;
 };
 
+// --- Déclencheurs email (rappels quotidien / date limite / DG) ---
+export const getEmailTriggersOverview = async () => {
+  const { data } = await api.get('/admin/email-triggers/overview');
+  return data.triggers || [];
+};
+
+export const getEmailTriggerConfig = async (trigger) => {
+  const { data } = await api.get(`/admin/email-triggers/${trigger}/config`);
+  return data;
+};
+
+export const updateEmailTriggerConfig = async (trigger, payload) => {
+  const { data } = await api.put(`/admin/email-triggers/${trigger}/config`, payload);
+  return data;
+};
+
+export const sendEmailTriggerNow = async (trigger) => {
+  const { data } = await api.post(`/admin/email-triggers/${trigger}/send`);
+  return data;
+};
+
+export const previewEmailTrigger = async (trigger) => {
+  const { data } = await api.get(`/admin/email-triggers/${trigger}/preview`);
+  return data;
+};
+
+export const getEmailTriggerExecutions = async (trigger, params = {}) => {
+  const { data } = await api.get(`/admin/email-triggers/${trigger}/executions`, { params });
+  return data;
+};
+
 // --- Rappel DG des primes en cours de validation ---
 export const getPrimeReminderConfig = async () => {
   const { data } = await api.get('/admin/prime-reminder/config');

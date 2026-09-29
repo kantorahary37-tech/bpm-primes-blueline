@@ -24,6 +24,9 @@ export default function SystemConfigPage() {
   const [activeCategory, setActiveCategory] = useState(null);
   const [showPasswords, setShowPasswords] = useState({});
 
+  // Catégorie « reminders » gérée par la page dédiée Configuration → Déclencheurs email
+  const HIDDEN_CATEGORIES = new Set(['reminders']);
+
   useEffect(() => {
     fetchConfig();
   }, []);
@@ -31,8 +34,11 @@ export default function SystemConfigPage() {
   const fetchConfig = async () => {
     try {
       const data = await getSystemConfig();
-      setCategories(data.categories || {});
-      const firstCat = Object.keys(data.categories || {})[0];
+      const filtered = Object.fromEntries(
+        Object.entries(data.categories || {}).filter(([key]) => !HIDDEN_CATEGORIES.has(key))
+      );
+      setCategories(filtered);
+      const firstCat = Object.keys(filtered)[0];
       if (firstCat) setActiveCategory(firstCat);
     } catch {
       toast.error('Erreur lors du chargement de la configuration');

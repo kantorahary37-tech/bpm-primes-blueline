@@ -18,6 +18,7 @@ from app.auth import get_current_user
 from app.api.admin import require_admin
 from app.api.database_dump import create_database_dump_file, cleanup_old_dumps
 from app.email_service import send_validation_reminder_email, send_deadline_reminder_email
+from app.email_trigger_service import log_trigger_execution
 from app.currency_format import format_amount_with_currency
 from app.config import get_config
 from app.permissions import n1_service_group_ids
@@ -81,6 +82,17 @@ async def send_daily_reminders() -> dict:
         else:
             failed += 1
     print(f"[REMINDER] Rappels envoyés: {sent}, échecs: {failed}")
+    # Journalisation CRON (historique unifié « Déclencheurs email »)
+    try:
+        await log_trigger_execution(
+            "daily", trigger_type="CRON",
+            status="FAILED" if (sent == 0 and failed > 0) else "SENT",
+            recipient=f"{sent + failed} email(s)",
+            summary={"emails_sent": sent, "emails_failed": failed},
+            total_count=sent,
+        )
+    except Exception as e:
+        print(f"[REMINDER] Erreur journalisation: {e}")
     return {"emails_sent": sent, "emails_failed": failed}
 
 
@@ -212,6 +224,20 @@ async def send_deadline_reminders() -> dict:
         else:
             failed += 1
     print(f"[REMINDER-DEADLINE] {wave} ({deadline}) envoyés: {sent}, échecs: {failed}")
+    # Journalisation CRON (historique unifié « Déclencheurs email »)
+    try:
+        await log_trigger_execution(
+            "deadline", trigger_type="CRON",
+            status="FAILED" if (sent == 0 and failed > 0) else "SENT",
+            recipient=f"{sent + failed} email(s)",
+            summary={
+                "wave": wave, "deadline": deadline,
+                "emails_sent": sent, "emails_failed": failed,
+            },
+            total_count=sent,
+        )
+    except Exception as e:
+        print(f"[REMINDER-DEADLINE] Erreur journalisation: {e}")
     return {"wave": wave, "deadline": deadline, "emails_sent": sent, "emails_failed": failed}
 
 

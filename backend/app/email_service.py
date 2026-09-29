@@ -459,45 +459,44 @@ async def send_validation_reminder_email(to_email: str, to_name: str, items: lis
     return await asyncio.to_thread(_send_validation_reminder_email_sync, to_email, to_name, items)
 
 
-def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: list) -> bool:
-    try:
-        cfg = _smtp_config()
-        env_label = _env_label(cfg)
-        prefix = _test_subject_prefix(cfg)
-        count = len(items)
-        plural = "s" if count > 1 else ""
-        msg = EmailMessage()
-        msg["Subject"] = f"{prefix}Rappel : {count} prime{plural} en attente de votre validation | BPM"
-        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
-        msg["To"] = _resolve_email(to_email)
+def render_validation_reminder_email(cfg: dict, to_name: str, items: list) -> tuple:
+    """
+    Construit (subject, plain, html) du rappel quotidien sans envoi SMTP.
+    Corps partagé entre l'envoi réel et l'aperçu de la page « Déclencheurs email ».
+    """
+    env_label = _env_label(cfg)
+    prefix = _test_subject_prefix(cfg)
+    count = len(items)
+    plural = "s" if count > 1 else ""
+    subject = f"{prefix}Rappel : {count} prime{plural} en attente de votre validation | BPM"
 
-        plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
-        msg.set_content(
-            f"{plain_env}"
-            f"Bonjour {to_name},\n\n"
-            f"Des processus sont en attente de votre intervention sur la plateforme BPM | Gestion de Prime.\n"
-            f"Vous trouverez ci-dessous la liste des prime{plural} bloquée{plural} à votre étape de validation.\n\n"
-            + "\n".join(f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}" for it in items)
-            + "\n\nMerci de bien vouloir traiter ces dossiers afin que les processus puissent se poursuivre.\n\n"
-            f"---\nBPM | Gestion de Prime"
-        )
+    plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
+    plain = (
+        f"{plain_env}"
+        f"Bonjour {to_name},\n\n"
+        f"Des processus sont en attente de votre intervention sur la plateforme BPM | Gestion de Prime.\n"
+        f"Vous trouverez ci-dessous la liste des prime{plural} bloquée{plural} à votre étape de validation.\n\n"
+        + "\n".join(f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}" for it in items)
+        + "\n\nMerci de bien vouloir traiter ces dossiers afin que les processus puissent se poursuivre.\n\n"
+        f"---\nBPM | Gestion de Prime"
+    )
 
-        links = "".join(
-            f"<li style=\"margin:8px 0;\">"
-            f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
-            f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
-            f"</li>"
-            for it in items
-        )
+    links = "".join(
+        f"<li style=\"margin:8px 0;\">"
+        f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
+        f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
+        f"</li>"
+        for it in items
+    )
 
-        banner = _test_banner_html(cfg)
-        footer = _test_footer_html(cfg)
-        env_badge = (
-            f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
-            f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
-            if cfg["test_mode"] else ""
-        )
-        msg.add_alternative(f"""<!DOCTYPE html>
+    banner = _test_banner_html(cfg)
+    footer = _test_footer_html(cfg)
+    env_badge = (
+        f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+        f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+        if cfg["test_mode"] else ""
+    )
+    html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
@@ -537,7 +536,21 @@ def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: lis
     </td></tr>
   </table>
 </body>
-</html>""", subtype="html")
+</html>"""
+
+    return subject, plain, html
+
+
+def _send_validation_reminder_email_sync(to_email: str, to_name: str, items: list) -> bool:
+    try:
+        cfg = _smtp_config()
+        subject, plain, html = render_validation_reminder_email(cfg, to_name, items)
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
+        msg["To"] = _resolve_email(to_email)
+        msg.set_content(plain)
+        msg.add_alternative(html, subtype="html")
 
         with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
             server.starttls()
@@ -567,56 +580,51 @@ async def send_deadline_reminder_email(
     )
 
 
-def _send_deadline_reminder_email_sync(
-    to_email: str,
-    to_name: str,
-    reminder_label: str,
-    deadline_date: str,
-    items: list,
-) -> bool:
-    try:
-        cfg = _smtp_config()
-        env_label = _env_label(cfg)
-        prefix = _test_subject_prefix(cfg)
-        count = len(items)
-        plural = "s" if count > 1 else ""
-        frontend_url = get_config("FRONTEND_URL")
-        msg = EmailMessage()
-        msg["Subject"] = f"{prefix}Rappel : finalisez vos validations avant le {deadline_date} | BPM"
-        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
-        msg["To"] = _resolve_email(to_email)
+def render_deadline_reminder_email(
+    cfg: dict, to_name: str, reminder_label: str, deadline_date: str, items: list
+) -> tuple:
+    """
+    Construit (subject, plain, html) du rappel de date limite sans envoi SMTP.
+    Corps partagé entre l'envoi réel et l'aperçu de la page « Déclencheurs email ».
+    """
+    env_label = _env_label(cfg)
+    prefix = _test_subject_prefix(cfg)
+    count = len(items)
+    plural = "s" if count > 1 else ""
+    frontend_url = get_config("FRONTEND_URL")
+    subject = f"{prefix}Rappel : finalisez vos validations avant le {deadline_date} | BPM"
 
-        plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
-        items_text = "\n".join(
-            f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}"
-            for it in items
-        )
-        msg.set_content(
-            f"{plain_env}"
-            f"Bonjour {to_name},\n\n"
-            f"{reminder_label} : la date limite de finalisation des validations de primes est fixée au {deadline_date}.\n"
-            f"Merci de bien vouloir finaliser les validations en attente avant cette échéance.\n\n"
-            f"Validations en attente ({count} prime{plural}) :\n"
-            f"{items_text}\n\n"
-            f"---\nBPM | Gestion de Prime"
-        )
+    plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
+    items_text = "\n".join(
+        f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}"
+        for it in items
+    )
+    plain = (
+        f"{plain_env}"
+        f"Bonjour {to_name},\n\n"
+        f"{reminder_label} : la date limite de finalisation des validations de primes est fixée au {deadline_date}.\n"
+        f"Merci de bien vouloir finaliser les validations en attente avant cette échéance.\n\n"
+        f"Validations en attente ({count} prime{plural}) :\n"
+        f"{items_text}\n\n"
+        f"---\nBPM | Gestion de Prime"
+    )
 
-        links = "".join(
-            f"<li style=\"margin:8px 0;\">"
-            f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
-            f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
-            f"</li>"
-            for it in items
-        )
+    links = "".join(
+        f"<li style=\"margin:8px 0;\">"
+        f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
+        f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
+        f"</li>"
+        for it in items
+    )
 
-        banner = _test_banner_html(cfg)
-        footer = _test_footer_html(cfg)
-        env_badge = (
-            f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
-            f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
-            if cfg["test_mode"] else ""
-        )
-        msg.add_alternative(f"""<!DOCTYPE html>
+    banner = _test_banner_html(cfg)
+    footer = _test_footer_html(cfg)
+    env_badge = (
+        f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
+        f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
+        if cfg["test_mode"] else ""
+    )
+    html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
@@ -673,7 +681,27 @@ def _send_deadline_reminder_email_sync(
     </td></tr>
   </table>
 </body>
-</html>""", subtype="html")
+</html>"""
+
+    return subject, plain, html
+
+
+def _send_deadline_reminder_email_sync(
+    to_email: str,
+    to_name: str,
+    reminder_label: str,
+    deadline_date: str,
+    items: list,
+) -> bool:
+    try:
+        cfg = _smtp_config()
+        subject, plain, html = render_deadline_reminder_email(cfg, to_name, reminder_label, deadline_date, items)
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
+        msg["To"] = _resolve_email(to_email)
+        msg.set_content(plain)
+        msg.add_alternative(html, subtype="html")
 
         with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
             server.starttls()
@@ -714,6 +742,11 @@ def _prime_reminder_greeting_name(email: str) -> str | None:
 
 def render_prime_reminder_email(cfg: dict, sections: list, total: int,
                                 greeting_name: str | None = None) -> tuple:
+    """
+    Construit (subject, plain, html) du rappel DG sans envoi SMTP.
+    Utilisé par l'envoi réel, les scripts CLI et l'aperçu de la page
+    « Déclencheurs email ».
+    """
     """
     Construit (subject, texte_brut, html) du rappel DG. Les sections sont des
     dicts {department, bonus_type_label, count}, regroupées PAR DÉPARTEMENT à
