@@ -152,6 +152,26 @@ async def test_send_daily_manual_logs_execution(db, reminder_config, monkeypatch
     assert rows[0].created_by_id == admin.id
 
 
+async def test_daily_reminder_excludes_dg_accounts(db, reminder_config):
+    """Les comptes DG ne reçoivent pas le rappel quotidien : ils sont couverts
+    par le dédié « Rappel DG » (synthèse groupée)."""
+    manager = await make_user("manager@test.mg")
+    await make_user("dir@test.mg", name="Directeur", is_directeur=True, dept_str="Direction Test")
+    await make_user("dg@test.mg", is_dg=True, is_admin=False, dept_str="Direction Test")
+    employee = await make_employee(manager)
+    await make_bonus(employee, manager, BonusType.ASTREINTE, "En attente Directeur")
+    await make_bonus(employee, manager, BonusType.MENSUEL, "En attente DG")
+
+    actors = await scheduler_module.collect_pending_by_actor()
+    recipients = {entry["user"].email for entry in actors.values()}
+    assert "dg@test.mg" not in recipients
+    assert "dir@test.mg" in recipients
+
+    items = [i for entry in actors.values() for i in entry["items"]]
+    assert items, "le directeur doit toujours être concerné"
+    assert all(i["status_label"] != "Validation DG" for i in items)
+
+
 async def test_send_deadline_manual_logs_execution(db, reminder_config, monkeypatch):
     manager = await make_user("manager@test.mg")
     await make_user("dir@test.mg", name="Directeur", is_directeur=True, dept_str="Direction Test")

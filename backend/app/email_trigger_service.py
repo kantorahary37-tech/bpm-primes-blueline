@@ -2,7 +2,7 @@
 Service centralisé des déclencheurs email automatiques.
 
 Quatre déclencheurs sont gérés par l'application :
-- daily    : rappels quotidiens de validation (Directeur / DG / DRH)
+- daily    : rappels quotidiens de validation (Directeur / DRH)
 - deadline : rappels de la date limite de validation (N+1 / N+2 / Directeurs)
 - dg       : rappel DG des primes en cours (résumé groupé)
 - rh       : rappel RH des primes validées en attente de traitement (résumé groupé)
@@ -188,7 +188,7 @@ async def trigger_config(trigger: str) -> dict:
             "minute": _int_config("REMINDER_MINUTE", 30, 0, 59),
             "tz_offset": float(get_config(TZ_KEY) or 3),
             "next_run": daily_next_run(),
-            "recipients_hint": "Un email par acteur concerné (Directeur du département, DG, DRH) — aucune adresse à configurer.",
+            "recipients_hint": "Un email par acteur concerné (Directeur du département, DRH) — les comptes DG reçoivent le dédié « Rappel DG ».",
         }
     if trigger == "deadline":
         day = _int_config("REMINDER_DEADLINE_DAY", 20, 1, 28)

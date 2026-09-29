@@ -1,7 +1,8 @@
 """
 Planificateur :
-- Rappel quotidien 08h30 : un email par acteur (Directeur / DG / DRH)
-  listant les primes en attente de sa validation.
+- Rappel quotidien 08h30 : un email par acteur (Directeur / DRH)
+  listant les primes en attente de sa validation. Les comptes DG ne sont pas
+  concernés : ils reçoivent le dédié « Rappel DG » (résumé groupé).
 - Rappel de la date limite (le 20 du mois) : un email les 5, 10 et 15 du mois à
   08h00 et 17h00 aux N+1, N+2 et Directeurs concernés, listant leurs
   validations encore en attente et la date limite fixée.
@@ -60,16 +61,17 @@ def _service_name(emp) -> str | None:
 
 
 # Statut bloquant → (libellé de l'étape, filtre sur le rôle responsable)
-# Uniquement les étapes Directeur, DG et DRH (traitement)
+# Étapes Directeur et DRH (traitement).
+# NB : l'étape DG est volontairement absente — les comptes DG sont couverts
+# par le dédié « Rappel DG » (synthèse groupée des primes en attente DG).
 STEPS = {
     ValidationStatus.EN_ATTENTE_DIRECTEUR: ("Validation Directeur", {"is_directeur": True}, True),
-    ValidationStatus.EN_ATTENTE_DG: ("Validation DG", {"is_dg": True}, False),
     ValidationStatus.VALIDE: ("Traitement DRH", {"is_drh": True}, False),
 }
 
 
 async def collect_pending_by_actor() -> dict:
-    """{user_id: {"user": User, "items": [...]}} pour les primes bloquées à l'étape Directeur/DG/DRH."""
+    """{user_id: {"user": User, "items": [...]}} pour les primes bloquées à l'étape Directeur/DRH."""
     actors = {}
     for status, (label, role_filter, dept_scoped) in STEPS.items():
         for bonus in await Bonus.filter(status=status, paid_at__isnull=True).prefetch_related(

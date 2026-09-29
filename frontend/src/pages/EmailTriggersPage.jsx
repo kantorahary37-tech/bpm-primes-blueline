@@ -17,10 +17,10 @@ import {
 const TRIGGER_META = {
   daily: {
     label: 'Rappels quotidiens',
-    description: 'Un email par acteur (Directeur / DG / DRH) listant les primes en attente de sa validation.',
+    description: 'Un email par acteur (Directeur / DRH) listant les primes en attente de sa validation. Les comptes DG reçoivent le dédié « Rappel DG ».',
     color: 'blue',
     Icon: BellIcon,
-    audience: 'Directeurs, DG, DRH concernés (automatique)',
+    audience: 'Directeurs et DRH concernés (automatique)',
   },
   deadline: {
     label: 'Rappel de date limite',
