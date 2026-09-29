@@ -42,6 +42,23 @@ MONTHS_FR = [
 # léger réveil tardif du planificateur).
 DEADLINE_SLOT_GRACE_SECONDS = 600
 
+
+def _service_name(emp) -> str | None:
+    """
+    Nom du service de l'employé (None s'il n'est rattaché à aucun service).
+
+    La relation doit être préchargée par l'appelant via
+    ``prefetch_related("employee__service_group")`` : sans préchargement,
+    Tortoise renvoie une coroutine à la place de l'objet ServiceGroup, et
+    ``service_group_name`` n'existe pas sur Employee — ce qui faisait échouer
+    la génération (aperçu ET envoi manuel) des rappels quotidiens/date limite.
+    """
+    if not emp.service_group_id:
+        return None
+    sg = emp.service_group
+    return sg.name if hasattr(sg, "name") else None
+
+
 # Statut bloquant → (libellé de l'étape, filtre sur le rôle responsable)
 # Uniquement les étapes Directeur, DG et DRH (traitement)
 STEPS = {
@@ -55,7 +72,9 @@ async def collect_pending_by_actor() -> dict:
     """{user_id: {"user": User, "items": [...]}} pour les primes bloquées à l'étape Directeur/DG/DRH."""
     actors = {}
     for status, (label, role_filter, dept_scoped) in STEPS.items():
-        for bonus in await Bonus.filter(status=status, paid_at__isnull=True).prefetch_related("employee"):
+        for bonus in await Bonus.filter(status=status, paid_at__isnull=True).prefetch_related(
+            "employee", "employee__service_group"
+        ):
             emp = bonus.employee
             query = User.filter(is_admin=False, **role_filter)
             validators = await (query.filter(dept_str=emp.dept_str).all() if dept_scoped else query.all())
@@ -67,6 +86,8 @@ async def collect_pending_by_actor() -> dict:
                     "amount": amount,
                     "status_label": label,
                     "url": f"{get_config('FRONTEND_URL')}/bonuses/{bonus.id}",
+                    "department": emp.dept_str or "—",
+                    "service": _service_name(emp),
                 })
     return actors
 
@@ -173,6 +194,8 @@ async def collect_deadline_pending_by_actor() -> dict:
             "amount": amount_cache[bonus.id],
             "status_label": status_label,
             "url": f"{get_config('FRONTEND_URL')}/bonuses/{bonus.id}",
+            "department": emp.dept_str or "—",
+            "service": _service_name(emp),
         })
 
     # N+1 : primes initialisées
@@ -192,7 +215,7 @@ async def collect_deadline_pending_by_actor() -> dict:
     # N+2 : primes en attente N+2 (validateur désigné)
     for bonus in await Bonus.filter(
         status=ValidationStatus.EN_ATTENTE_N2, paid_at__isnull=True
-    ).prefetch_related("employee"):
+    ).prefetch_related("employee", "employee__service_group"):
         n2 = await User.get_or_none(id=bonus.n2_user_id) if bonus.n2_user_id else None
         if n2 and n2.is_validator_n2 and not n2.is_admin:
             await _add(n2, bonus, "Validation N+2")
@@ -200,7 +223,7 @@ async def collect_deadline_pending_by_actor() -> dict:
     # Directeurs : primes en attente Directeur
     for bonus in await Bonus.filter(
         status=ValidationStatus.EN_ATTENTE_DIRECTEUR, paid_at__isnull=True
-    ).prefetch_related("employee"):
+    ).prefetch_related("employee", "employee__service_group"):
         emp = bonus.employee
         directeurs = await User.filter(is_directeur=True, is_admin=False, dept_str=emp.dept_str).all()
         for d in directeurs:

@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 
-from app.models import User, Department, Employee, Bonus
+from app.models import User, Department, Employee, Bonus, ServiceGroup
 from app.models import BonusType, ValidationStatus, PrimeReminderExecution
 from app.config import set_config
 from app.email_trigger_service import (
@@ -228,6 +228,34 @@ async def test_preview_daily_uses_real_data(db, reminder_config):
     data = await trigger_preview("daily")
     assert data["using_real_data"] is True
     assert data["stats"]["primes"] >= 1
+
+
+async def test_collect_and_preview_employee_with_service_group(db, reminder_config):
+    """Employé rattaché à un service : la génération des rappels ne doit pas
+    planter (AttributeError sur service_group_name) ni omettre le service."""
+    manager = await make_user("sg-manager@test.mg")
+    await make_user("sg-dir@test.mg", name="Directeur", is_directeur=True, dept_str="Direction Test")
+    employee = await make_employee(manager)
+    dept = await Department.get(name="Direction Test")
+    group = await ServiceGroup.create(name="Réseau", department=dept)
+    employee.service_group = group
+    await employee.save()
+    await make_bonus(employee, manager, BonusType.ASTREINTE, "En attente Directeur")
+
+    actors = await scheduler_module.collect_pending_by_actor()
+    items = [i for entry in actors.values() for i in entry["items"]]
+    assert any(i["service"] == "Réseau" for i in items)
+
+    daily = await trigger_preview("daily")
+    assert daily["using_real_data"] is True
+    assert "Réseau" in daily["html"]
+
+    deadline_actors = await scheduler_module.collect_deadline_pending_by_actor()
+    deadline_items = [i for entry in deadline_actors.values() for i in entry["items"]]
+    assert any(i["service"] == "Réseau" for i in deadline_items)
+
+    deadline = await trigger_preview("deadline")
+    assert "<html" in deadline["html"]
 
 
 async def test_preview_deadline(db, reminder_config, monkeypatch):

@@ -317,13 +317,13 @@ async def trigger_send_now(trigger: str, user: User = None) -> dict:
 _REPRESENTATIVE_ITEMS = [
     {"employee_name": "Rakoto Jean", "type_label": "Astreinte",
      "amount": "50 000 Ar", "status_label": "Validation Directeur",
-     "url": "#"},
+     "url": "#", "department": "Direction des Operations", "service": "Réseau"},
     {"employee_name": "Ravao Marie", "type_label": "Prime mensuelle",
      "amount": "120 000 Ar", "status_label": "Validation DG",
-     "url": "#"},
+     "url": "#", "department": "Direction des Operations", "service": "Support"},
     {"employee_name": "Randria Paul", "type_label": "Intervention",
      "amount": "35 000 Ar", "status_label": "Traitement DRH",
-     "url": "#"},
+     "url": "#", "department": "Direction BBS", "service": None},
 ]
 
 _REPRESENTATIVE_SECTIONS = [

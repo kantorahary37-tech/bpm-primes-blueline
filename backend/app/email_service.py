@@ -463,7 +463,9 @@ async def send_validation_reminder_email(to_email: str, to_name: str, items: lis
 def render_validation_reminder_email(cfg: dict, to_name: str, items: list) -> tuple:
     """
     Construit (subject, plain, html) du rappel quotidien sans envoi SMTP.
-    Corps partagé entre l'envoi réel et l'aperçu de la page « Déclencheurs email ».
+    Résumé groupé par département (et par service si disponible) — même
+    principe que le rappel groupé DG/RH : AUCUNE information nominative
+    (ni nom d'employé, ni montant, ni lien direct vers une prime).
     """
     env_label = _env_label(cfg)
     prefix = _test_subject_prefix(cfg)
@@ -471,24 +473,81 @@ def render_validation_reminder_email(cfg: dict, to_name: str, items: list) -> tu
     plural = "s" if count > 1 else ""
     subject = f"{prefix}Rappel : {count} prime{plural} en attente de votre validation | BPM"
 
+    # Regroupement par département puis par service / type
+    dept_index = {}
+    dept_order = []
+    for it in items:
+        dept = it.get("department") or "—"
+        service = it.get("service") or "—"
+        if dept not in dept_index:
+            dept_index[dept] = {"total": 0, "services": {}, "types": {}}
+            dept_order.append(dept)
+        dept_index[dept]["total"] += 1
+        if service not in dept_index[dept]["services"]:
+            dept_index[dept]["services"][service] = 0
+        dept_index[dept]["services"][service] += 1
+        key = it["type_label"]
+        dept_index[dept]["types"][key] = dept_index[dept]["types"].get(key, 0) + 1
+
     plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
+    dept_lines = []
+    for dept in dept_order:
+        g = dept_index[dept]
+        has_service = any(s != "—" for s in g["services"].keys())
+        if has_service:
+            parts = ", ".join(f"{svc} : {n}" for svc, n in sorted(g["services"].items()) if svc != "—")
+            dept_lines.append(f"- {dept} — {g['total']} ({parts})")
+        else:
+            parts = ", ".join(f"{label} ({n})" for label, n in g["types"].items())
+            dept_lines.append(f"- {dept} : {parts}")
     plain = (
         f"{plain_env}"
         f"Bonjour {to_name},\n\n"
         f"Des processus sont en attente de votre intervention sur la plateforme BPM | Gestion de Prime.\n"
-        f"Vous trouverez ci-dessous la liste des prime{plural} bloquée{plural} à votre étape de validation.\n\n"
-        + "\n".join(f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}" for it in items)
+        f"Vous trouverez ci-dessous le récapitulatif des prime{plural} bloquée{plural} à votre étape de validation.\n\n"
+        + "\n".join(dept_lines)
         + "\n\nMerci de bien vouloir traiter ces dossiers afin que les processus puissent se poursuivre.\n\n"
         f"---\nBPM | Gestion de Prime"
     )
 
-    links = "".join(
-        f"<li style=\"margin:8px 0;\">"
-        f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
-        f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
-        f"</li>"
-        for it in items
-    )
+    def _dept_rows_html(show_service: bool) -> str:
+        rows = ""
+        for dept in dept_order:
+            g = dept_index[dept]
+            has_service = any(s != "—" for s in g["services"].keys())
+            if has_service != show_service:
+                continue
+            rows += (
+                f'<tr>'
+                f'<td style="padding:12px 16px 2px;">'
+                f'<span style="font-size:14px;font-weight:700;color:#0f172a;">{dept}</span>'
+                f'</td>'
+                f'<td align="right" style="padding:12px 16px 2px;">'
+                f'<span style="display:inline-block;background:#eff6ff;color:#1d4ed8;'
+                f'font-size:14px;font-weight:700;padding:2px 12px;border-radius:999px;">{g["total"]}</span>'
+                f'</td>'
+                f'</tr>'
+            )
+            if show_service:
+                detail = "&nbsp;&nbsp;".join(
+                    f'<span style="color:#64748b;">{svc} :</span> <span style="color:#2563eb;font-weight:600;">{n}</span>'
+                    for svc, n in sorted(g["services"].items())
+                    if svc != "—"
+                )
+            else:
+                detail = "&nbsp;&nbsp;".join(
+                    f'<span style="font-size:13px;color:#2563eb;">{label}</span>'
+                    f'<span style="font-size:13px;color:#64748b;">&nbsp;({n})</span>'
+                    for label, n in g["types"].items()
+                )
+            rows += (
+                f'<tr>'
+                f'<td colspan="2" style="padding:2px 16px 12px;border-bottom:1px solid #f1f5f9;line-height:1.9;">'
+                f'{detail}'
+                f'</td>'
+                f'</tr>'
+            )
+        return rows
 
     banner = _test_banner_html(cfg)
     footer = _test_footer_html(cfg)
@@ -497,6 +556,7 @@ def render_validation_reminder_email(cfg: dict, to_name: str, items: list) -> tu
         f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
         if cfg["test_mode"] else ""
     )
+    dept_rows = _dept_rows_html(True) + _dept_rows_html(False)
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
@@ -518,7 +578,7 @@ def render_validation_reminder_email(cfg: dict, to_name: str, items: list) -> tu
           <p style="margin:0 0 16px;font-size:15px;color:#334155;">Bonjour <strong style="color:#0f172a;">{to_name}</strong>,</p>
           <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
             Des processus sont actuellement <strong style="color:#0f172a;">en attente de votre intervention</strong>.
-            Vous trouverez ci-dessous la liste des prime{plural} bloquée{plural} à votre étape de validation.
+            Vous trouverez ci-dessous le récapitulatif des prime{plural} bloquée{plural} à votre étape de validation.
             Merci de bien vouloir les traiter dans les meilleurs délais.
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
@@ -527,9 +587,9 @@ def render_validation_reminder_email(cfg: dict, to_name: str, items: list) -> tu
               <span style="font-size:13px;color:#334155;"> prime{plural} en attente de votre décision</span>
             </td></tr>
           </table>
-          <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#475569;line-height:1.6;">
-            {links}
-          </ul>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            {dept_rows}
+          </table>
           <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
           {footer}
         </td></tr>
@@ -586,7 +646,8 @@ def render_deadline_reminder_email(
 ) -> tuple:
     """
     Construit (subject, plain, html) du rappel de date limite sans envoi SMTP.
-    Corps partagé entre l'envoi réel et l'aperçu de la page « Déclencheurs email ».
+    Résumé groupé PAR DÉPARTEMENT UNIQUEMENT (nom du département + nombre de
+    primes) : ni nom d'employé, ni service, ni type, ni montant.
     """
     env_label = _env_label(cfg)
     prefix = _test_subject_prefix(cfg)
@@ -595,27 +656,27 @@ def render_deadline_reminder_email(
     frontend_url = get_config("FRONTEND_URL")
     subject = f"{prefix}Rappel : finalisez vos validations avant le {deadline_date} | BPM"
 
+    # Comptage par département uniquement
+    dept_counts = {}
+    dept_order = []
+    for it in items:
+        dept = it.get("department") or "—"
+        if dept not in dept_counts:
+            dept_counts[dept] = 0
+            dept_order.append(dept)
+        dept_counts[dept] += 1
+
     plain_env = f"[{env_label}]\n\n" if cfg["test_mode"] else ""
-    items_text = "\n".join(
-        f"- {it['employee_name']} - {it['type_label']} - {it['amount']} - {it['status_label']} : {it['url']}"
-        for it in items
-    )
+    dept_lines = [f"- {dept} : {dept_counts[dept]}" for dept in dept_order]
     plain = (
         f"{plain_env}"
         f"Bonjour {to_name},\n\n"
         f"{reminder_label} : la date limite de finalisation des validations de primes est fixée au {deadline_date}.\n"
         f"Merci de bien vouloir finaliser les validations en attente avant cette échéance.\n\n"
         f"Validations en attente ({count} prime{plural}) :\n"
-        f"{items_text}\n\n"
+        + "\n".join(dept_lines)
+        + "\n\n"
         f"---\nBPM | Gestion de Prime"
-    )
-
-    links = "".join(
-        f"<li style=\"margin:8px 0;\">"
-        f"<a href=\"{it['url']}\" style=\"color:#2563eb;font-weight:600;text-decoration:none;\">{it['employee_name']}</a>"
-        f" <span style=\"color:#64748b;\">&mdash; {it['type_label']} &middot; {it['amount']} &middot; {it['status_label']}</span>"
-        f"</li>"
-        for it in items
     )
 
     banner = _test_banner_html(cfg)
@@ -624,6 +685,18 @@ def render_deadline_reminder_email(
         f'<span style="font-size:11px;font-weight:600;color:#d97706;background:#fef3c7;'
         f'padding:3px 10px;border-radius:12px;">{env_label}</span>'
         if cfg["test_mode"] else ""
+    )
+    dept_rows = "".join(
+        f'<tr>'
+        f'<td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">'
+        f'<span style="font-size:14px;font-weight:700;color:#0f172a;">{dept}</span>'
+        f'</td>'
+        f'<td align="right" style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">'
+        f'<span style="display:inline-block;background:#eff6ff;color:#1d4ed8;'
+        f'font-size:14px;font-weight:700;padding:2px 12px;border-radius:999px;">{dept_counts[dept]}</span>'
+        f'</td>'
+        f'</tr>'
+        for dept in dept_order
     )
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -667,9 +740,9 @@ def render_deadline_reminder_email(
               <span style="font-size:13px;color:#334155;"> prime{plural} encore en attente de votre décision</span>
             </td></tr>
           </table>
-          <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#475569;line-height:1.6;">
-            {links}
-          </ul>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+            {dept_rows}
+          </table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:8px 0 24px;">
             <a href="{frontend_url}" style="display:inline-block;background:#f59e0b;color:#fff;padding:12px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;letter-spacing:0.3px;">
               Ouvrir la plateforme BPM &rarr;
