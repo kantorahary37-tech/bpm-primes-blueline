@@ -309,6 +309,36 @@ async def _prime_reminder_loop():
         await asyncio.sleep(max(delay, 1.0))
 
 
+_last_rh_reminder_slot = None
+
+
+async def _rh_reminder_loop():
+    global _last_rh_reminder_slot
+    # Même mécanisme que le rappel DG, contenu RH (primes validées en
+    # attente de traitement) et créneaux RH_REMINDER_*.
+    from app.prime_reminder_service import rh_reminder_next_slot, rh_reminder_send_scheduled
+
+    while True:
+        now = datetime.now(_deadline_tz())
+        target, delay = rh_reminder_next_slot(now)
+        if target is None:
+            print("[SCHEDULER] Aucun créneau de rappel RH configuré")
+            await asyncio.sleep(3600)
+            continue
+        slot_key = (target.year, target.month, target.day, target.hour)
+        if delay <= 0 and slot_key != _last_rh_reminder_slot:
+            _last_rh_reminder_slot = slot_key
+            try:
+                print(f"[SCHEDULER] Rappel RH déclenché pour le créneau {slot_key}")
+                await rh_reminder_send_scheduled(target)
+            except Exception as e:
+                print(f"[SCHEDULER] Erreur rappel RH : {e}")
+                await asyncio.sleep(60)
+                continue
+        print(f"[SCHEDULER] Prochain rappel RH dans {delay/3600:.2f} h")
+        await asyncio.sleep(max(delay, 1.0))
+
+
 async def _deadline_reminder_loop():
     global _last_deadline_sent
     while True:
@@ -421,6 +451,12 @@ def start_scheduler():
         tasks.append(asyncio.create_task(_prime_reminder_loop()))
     else:
         print("[SCHEDULER] Rappel DG des primes en cours désactivé")
+
+    if (get_config("RH_REMINDER_ENABLED") or "false").lower() == "true":
+        print("[SCHEDULER] Rappel RH des primes validées activé")
+        tasks.append(asyncio.create_task(_rh_reminder_loop()))
+    else:
+        print("[SCHEDULER] Rappel RH des primes validées désactivé")
 
     if (get_config("BACKUP_ENABLED") or "true").lower() == "true":
         print("[SCHEDULER] Sauvegardes automatiques activées")

@@ -1,10 +1,11 @@
 """
 Service centralisé des déclencheurs email automatiques.
 
-Trois déclencheurs sont gérés par l'application :
+Quatre déclencheurs sont gérés par l'application :
 - daily    : rappels quotidiens de validation (Directeur / DG / DRH)
 - deadline : rappels de la date limite de validation (N+1 / N+2 / Directeurs)
 - dg       : rappel DG des primes en cours (résumé groupé)
+- rh       : rappel RH des primes validées en attente de traitement (résumé groupé)
 
 Chaque déclenchement (cron ou manuel) est journalisé dans la table
 PrimeReminderExecution (colonne notification_type) afin d'offrir un
@@ -26,12 +27,14 @@ TRIGGER_NOTIFICATION_TYPES = {
     "daily": "daily_reminder",
     "deadline": "deadline_reminder",
     "dg": "prime_reminder_dg",
+    "rh": "prime_reminder_rh",
 }
 
 TRIGGER_LABELS = {
     "daily": "Rappels quotidiens de validation",
     "deadline": "Rappel de date limite",
     "dg": "Rappel DG — primes en cours",
+    "rh": "Rappel RH — primes validées à traiter",
 }
 
 TZ_KEY = "REMINDER_TZ_OFFSET"
@@ -160,10 +163,16 @@ def dg_next_run(now: datetime = None) -> datetime | None:
     return prime_reminder_next_execution(now)
 
 
+def rh_next_run(now: datetime = None) -> datetime | None:
+    from app.prime_reminder_service import rh_reminder_next_execution
+    return rh_reminder_next_execution(now)
+
+
 NEXT_RUN_FNS = {
     "daily": daily_next_run,
     "deadline": deadline_next_run,
     "dg": dg_next_run,
+    "rh": rh_next_run,
 }
 
 
@@ -195,6 +204,9 @@ async def trigger_config(trigger: str) -> dict:
     if trigger == "dg":
         from app.prime_reminder_service import prime_reminder_config
         return await prime_reminder_config()
+    if trigger == "rh":
+        from app.prime_reminder_service import rh_reminder_config
+        return await rh_reminder_config()
     raise ValueError(f"Déclencheur inconnu : {trigger}")
 
 
@@ -221,6 +233,7 @@ SAVE_CONFIG_FNS = {
     "daily": save_daily_config,
     "deadline": save_deadline_config,
     "dg": None,  # géré par prime_reminder_save_config
+    "rh": None,  # géré par rh_reminder_save_config
 }
 
 
@@ -277,10 +290,16 @@ async def _send_dg_manual(user: User) -> dict:
     return await prime_reminder_send_manual(user)
 
 
+async def _send_rh_manual(user: User) -> dict:
+    from app.prime_reminder_service import rh_reminder_send_manual
+    return await rh_reminder_send_manual(user)
+
+
 SEND_FNS = {
     "daily": _send_daily_manual,
     "deadline": _send_deadline_manual,
     "dg": _send_dg_manual,
+    "rh": _send_rh_manual,
 }
 
 
@@ -358,6 +377,15 @@ async def trigger_preview(trigger: str) -> dict:
             "using_real_data": data["using_real_data"],
         }
 
+    if trigger == "rh":
+        from app.prime_reminder_service import rh_reminder_preview
+        data = await rh_reminder_preview()
+        return {
+            "subject": data["subject"], "plain": data["plain"], "html": data["html"],
+            "stats": {"destinataires": None, "primes": data["total_count"]},
+            "using_real_data": data["using_real_data"],
+        }
+
     raise ValueError(f"Déclencheur inconnu : {trigger}")
 
 
@@ -419,7 +447,7 @@ async def triggers_overview() -> list:
                 "Jours de rappel": ", ".join(str(d) for d in cfg["days"]),
                 "Heures": ", ".join(f"{h:02d}h" for h in cfg["hours"]),
             }
-        else:
+        elif trigger == "dg":
             days = cfg.get("days") or []
             hours = cfg.get("hours") or []
             schedule = f"Jours {', '.join(str(d) for d in days)} à {', '.join(str(h) + 'h' for h in hours)}"
@@ -427,6 +455,15 @@ async def triggers_overview() -> list:
                 "Jours du mois": ", ".join(str(d) for d in days) or "—",
                 "Heures": ", ".join(f"{h:02d}h" for h in hours) or "—",
                 "Destinataires": cfg.get("recipient") or "Aucun compte DG",
+            }
+        else:  # rh
+            days = cfg.get("days") or []
+            hours = cfg.get("hours") or []
+            schedule = f"Jours {', '.join(str(d) for d in days)} à {', '.join(str(h) + 'h' for h in hours)}"
+            details = {
+                "Jours du mois": ", ".join(str(d) for d in days) or "—",
+                "Heures": ", ".join(f"{h:02d}h" for h in hours) or "—",
+                "Destinataires": cfg.get("recipient") or "Aucun compte RH",
             }
 
         result.append({

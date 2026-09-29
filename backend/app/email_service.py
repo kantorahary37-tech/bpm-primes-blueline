@@ -3,6 +3,7 @@ import asyncio
 from datetime import date
 from email.message import EmailMessage
 from urllib.parse import urlencode
+
 from app.config import get_config
 
 
@@ -756,6 +757,42 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
     nom réel du DG (LDAP, sinon compte BPM) et inclut l'URL de l'application
     (FRONTEND_URL, config auth).
     """
+    return _render_grouped_reminder_email(
+        cfg, sections, total, greeting_name,
+        subject_label="en attente de votre validation",
+        status_filter="En attente DG",
+    )
+
+
+def render_rh_reminder_email(cfg: dict, sections: list, total: int,
+                             greeting_name: str | None = None) -> tuple:
+    """
+    Variante RH du rappel groupé : même template que le rappel DG, mais
+    l'objet, le lien et le libellé portent sur les primes validées en
+    attente de traitement RH.
+    """
+    return _render_grouped_reminder_email(
+        cfg, sections, total, greeting_name,
+        subject_label="en attente de votre traitement",
+        status_filter="Prime validée",
+        body_label="en attente de votre traitement",
+        body_cta="Merci de traiter ces primes afin que le processus puisse se poursuivre.",
+    )
+
+
+def _render_grouped_reminder_email(cfg: dict, sections: list, total: int,
+                                   greeting_name: str | None = None,
+                                   subject_label: str = "en attente de votre validation",
+                                   status_filter: str = "En attente DG",
+                                   body_label: str = "en attente de votre validation",
+                                   body_cta: str = "Merci de valider ces primes afin que le processus puisse se poursuivre.") -> tuple:
+    """
+    Construit (subject, texte_brut, html) du rappel groupé — DG (primes en
+    attente de validation) ou RH (primes validées en attente de traitement).
+    Les sections sont des dicts {department, bonus_type_label, count},
+    regroupées PAR DÉPARTEMENT à l'affichage. Le résumé ne contient AUCUNE
+    information nominative des primes.
+    """
     # Regroupement des sections par département (ordre alphabétique conservé)
     dept_groups = []
     index = {}
@@ -768,12 +805,12 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
         index[key]["count"] += s["count"]
     env_label = _env_label(cfg)
     prefix = _test_subject_prefix(cfg)
-    subject = f"{prefix}Rappel : {total} prime(s) en attente de votre validation | BPM"
+    subject = f"{prefix}Rappel : {total} prime(s) {subject_label} | BPM"
     greeting = _prime_reminder_greeting(greeting_name)
     app_url = (get_config("FRONTEND_URL") or "").strip().rstrip("/")
-    # Lien direct vers la liste filtrée des primes en attente de la validation DG.
+    # Lien direct vers la liste filtrée sur l'étape concernée (DG ou traitement RH).
     list_url = (
-        f"{app_url}/bonuses?{urlencode({'status': 'En attente DG', 'view': 'department'})}"
+        f"{app_url}/bonuses?{urlencode({'status': status_filter, 'view': 'department'})}"
         if app_url else ""
     )
     app_url_button = (
@@ -802,9 +839,9 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
     plain = (
         f"{plain_env}"
         f"{greeting}\n\n"
-        f"Voici le récapitulatif des primes en attente de votre validation :\n\n"
+        f"Voici le récapitulatif des primes {body_label} :\n\n"
         + "\n".join(dept_line_plain(g) for g in dept_groups)
-        + f"\n\nMerci de valider ces primes afin que le processus puisse se poursuivre.\n\n"
+        + f"\n\n{body_cta}\n\n"
         + app_url_line
         + f"Cordialement,\nBPM | Gestion de Prime"
     )
@@ -859,13 +896,13 @@ def render_prime_reminder_email(cfg: dict, sections: list, total: int,
           {banner}
           <p style="margin:0 0 16px;font-size:15px;color:#334155;">{greeting}</p>
           <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
-            Voici le récapitulatif des primes <strong style="color:#0f172a;">en attente de votre validation</strong> :
+            Voici le récapitulatif des primes <strong style="color:#0f172a;">{body_label}</strong> :
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;margin:0 0 20px;">
             {rows}
           </table>
           <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
-            Merci de valider ces primes afin que le processus puisse se poursuivre.
+            {body_cta}
           </p>
           {app_url_button}
           <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
@@ -902,14 +939,41 @@ async def send_prime_reminder_email(to_emails: list, sections: list, total: int)
     Le mail est adressé au DG réel (objet personnalisé avec son nom), quel que
     soit le destinataire de test configuré."""
     greeting_name = await _prime_reminder_dg_greeting_name()
-    return await asyncio.to_thread(_send_prime_reminder_email_sync, to_emails, sections, total, greeting_name)
+    return await asyncio.to_thread(_send_grouped_reminder_email_sync, to_emails, sections, total,
+                                   render_prime_reminder_email, greeting_name)
 
 
-def _send_prime_reminder_email_sync(to_emails: list, sections: list, total: int,
-                                    greeting_name: str | None = None) -> bool:
+async def send_rh_reminder_email(to_emails: list, sections: list, total: int) -> bool:
+    """Envoie le rappel RH groupé (même template, contenu « traitement RH »).
+
+    Le mail est adressé à la RH réelle (objet personnalisé avec son nom), quel
+    que soit le destinataire de test configuré."""
+    greeting_name = await _reminder_greeting_name_for(lambda: User.filter(is_drh=True, is_admin=False).order_by("id").first())
+    return await asyncio.to_thread(_send_grouped_reminder_email_sync, to_emails, sections, total,
+                                   render_rh_reminder_email, greeting_name)
+
+
+async def _reminder_greeting_name_for(first_user) -> str | None:
+    """Nom réel (LDAP cn, sinon nom du compte BPM) d'un compte destinataire
+    pour personnaliser l'objet du mail."""
+    try:
+        from app.models import User  # import local : évite tout cycle d'import
+        u = await first_user()
+        if not u or not u.email:
+            return None
+        name = await asyncio.to_thread(_prime_reminder_greeting_name, u.email)
+        if name:
+            return name
+        return (u.name or "").strip() or None
+    except Exception:
+        return None
+
+
+def _send_grouped_reminder_email_sync(to_emails: list, sections: list, total: int,
+                                      render_fn, greeting_name: str | None = None) -> bool:
     try:
         cfg = _smtp_config()
-        subject, plain, html = render_prime_reminder_email(cfg, sections, total, greeting_name)
+        subject, plain, html = render_fn(cfg, sections, total, greeting_name)
         resolved = [_resolve_email(e) for e in to_emails]
         sent_any = False
         for email in resolved:
@@ -926,5 +990,5 @@ def _send_prime_reminder_email_sync(to_emails: list, sections: list, total: int,
             sent_any = True
         return sent_any
     except Exception as e:
-        print(f"SMTP error (prime reminder): {e}")
+        print(f"SMTP error (grouped reminder): {e}")
         return False

@@ -18,6 +18,19 @@ import app.scheduler as scheduler_module
 import app.prime_reminder_service as prime_service
 
 
+def _make_rh_bonus(employee, user):
+    """Prime VALIDÉE non payée (traitement RH restant)."""
+    return Bonus.create(
+        employee=employee,
+        start_date=datetime(2026, 1, 1).date(),
+        end_date=datetime(2026, 1, 31).date(),
+        bonus_type=BonusType.ASTREINTE,
+        total_amount=1000,
+        status=ValidationStatus("Prime validée"),
+        created_by=user,
+    )
+
+
 def tz3():
     return timezone(timedelta(hours=3))
 
@@ -171,6 +184,23 @@ async def test_send_dg_manual_delegates_to_prime_service(db, reminder_config, mo
     assert result["status"] == "sent"
 
 
+async def test_send_rh_manual_delegates_to_prime_service(db, reminder_config, monkeypatch):
+    manager = await make_user("manager@test.mg")
+    await make_user("rh@test.mg", is_drh=True, is_admin=False)
+    employee = await make_employee(manager)
+    await _make_rh_bonus(employee, manager)
+
+    async def fake_send(*a, **k):
+        return True
+    monkeypatch.setattr(prime_service, "send_rh_reminder_email", fake_send)
+
+    admin = await make_user("admin@test.mg", is_admin=True)
+    result = await service_module.trigger_send_now("rh", admin)
+    assert result["status"] == "sent"
+    rows = await PrimeReminderExecution.filter(notification_type="prime_reminder_rh", trigger_type="MANUAL")
+    assert len(rows) == 1
+
+
 async def test_send_unknown_trigger_raises(db, reminder_config):
     import pytest
     with pytest.raises(ValueError):
@@ -218,12 +248,22 @@ async def test_preview_dg(db, reminder_config, monkeypatch):
     assert data["subject"]
 
 
+async def test_preview_rh(db, reminder_config, monkeypatch):
+    async def boom(*a, **k):
+        raise AssertionError("L'aperçu ne doit pas envoyer d'email")
+    monkeypatch.setattr(prime_service, "send_rh_reminder_email", boom)
+    data = await trigger_preview("rh")
+    assert "<html" in data["html"]
+    assert data["subject"]
+
+
 # ── Historique ────────────────────────────────────────────────────────────
 
 async def test_trigger_executions_filters_by_notification_type(db, reminder_config):
     await log_trigger_execution("daily", status="SENT", total_count=3)
     await log_trigger_execution("deadline", status="SENT", total_count=5)
     await log_trigger_execution("dg", status="MANUAL", total_count=1)
+    await log_trigger_execution("rh", status="MANUAL", total_count=2)
 
     daily = await trigger_executions("daily")
     assert daily["total"] == 1
@@ -236,6 +276,10 @@ async def test_trigger_executions_filters_by_notification_type(db, reminder_conf
     dg = await trigger_executions("dg")
     assert dg["total"] == 1
     assert dg["items"][0]["notification_type"] == "prime_reminder_dg"
+
+    rh = await trigger_executions("rh")
+    assert rh["total"] == 1
+    assert rh["items"][0]["notification_type"] == "prime_reminder_rh"
 
 
 async def test_trigger_executions_pagination_and_status(db, reminder_config):
@@ -259,7 +303,7 @@ async def test_triggers_overview_shape(db, reminder_config):
     set_config("REMINDER_DEADLINE_ENABLED", "false")
     overview = await triggers_overview()
     keys = [t["key"] for t in overview]
-    assert keys == ["daily", "deadline", "dg"]
+    assert keys == ["daily", "deadline", "dg", "rh"]
     for t in overview:
         assert "enabled" in t and "schedule" in t and "next_run" in t
         assert "last_execution" in t and "details" in t
@@ -300,7 +344,7 @@ async def test_api_overview(api_client):
     resp = await api_client.get("/email-triggers/overview")
     assert resp.status_code == 200
     triggers = resp.json()["triggers"]
-    assert [t["key"] for t in triggers] == ["daily", "deadline", "dg"]
+    assert [t["key"] for t in triggers] == ["daily", "deadline", "dg", "rh"]
 
 
 async def test_api_get_config(api_client):
@@ -341,6 +385,16 @@ async def test_api_put_dg_config(api_client):
     assert data["recipient_override"] == "x@y.mg"
 
 
+async def test_api_put_rh_config(api_client):
+    resp = await api_client.put("/email-triggers/rh/config", json={
+        "enabled": True, "days": [12, 22], "hours": [9], "recipient": "rh@y.mg",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["days"] == [12, 22]
+    assert data["recipient_override"] == "rh@y.mg"
+
+
 async def test_api_send_now(api_client):
     resp = await api_client.post("/email-triggers/daily/send")
     assert resp.status_code == 200
@@ -362,6 +416,14 @@ async def test_api_executions(api_client):
     data = resp.json()
     assert data["total"] >= 1
     assert data["items"][0]["notification_type"] == "prime_reminder_dg"
+
+    resp = await api_client.post("/email-triggers/rh/send")
+    assert resp.status_code == 200
+    resp = await api_client.get("/email-triggers/rh/executions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] >= 1
+    assert data["items"][0]["notification_type"] == "prime_reminder_rh"
 
 
 async def test_api_unknown_trigger_404(api_client):

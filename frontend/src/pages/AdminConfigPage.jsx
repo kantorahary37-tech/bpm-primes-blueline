@@ -39,7 +39,7 @@ const SECTIONS_ALL = [
   {
     group: 'Notifications',
     items: [
-      { key: 'emailTriggers', label: 'Déclencheurs email', desc: 'Rappels de validation, échéances et synthèse DG', Icon: BellIcon, adminOnly: true },
+      { key: 'emailTriggers', label: 'Déclencheurs email', desc: 'Rappels de validation, échéances, synthèse DG et RH', Icon: BellIcon, adminOnly: true },
     ],
   },
   {

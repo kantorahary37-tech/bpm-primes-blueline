@@ -14,7 +14,7 @@ from app.email_trigger_service import (
     save_daily_config,
     save_deadline_config,
 )
-from app.prime_reminder_service import prime_reminder_save_config
+from app.prime_reminder_service import prime_reminder_save_config, rh_reminder_save_config
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -33,6 +33,13 @@ class DeadlineConfigUpdate(BaseModel):
 
 
 class DGConfigUpdate(BaseModel):
+    enabled: bool = False
+    days: List[int]
+    hours: List[int]
+    recipient: Optional[str] = ""
+
+
+class RHConfigUpdate(BaseModel):
     enabled: bool = False
     days: List[int]
     hours: List[int]
@@ -67,6 +74,13 @@ async def put_deadline_config(body: DeadlineConfigUpdate, _admin: User = Depends
 @router.put("/email-triggers/dg/config")
 async def put_dg_config(body: DGConfigUpdate, _admin: User = Depends(require_admin)):
     return await prime_reminder_save_config(
+        enabled=body.enabled, days=body.days, hours=body.hours, recipient=body.recipient,
+    )
+
+
+@router.put("/email-triggers/rh/config")
+async def put_rh_config(body: RHConfigUpdate, _admin: User = Depends(require_admin)):
+    return await rh_reminder_save_config(
         enabled=body.enabled, days=body.days, hours=body.hours, recipient=body.recipient,
     )
 

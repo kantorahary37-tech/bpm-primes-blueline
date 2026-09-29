@@ -17,9 +17,10 @@ from tortoise.exceptions import IntegrityError
 
 from app.models import User, Bonus, ValidationStatus, PrimeReminderExecution
 from app.config import get_config, set_config
-from app.email_service import send_prime_reminder_email, render_prime_reminder_email, _smtp_config
+from app.email_service import send_prime_reminder_email, render_prime_reminder_email, send_rh_reminder_email, _smtp_config
 
 PRIME_REMINDER_TYPE = "prime_reminder_dg"
+RH_REMINDER_TYPE = "prime_reminder_rh"
 
 # Créneau passé considéré comme encore exécutable (évite de sauter un envoi
 # après un léger réveil tardif du planificateur). L'idempotence reste portée
@@ -405,3 +406,321 @@ async def prime_reminder_save_config(enabled: bool, days: list, hours: list, rec
             print(f"[CONFIG] Erreur sauvegarde {key}: {e}")
 
     return await prime_reminder_config()
+
+
+# ---------------------------------------------------------------------------
+# Rappel RH des primes validées en attente de traitement
+# ---------------------------------------------------------------------------
+# Même mécanisme que le rappel DG : email groupé (résumé par département /
+# type, aucune information nominative), envoyé aux jours et heures
+# configurés, journalisé dans PrimeReminderExecution. Le contenu porte sur
+# les primes au statut « Prime validée » non encore payées (traitement RH).
+
+
+def rh_reminder_enabled() -> bool:
+    return (get_config("RH_REMINDER_ENABLED") or "false").lower() == "true"
+
+
+def rh_reminder_days() -> list:
+    return _parse_int_list(get_config("RH_REMINDER_DAYS"), [15, 20])
+
+
+def rh_reminder_hours() -> list:
+    return _parse_int_list(get_config("RH_REMINDER_HOURS"), [8, 17])
+
+
+async def rh_reminder_recipients() -> list:
+    """Surcharge config RH_REMINDER_RECIPIENT sinon emails des comptes RH."""
+    override = (get_config("RH_REMINDER_RECIPIENT") or "").strip()
+    if override:
+        return [e.strip() for e in override.split(",") if e.strip()]
+    drhs = await User.filter(is_drh=True, is_admin=False).all()
+    return [u.email for u in drhs if u.email]
+
+
+async def rh_reminder_summary() -> tuple:
+    """Résumé groupé des primes VALIDÉES non payées (traitement RH restant).
+    Même format que le rappel DG : (sections, total)."""
+    bonuses = await Bonus.filter(
+        status=ValidationStatus.VALIDE,
+        paid_at__isnull=True,
+    ).prefetch_related("employee")
+
+    groups = {}
+    for b in bonuses:
+        emp = b.employee
+        dept = (emp.dept_str or "").strip() or "N/A"
+        btype = b.bonus_type.value
+        key = (dept, btype)
+        if key not in groups:
+            groups[key] = {
+                "department": dept,
+                "bonus_type": btype,
+                "bonus_type_label": _type_label(btype),
+                "count": 0,
+            }
+        groups[key]["count"] += 1
+
+    sections = sorted(
+        groups.values(),
+        key=lambda g: (g["department"].lower(), g["bonus_type"].lower()),
+    )
+    total = sum(g["count"] for g in sections)
+    return sections, total
+
+
+def rh_reminder_next_slot(now: datetime = None) -> tuple:
+    """Prochain créneau RH configuré (même logique que le rappel DG)."""
+    now = now or datetime.now(reminder_tz())
+    candidates = []
+    for day in rh_reminder_days():
+        for hour in rh_reminder_hours():
+            for offset in range(0, 367):
+                d = now + timedelta(days=offset)
+                try:
+                    target = d.replace(day=day, hour=hour, minute=0, second=0, microsecond=0)
+                except ValueError:
+                    continue
+                delta = (target - now).total_seconds()
+                if delta > -GRACE_SECONDS:
+                    candidates.append((target, delta))
+                    break
+    if not candidates:
+        return None, None
+    target, delta = min(candidates, key=lambda c: c[1])
+    return target, max(delta, 0.0)
+
+
+def rh_reminder_next_execution(now: datetime = None) -> datetime:
+    now = now or datetime.now(reminder_tz())
+    for day in rh_reminder_days():
+        for hour in rh_reminder_hours():
+            for offset in range(1, 367):
+                d = now + timedelta(days=offset)
+                try:
+                    target = d.replace(day=day, hour=hour, minute=0, second=0, microsecond=0)
+                except ValueError:
+                    continue
+                if target > now:
+                    return target
+    return None
+
+
+def _rh_execution_dict(execution) -> dict:
+    return _execution_dict(execution)
+
+
+async def rh_reminder_send_scheduled(scheduled_for: datetime = None) -> dict:
+    """Exécution CRON du rappel RH (idempotente, même règles que le DG)."""
+    if scheduled_for is None:
+        scheduled_for, _ = rh_reminder_next_slot()
+
+    if scheduled_for is None:
+        return {
+            "status": "skipped",
+            "message": "Aucun créneau de rappel RH configuré",
+            "execution": None,
+        }
+
+    execution = await PrimeReminderExecution.filter(
+        notification_type=RH_REMINDER_TYPE,
+        scheduled_for=scheduled_for,
+    ).first()
+
+    if execution and execution.status in ("SENT", "MANUAL"):
+        print(f"[RH_REMINDER] Créneau {scheduled_for} déjà envoyé ({execution.status}) — ignoré")
+        return {"status": "skipped", "message": "Rappel déjà envoyé pour ce créneau", "execution": _execution_dict(execution)}
+
+    if execution and execution.status in ("PENDING", "SENDING"):
+        print(f"[RH_REMINDER] Créneau {scheduled_for} déjà en cours — ignoré")
+        return {"status": "skipped", "message": "Envoi déjà en cours pour ce créneau", "execution": _execution_dict(execution)}
+
+    if execution is None:
+        try:
+            execution = await _record_execution(
+                notification_type=RH_REMINDER_TYPE,
+                trigger_type="CRON",
+                scheduled_for=scheduled_for,
+                status="PENDING",
+            )
+        except IntegrityError:
+            execution = await PrimeReminderExecution.filter(
+                notification_type=RH_REMINDER_TYPE,
+                scheduled_for=scheduled_for,
+            ).first()
+            return {"status": "skipped", "message": "Envoi déjà planifié pour ce créneau", "execution": _execution_dict(execution)}
+
+    print(f"[RH_REMINDER] Démarrage du rappel planifié pour {scheduled_for}")
+    execution.status = "SENDING"
+    execution.error_message = None
+    await execution.save()
+
+    try:
+        sections, total = await rh_reminder_summary()
+        execution.summary = sections
+        execution.total_count = total
+
+        if total == 0:
+            execution.status = "SENT"
+            execution.sent_at = datetime.now(reminder_tz())
+            execution.error_message = None
+            await execution.save()
+            print(f"[RH_REMINDER] Aucune prime validée en attente pour {scheduled_for} — envoi ignoré")
+            return {"status": "skipped", "message": "Aucune prime validée en attente de traitement", "execution": _execution_dict(execution)}
+
+        recipients = await rh_reminder_recipients()
+        if not recipients:
+            raise ValueError("Aucun destinataire RH (email) configuré")
+        execution.recipient = ", ".join(recipients)
+
+        print(f"[RH_REMINDER] Créneau {scheduled_for} — groupes trouvés: {len(sections)}, primes: {total}")
+        ok = await send_rh_reminder_email(recipients, sections, total)
+        if not ok:
+            raise RuntimeError("Échec de l'envoi SMTP")
+
+        execution.status = "SENT"
+        execution.sent_at = datetime.now(reminder_tz())
+        execution.error_message = None
+        await execution.save()
+        print(f"[RH_REMINDER] Email envoyé avec succès ({total} primes en attente de traitement)")
+        return {"status": "sent", "message": "Rappel RH envoyé avec succès", "execution": _execution_dict(execution)}
+
+    except Exception as e:
+        execution.status = "FAILED"
+        execution.error_message = str(e)
+        await execution.save()
+        print(f"[RH_REMINDER] Échec de l'envoi : {e}")
+        return {"status": "failed", "message": "Impossible d'envoyer le rappel RH", "execution": _execution_dict(execution)}
+
+
+async def rh_reminder_send_manual(user: User = None) -> dict:
+    """Déclenchement manuel du rappel RH (bouton admin)."""
+    now = datetime.now(reminder_tz())
+    execution = await _record_execution(
+        notification_type=RH_REMINDER_TYPE,
+        trigger_type="MANUAL",
+        scheduled_for=now,
+        status="SENDING",
+        created_by=user,
+    )
+    print(f"[RH_REMINDER] Déclenchement manuel par "
+          f"{user.name if user else 'script'} à {now.isoformat()}")
+
+    try:
+        sections, total = await rh_reminder_summary()
+        execution.summary = sections
+        execution.total_count = total
+
+        if total == 0:
+            execution.status = "MANUAL"
+            execution.sent_at = now
+            await execution.save()
+            return {"status": "skipped", "message": "Aucune prime validée en attente de traitement", "execution": _execution_dict(execution)}
+
+        recipients = await rh_reminder_recipients()
+        if not recipients:
+            raise ValueError("Aucun destinataire RH (email) configuré")
+        execution.recipient = ", ".join(recipients)
+
+        ok = await send_rh_reminder_email(recipients, sections, total)
+        if not ok:
+            raise RuntimeError("Échec de l'envoi SMTP")
+
+        execution.status = "MANUAL"
+        execution.sent_at = datetime.now(reminder_tz())
+        execution.error_message = None
+        await execution.save()
+        print(f"[RH_REMINDER] Email manuel envoyé avec succès ({total} primes en attente de traitement)")
+        return {"status": "sent", "message": "Rappel RH envoyé avec succès", "execution": _execution_dict(execution)}
+
+    except Exception as e:
+        execution.status = "FAILED"
+        execution.error_message = str(e)
+        await execution.save()
+        print(f"[RH_REMINDER] Échec de l'envoi manuel : {e}")
+        return {"status": "failed", "message": "Impossible d'envoyer le rappel RH", "execution": _execution_dict(execution)}
+
+
+RH_REPRESENTATIVE_SECTIONS = [
+    {"department": "DO", "bonus_type": "astreinte", "bonus_type_label": "Astreinte", "count": 9},
+    {"department": "BBS", "bonus_type": "mensuel", "bonus_type_label": "Prime mensuelle", "count": 6},
+]
+
+
+async def rh_reminder_preview() -> dict:
+    """Aperçu du template RH (données réelles sinon jeu représentatif)."""
+    sections, total = await rh_reminder_summary()
+    using_real_data = total > 0
+    if not using_real_data:
+        sections = RH_REPRESENTATIVE_SECTIONS
+        total = 2
+
+    cfg = _smtp_config()
+    from app.email_service import _reminder_greeting_name_for
+    greeting_name = await _reminder_greeting_name_for(
+        lambda: User.filter(is_drh=True, is_admin=False).order_by("id").first()
+    )
+    subject, plain, html = render_rh_reminder_email_preview(cfg, sections, total, greeting_name)
+    return {
+        "subject": subject,
+        "plain": plain,
+        "html": html,
+        "sections": sections,
+        "total_count": total,
+        "using_real_data": using_real_data,
+    }
+
+
+def render_rh_reminder_email_preview(cfg, sections, total, greeting_name):
+    from app.email_service import render_rh_reminder_email
+    return render_rh_reminder_email(cfg, sections, total, greeting_name)
+
+
+async def rh_reminder_config() -> dict:
+    recipients = await rh_reminder_recipients()
+    last = await PrimeReminderExecution.filter(
+        notification_type=RH_REMINDER_TYPE,
+    ).order_by("-created_at").first()
+
+    return {
+        "enabled": rh_reminder_enabled(),
+        "days": rh_reminder_days(),
+        "hours": rh_reminder_hours(),
+        "recipient_override": (get_config("RH_REMINDER_RECIPIENT") or "").strip(),
+        "recipient": ", ".join(recipients),
+        "tz_offset": float(get_config("REMINDER_TZ_OFFSET") or "3"),
+        "last_execution": _execution_dict(last) if last else None,
+        "next_execution": rh_reminder_next_execution(),
+    }
+
+
+async def rh_reminder_save_config(enabled: bool, days: list, hours: list, recipient: str) -> dict:
+    """Persiste la configuration du rappel RH dans SystemConfig."""
+    from app.models import SystemConfig
+
+    settings = {
+        "RH_REMINDER_ENABLED": "true" if enabled else "false",
+        "RH_REMINDER_DAYS": ",".join(str(max(1, min(28, int(d)))) for d in days),
+        "RH_REMINDER_HOURS": ",".join(str(max(0, min(23, int(h)))) for h in hours),
+        "RH_REMINDER_RECIPIENT": (recipient or "").strip(),
+    }
+    for key, value in settings.items():
+        set_config(key, value)
+        try:
+            row = await SystemConfig.get_or_none(key=key)
+            if row:
+                row.value = value
+                await row.save()
+            else:
+                from app.config import CONFIG_DEFINITIONS
+                meta = CONFIG_DEFINITIONS[key]
+                await SystemConfig.create(
+                    key=key,
+                    value=value,
+                    category=meta["category"],
+                    description=meta["description"],
+                )
+        except Exception as e:
+            print(f"[CONFIG] Erreur sauvegarde {key}: {e}")
+
+    return await rh_reminder_config()

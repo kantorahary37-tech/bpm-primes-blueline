@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom' // Navigate: redirect /admin/prime-reminder → Déclencheurs email
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom' // Navigate: redirect /admin/prime-reminder & /admin/rh-reminder → Déclencheurs email
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { DepartmentsProvider } from './contexts/DepartmentsContext'
@@ -65,8 +65,9 @@ function AppContent() {
       <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><UsersPage /></RestrictedRoute>} />
       <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2']}><EvaluationTemplatesPage /></RestrictedRoute>} />
       <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur']}><AdminConfigPage /></RestrictedRoute>} />
-      {/* Rappel DG déplacé dans Configuration → Déclencheurs email (tab=emailTriggers) */}
+      {/* Rappels DG/RH déplacés dans Configuration → Déclencheurs email (tab=emailTriggers) */}
       <Route path="/admin/prime-reminder" element={<Navigate to="/admin/config?tab=emailTriggers" replace />} />
+      <Route path="/admin/rh-reminder" element={<Navigate to="/admin/config?tab=emailTriggers" replace />} />
       <Route path="/settings/primemax" element={<ProtectedRoute><PlafondsPage /></ProtectedRoute>} />
     </Routes>
   )

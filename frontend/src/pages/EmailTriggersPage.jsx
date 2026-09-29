@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
 import {
   MailIcon, ClockIcon, CalendarIcon, EyeIcon, CheckBadgeIcon,
-  SettingsIcon, BellIcon, ExclamationIcon,
+  SettingsIcon, BellIcon, ExclamationIcon, UsersIcon,
 } from '../components/Icons';
 import {
   getEmailTriggersOverview,
@@ -31,10 +31,17 @@ const TRIGGER_META = {
   },
   dg: {
     label: 'Rappel DG',
-    description: 'Résumé groupé (département / type de prime) envoyé à la DG pour finaliser les validations. Aucune information nominative.',
+    description: 'Résumé groupé (département / type de prime) des primes en attente de validation DG, envoyé aux comptes DG. Aucune information nominative.',
     color: 'emerald',
     Icon: MailIcon,
     audience: 'Comptes DG (ou surcharge)',
+  },
+  rh: {
+    label: 'Rappel RH',
+    description: 'Résumé groupé (département / type de prime) des primes validées en attente de traitement, envoyé aux comptes RH. Aucune information nominative.',
+    color: 'violet',
+    Icon: UsersIcon,
+    audience: 'Comptes RH (ou surcharge)',
   },
 };
 
@@ -42,6 +49,7 @@ const COLOR_CLASSES = {
   blue: { bg: 'bg-blue-50', text: 'text-blue-600', ring: 'ring-blue-100', dot: 'bg-blue-500', toggle: 'toggle-primary' },
   amber: { bg: 'bg-amber-50', text: 'text-amber-600', ring: 'ring-amber-100', dot: 'bg-amber-500', toggle: 'toggle-warning' },
   emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'ring-emerald-100', dot: 'bg-emerald-500', toggle: 'toggle-success' },
+  violet: { bg: 'bg-violet-50', text: 'text-violet-600', ring: 'ring-violet-100', dot: 'bg-violet-500', toggle: 'toggle-secondary' },
 };
 
 const STATUS_BG = {
@@ -250,6 +258,7 @@ function TriggerConfigPanel({ triggerKey, onClose, onSaved }) {
         if (!cfg.hours?.length) { toast.error('Indiquez au moins une heure'); return; }
         payload = { enabled: cfg.enabled, deadline_day: cfg.deadline_day, days: cfg.days, hours: cfg.hours };
       } else {
+        // dg & rh : même forme de payload
         if (!cfg.days?.length) { toast.error('Indiquez au moins un jour du mois'); return; }
         if (!cfg.hours?.length) { toast.error('Indiquez au moins une heure'); return; }
         payload = { enabled: cfg.enabled, days: cfg.days, hours: cfg.hours, recipient: cfg.recipient_override || '' };
@@ -346,7 +355,7 @@ function TriggerConfigPanel({ triggerKey, onClose, onSaved }) {
             </>
           )}
 
-          {triggerKey === 'dg' && (
+          {(triggerKey === 'dg' || triggerKey === 'rh') && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -365,11 +374,13 @@ function TriggerConfigPanel({ triggerKey, onClose, onSaved }) {
                   className="input input-bordered w-full"
                   value={cfg.recipient_override || ''}
                   onChange={(e) => setCfg((prev) => ({ ...prev, recipient_override: e.target.value }))}
-                  placeholder="Laissez vide pour utiliser le(s) compte(s) DG de l'application"
+                  placeholder={triggerKey === 'dg'
+                    ? "Laissez vide pour utiliser le(s) compte(s) DG de l'application"
+                    : "Laissez vide pour utiliser le(s) compte(s) RH de l'application"}
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Emails séparés par des virgules. Vide = tous les comptes marqués DG (is_dg) non administrateurs.
-                  Actuellement : <span className="font-medium text-gray-600">{cfg.recipient || 'aucun compte DG'}</span>
+                  Emails séparés par des virgules. Vide = tous les comptes marqués {triggerKey === 'dg' ? 'DG (is_dg)' : 'RH (is_drh)'} non administrateurs.
+                  Actuellement : <span className="font-medium text-gray-600">{cfg.recipient || (triggerKey === 'dg' ? 'aucun compte DG' : 'aucun compte RH')}</span>
                 </p>
               </div>
             </>
@@ -539,6 +550,7 @@ export default function EmailTriggersPage() {
   const [sending, setSending] = useState(null);
   const [confirmSend, setConfirmSend] = useState(null);   // clé du trigger à confirmer
   const [historyKey, setHistoryKey] = useState('daily');  // onglet d'historique
+  const historyTriggers = triggers.length ? triggers : [{ key: 'daily' }, { key: 'deadline' }, { key: 'dg' }, { key: 'rh' }];
 
   const refreshOverview = useCallback(async () => {
     try {
@@ -603,12 +615,12 @@ export default function EmailTriggersPage() {
         <h1 className="text-xl font-bold text-gray-900">Déclencheurs email</h1>
         <p className="text-sm text-gray-400">
           Configurez, surveillez et testez les emails automatiques de l'application :
-          rappels de validation, échéances et synthèse DG.
+          rappels de validation, échéances, synthèse DG et traitement RH.
         </p>
       </div>
 
       {/* Cartes déclencheurs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {triggers.map((t) => (
           <TriggerCard
             key={t.key}
@@ -633,8 +645,8 @@ export default function EmailTriggersPage() {
 
       {/* Historique unifié */}
       <div>
-        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-3 w-fit">
-          {triggers.map((t) => (
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-3 w-fit flex-wrap">
+          {historyTriggers.map((t) => (
             <button
               key={t.key}
               onClick={() => setHistoryKey(t.key)}
@@ -664,7 +676,7 @@ export default function EmailTriggersPage() {
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
             <button className="btn btn-ghost btn-sm" onClick={() => setConfirmSend(null)}>Annuler</button>
-            <button className="btn btn-primary btn-sm" onClick={() => handleSend(confirmSend)} disabled={sending}>
+            <button className="btn btn-primary btn-sm" onClick={() => handleSend(confirmSend)} disabled={sending || !confirmSend}>
               {sending ? <span className="loading loading-spinner loading-xs" /> : <MailIcon className="w-4 h-4" />}
               Envoyer
             </button>

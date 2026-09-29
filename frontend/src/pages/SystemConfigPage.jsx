@@ -16,6 +16,9 @@ const CATEGORY_META = {
 
 const PASSWORD_KEYS = new Set(['SMTP_PASSWORD', 'LDAP_BIND_PASSWORD', 'SFTP_PASSWORD', 'SECRET_KEY']);
 
+// Catégorie « reminders » gérée par la page dédiée Configuration → Déclencheurs email
+const HIDDEN_CATEGORIES = new Set(['reminders']);
+
 export default function SystemConfigPage() {
   const [categories, setCategories] = useState({});
   const [edits, setEdits] = useState({});
@@ -24,28 +27,30 @@ export default function SystemConfigPage() {
   const [activeCategory, setActiveCategory] = useState(null);
   const [showPasswords, setShowPasswords] = useState({});
 
-  // Catégorie « reminders » gérée par la page dédiée Configuration → Déclencheurs email
-  const HIDDEN_CATEGORIES = new Set(['reminders']);
-
-  useEffect(() => {
-    fetchConfig();
-  }, []);
+  const applyConfig = (data) => {
+    const filtered = Object.fromEntries(
+      Object.entries(data.categories || {}).filter(([key]) => !HIDDEN_CATEGORIES.has(key))
+    );
+    setCategories(filtered);
+    setActiveCategory((prev) => prev ?? Object.keys(filtered)[0] ?? null);
+  };
 
   const fetchConfig = async () => {
     try {
-      const data = await getSystemConfig();
-      const filtered = Object.fromEntries(
-        Object.entries(data.categories || {}).filter(([key]) => !HIDDEN_CATEGORIES.has(key))
-      );
-      setCategories(filtered);
-      const firstCat = Object.keys(filtered)[0];
-      if (firstCat) setActiveCategory(firstCat);
+      applyConfig(await getSystemConfig());
     } catch {
       toast.error('Erreur lors du chargement de la configuration');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    getSystemConfig()
+      .then(applyConfig)
+      .catch(() => toast.error('Erreur lors du chargement de la configuration'))
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleChange = (key, value) => {
     setEdits(prev => ({ ...prev, [key]: value }));

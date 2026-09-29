@@ -11,11 +11,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-const handleError = (error) => {
-  console.error('API Error:', error.response?.data || error.message);
-  throw error;
-};
-
 export const login = async (email, password) => {
   const { data } = await api.post('/auth/login', { email, password });
   return data;
@@ -643,32 +638,6 @@ export const previewEmailTrigger = async (trigger) => {
 
 export const getEmailTriggerExecutions = async (trigger, params = {}) => {
   const { data } = await api.get(`/admin/email-triggers/${trigger}/executions`, { params });
-  return data;
-};
-
-// --- Rappel DG des primes en cours de validation ---
-export const getPrimeReminderConfig = async () => {
-  const { data } = await api.get('/admin/prime-reminder/config');
-  return data;
-};
-
-export const updatePrimeReminderConfig = async (payload) => {
-  const { data } = await api.put('/admin/prime-reminder/config', payload);
-  return data;
-};
-
-export const sendPrimeReminderNow = async () => {
-  const { data } = await api.post('/admin/prime-reminder/send');
-  return data;
-};
-
-export const previewPrimeReminder = async () => {
-  const { data } = await api.get('/admin/prime-reminder/preview');
-  return data;
-};
-
-export const getPrimeReminderExecutions = async (params = {}) => {
-  const { data } = await api.get('/admin/prime-reminder/executions', { params });
   return data;
 };
 

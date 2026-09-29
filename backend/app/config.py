@@ -52,6 +52,10 @@ CONFIG_DEFINITIONS = {
     "PRIME_REMINDER_DAYS": {"category": "reminders", "type": "string", "description": "Jours du mois d'envoi du rappel DG (séparés par virgule)", "default": "15,20"},
     "PRIME_REMINDER_HOURS": {"category": "reminders", "type": "string", "description": "Heures d'envoi du rappel DG dans la journée (séparées par virgule)", "default": "8,17"},
     "PRIME_REMINDER_RECIPIENT": {"category": "reminders", "type": "string", "description": "Destinataire(s) du rappel DG (emails séparés par virgule ; vide = compte(s) DG de l'application)", "default": ""},
+    "RH_REMINDER_ENABLED": {"category": "reminders", "type": "boolean", "description": "Activer le rappel RH des primes validées en attente de traitement", "default": "false"},
+    "RH_REMINDER_DAYS": {"category": "reminders", "type": "string", "description": "Jours du mois d'envoi du rappel RH (séparés par virgule)", "default": "15,20"},
+    "RH_REMINDER_HOURS": {"category": "reminders", "type": "string", "description": "Heures d'envoi du rappel RH dans la journée (séparées par virgule)", "default": "8,17"},
+    "RH_REMINDER_RECIPIENT": {"category": "reminders", "type": "string", "description": "Destinataire(s) du rappel RH (emails séparés par virgule ; vide = compte(s) RH de l'application)", "default": ""},
 
     # ── LDAP ──
     "LDAP_SERVER_URI": {"category": "ldap", "type": "string", "description": "URI du serveur LDAP", "default": "ldap://ldap.blueline.mg:389"},
