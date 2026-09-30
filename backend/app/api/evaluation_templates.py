@@ -66,12 +66,16 @@ def _can_view_evaluation(user: User) -> bool:
 
 
 async def _can_edit_employee_evaluation(user: User, emp: Employee) -> bool:
-    """Périmètre d'édition d'un employé : comme la consultation des primes.
+    """Périmètre d'édition d'un employé : doit correspondre au périmètre affiché
+    par la liste (/evaluation-templates/all).
     - admin/DG/DRH : tous ;
     - manager de l'employé : oui, même dans un autre département ;
     - directeur : son département ;
-    - N+1/N+2 : les employés de leurs services affectés dans leur département,
-      ou uniquement leur propre fiche employé s'ils n'ont aucun service affecté."""
+    - N+1/N+2 avec services affectés : les employés de ces services, sans
+      restriction de département (les services peuvent être affectés à un
+      service d'une autre direction), plus les employés qu'ils manage ;
+    - N+1/N+2 sans service affecté : les employés de leur département (et
+      ceux qu'ils manage)."""
     if _is_broad(user):
         return True
     if emp and emp.manager_id == user.id:  # Adding null check
@@ -79,8 +83,12 @@ async def _can_edit_employee_evaluation(user: User, emp: Employee) -> bool:
     if user.is_directeur:
         return emp.department == user.department
     if user.is_validator_n1 or user.is_validator_n2:
-        if emp.department != user.department:
-            return False
+        sids, _, _ = await employee_scope(user)
+        if sids is None:
+            # Aucun service affecté : périmètre = département
+            return emp.department == user.department
+        # Services affectés : identique à la liste (aucune restriction de
+        # département pour les employés de ses services).
         return await employee_in_scope(user, emp)
     return False
 

@@ -88,7 +88,11 @@ def apply_employee_scope(query, scope, rel=""):
         return query
     cond = Q(**{f"{rel}service_group_id__in": sids})
     if managed_ids:
-        cond = cond | Q(**{f"{rel}manager_id__in": sorted(managed_ids)})
+        # ``managed_ids`` contient des IDs d'employés (et non de managers) :
+        # on filtre donc sur la clé primaire de l'employé (``employee__id``
+        # pour une queryset de primes) et non sur ``manager_id``, qui pointe
+        # vers la table ``user``.
+        cond = cond | Q(**{f"{rel}id__in": sorted(managed_ids)})
     return query.filter(cond)
 
 

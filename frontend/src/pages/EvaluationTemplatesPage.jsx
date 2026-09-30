@@ -363,18 +363,13 @@ export default function EvaluationTemplatesPage() {
         </div>
       )}
 
-      {confirmDelete && (
-        <Modal onClose={() => setConfirmDelete(null)}>
-          <div className="p-6">
-            <h3 className="font-semibold mb-3">Confirmer la suppression</h3>
-            <p className="text-sm text-base-content/60 mb-4">Voulez-vous vraiment supprimer ce critere ?</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(null)} className="btn btn-sm btn-ghost">Annuler</button>
-              <button onClick={doDelete} className="btn btn-sm bg-red-600 hover:bg-red-700 text-white border-0">Supprimer</button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <Modal open={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmer la suppression" size="sm">
+        <p className="text-sm text-base-content/60 mb-4">Voulez-vous vraiment supprimer ce critere ?</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setConfirmDelete(null)} className="btn btn-sm btn-ghost">Annuler</button>
+          <button onClick={doDelete} className="btn btn-sm bg-red-600 hover:bg-red-700 text-white border-0">Supprimer</button>
+        </div>
+      </Modal>
 
       <ServiceGroupEvaluationModal
         open={sgModalOpen}
