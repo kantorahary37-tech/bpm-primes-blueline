@@ -1,5 +1,3 @@
-import { useState } from 'react';
-import toast from '../utils/toast';
 import { useSearchParams } from 'react-router-dom';
 import PlafondsPage from './PlafondsPage';
 import CommissionConfigPage from './CommissionConfigPage';
@@ -10,11 +8,7 @@ import DatabaseBackupPage from './DatabaseBackupPage';
 import OtherPrimesConfigPage from './OtherPrimesConfigPage';
 import EmailTriggersPage from './EmailTriggersPage';
 import { useAuth } from '../contexts/AuthContext';
-import { useDepartments } from '../contexts/DepartmentsContext';
-import { adminLdapSyncDepartments } from '../services/api';
-import { useConfirm } from '../components/ConfirmModal';
-import { departmentSyncToast, apiErrorToast } from '../utils/toastHelpers';
-import { SettingsIcon, ChartIcon, ArchiveIcon, DatabaseIcon, BellIcon, MailIcon } from '../components/Icons';
+import { SettingsIcon, ChartIcon, ArchiveIcon, DatabaseIcon, BellIcon } from '../components/Icons';
 
 // Commission GC : réservée au Directeur Commercial (+ Admin/DG/DRH)
 const canAccessGC = (user) =>
@@ -89,7 +83,6 @@ export default function AdminConfigPage() {
             Centre d'administration : plafonds, barèmes, notifications et maintenance
           </p>
         </div>
-        <SyncDepartmentsButton />
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -143,49 +136,3 @@ export default function AdminConfigPage() {
   );
 }
 
-function SyncDepartmentsButton() {
-  const { user } = useAuth();
-  const { refresh } = useDepartments();
-  const [syncing, setSyncing] = useState(false);
-  const { confirm, confirmElement } = useConfirm();
-
-  if (!user?.is_admin) return null;
-
-  const handleSync = async () => {
-    const ok = await confirm({
-      title: 'Synchronisation LDAP des départements',
-      message: 'Voulez-vous lancer la synchronisation LDAP des départements ?',
-      details: [
-        'Cette opération créera uniquement les départements manquants.',
-        'Les employés existants ne seront pas modifiés.',
-      ],
-      confirmText: 'Synchroniser',
-      tone: 'primary',
-    });
-    if (!ok) return;
-    setSyncing(true);
-    try {
-      const result = await adminLdapSyncDepartments();
-      if (result.success) {
-        refresh();
-        departmentSyncToast(result);
-      } else {
-        toast.error('Erreur lors de la synchronisation LDAP');
-      }
-    } catch (err) {
-      apiErrorToast(err, 'Erreur de connexion lors de la synchronisation');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  return (
-    <>
-      {confirmElement}
-      <button onClick={handleSync} disabled={syncing} className="btn bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 btn-sm flex items-center gap-1.5">
-        {syncing ? <span className="loading loading-spinner loading-xs"></span> : <MailIcon className="w-4 h-4" />}
-        Sync départements
-      </button>
-    </>
-  );
-}
