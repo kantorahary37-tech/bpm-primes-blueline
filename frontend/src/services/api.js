@@ -96,6 +96,17 @@ export const restoreEmployee = async (id) => {
   return data;
 };
 
+// --- Odoo : comparaison de l'état d'archivage des employés ---
+export const compareOdooEmployees = async () => {
+  const { data } = await api.get('/admin/odoo/employees/compare');
+  return data;
+};
+
+export const archiveEmployeesFromOdoo = async (ids, reason = '') => {
+  const { data } = await api.post('/admin/odoo/employees/archive', { ids, reason });
+  return data;
+};
+
 export const getArchivedEmployees = async () => {
   const { data } = await api.get('/employees/archived');
   return data;

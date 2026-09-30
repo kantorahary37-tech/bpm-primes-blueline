@@ -83,6 +83,12 @@ CONFIG_DEFINITIONS = {
     "BACKUP_RETENTION": {"category": "backups", "type": "number", "description": "Nombre maximal de sauvegardes conservées (les plus anciennes sont supprimées)", "default": "6"},
     "BACKUP_LABEL": {"category": "backups", "type": "string", "description": "Libellé des sauvegardes automatiques", "default": "auto"},
 
+    # ── Odoo (HR) : comparaison des états d'archivage des employés ──
+    "ODOO_URL": {"category": "odoo", "type": "string", "description": "URL de l'instance Odoo", "default": ""},
+    "ODOO_DB": {"category": "odoo", "type": "string", "description": "Base de données Odoo", "default": ""},
+    "ODOO_USER": {"category": "odoo", "type": "string", "description": "Utilisateur Odoo (email)", "default": ""},
+    "ODOO_PASSWORD": {"category": "odoo", "type": "password", "description": "Mot de passe de l'utilisateur Odoo", "default": ""},
+
     # ── Interface ──
     "SHOW_AMOUNTS": {"category": "interface", "type": "boolean", "description": "Afficher les montants aux utilisateurs (DRH/DG/Admin)", "default": "true"},
     "SHOW_AMOUNTS_DG_DRH": {"category": "interface", "type": "boolean", "description": "Afficher les montants aux DG/DRH/Directeur (désactiver pour masquer même pour DG/DRH)", "default": "true"},
@@ -96,6 +102,7 @@ CATEGORY_LABELS = {
     "ldap": "LDAP",
     "sftp": "SFTP (serveur 4D)",
     "backups": "Sauvegardes automatiques",
+    "odoo": "Odoo (RH)",
     "interface": "Interface",
 }
 

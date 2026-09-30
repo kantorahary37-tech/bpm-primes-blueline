@@ -7,8 +7,9 @@ import ConfigSnapshotPage from './ConfigSnapshotPage';
 import DatabaseBackupPage from './DatabaseBackupPage';
 import OtherPrimesConfigPage from './OtherPrimesConfigPage';
 import EmailTriggersPage from './EmailTriggersPage';
+import OdooSyncPage from './OdooSyncPage';
 import { useAuth } from '../contexts/AuthContext';
-import { SettingsIcon, ChartIcon, ArchiveIcon, DatabaseIcon, BellIcon } from '../components/Icons';
+import { SettingsIcon, ChartIcon, ArchiveIcon, DatabaseIcon, BellIcon, BuildingIcon } from '../components/Icons';
 
 // Commission GC : réservée au Directeur Commercial (+ Admin/DG/DRH)
 const canAccessGC = (user) =>
@@ -40,6 +41,7 @@ const SECTIONS_ALL = [
     group: 'Données & maintenance',
     items: [
       { key: 'affectations', label: 'Affectations employés', desc: 'Sauvegarde et restauration des départements et services', Icon: ArchiveIcon, adminOnly: true },
+      { key: 'odooSync', label: 'Comparaison Odoo', desc: 'Employés archivés dans Odoo à archiver dans l\'application', Icon: BuildingIcon, adminOnly: true },
       { key: 'databaseBackup', label: 'Sauvegardes complètes', desc: 'Dump SQL complet de la base (schéma + données)', Icon: DatabaseIcon, adminOnly: true },
       { key: 'system', label: 'Paramètres système', desc: 'SMTP, LDAP, SFTP, base de données et interface', Icon: SettingsIcon, adminOnly: true },
     ],
@@ -128,6 +130,7 @@ export default function AdminConfigPage() {
           {activeTab === 'commissionGC' && canAccessGC(user) && <CommissionGCConfigPage />}
           {activeTab === 'emailTriggers' && user?.is_admin && <EmailTriggersPage />}
           {activeTab === 'affectations' && user?.is_admin && <ConfigSnapshotPage />}
+          {activeTab === 'odooSync' && user?.is_admin && <OdooSyncPage />}
           {activeTab === 'databaseBackup' && user?.is_admin && <DatabaseBackupPage />}
           {activeTab === 'system' && user?.is_admin && <SystemConfigPage />}
         </div>

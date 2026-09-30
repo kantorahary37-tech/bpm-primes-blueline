@@ -11,10 +11,11 @@ const CATEGORY_META = {
   auth: { label: 'Authentification', Icon: KeyIcon, desc: 'Clés JWT et URL du frontend' },
   reminders: { label: 'Rappels', Icon: BellIcon, desc: 'Planification des rappels quotidiens et de la date limite de validation' },
   backups: { label: 'Sauvegardes automatiques', Icon: ArchiveIcon, desc: 'Planification et rétention des sauvegardes de la base' },
+  odoo: { label: 'Odoo (RH)', Icon: BuildingIcon, desc: 'Connexion à Odoo pour la comparaison des états d\'archivage des employés' },
   database: { label: 'Base de données', Icon: DatabaseIcon, desc: 'Connexion PostgreSQL (requiert redémarrage)' },
 };
 
-const PASSWORD_KEYS = new Set(['SMTP_PASSWORD', 'LDAP_BIND_PASSWORD', 'SFTP_PASSWORD', 'SECRET_KEY']);
+const PASSWORD_KEYS = new Set(['SMTP_PASSWORD', 'LDAP_BIND_PASSWORD', 'SFTP_PASSWORD', 'SECRET_KEY', 'ODOO_PASSWORD']);
 
 // Catégories « reminders » et « backups » gérées par les pages dédiées
 // Configuration → Déclencheurs email et Sauvegardes complètes
