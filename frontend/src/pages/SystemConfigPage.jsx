@@ -16,8 +16,9 @@ const CATEGORY_META = {
 
 const PASSWORD_KEYS = new Set(['SMTP_PASSWORD', 'LDAP_BIND_PASSWORD', 'SFTP_PASSWORD', 'SECRET_KEY']);
 
-// Catégorie « reminders » gérée par la page dédiée Configuration → Déclencheurs email
-const HIDDEN_CATEGORIES = new Set(['reminders']);
+// Catégories « reminders » et « backups » gérées par les pages dédiées
+// Configuration → Déclencheurs email et Sauvegardes complètes
+const HIDDEN_CATEGORIES = new Set(['reminders', 'backups']);
 
 export default function SystemConfigPage() {
   const [categories, setCategories] = useState({});

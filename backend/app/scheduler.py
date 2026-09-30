@@ -17,7 +17,12 @@ from fastapi import APIRouter, Depends
 from app.models import User, Bonus, ValidationStatus
 from app.auth import get_current_user
 from app.api.admin import require_admin
-from app.api.database_dump import create_database_dump_file, cleanup_old_dumps
+from app.api.database_dump import (
+    create_database_dump_file,
+    cleanup_old_dumps,
+    get_backup_settings,
+    seconds_until_next_backup,
+)
 from app.email_service import send_validation_reminder_email, send_deadline_reminder_email
 from app.email_trigger_service import log_trigger_execution
 from app.currency_format import format_amount_with_currency
@@ -415,6 +420,12 @@ async def _reminder_loop():
 # ---------------------------------------------------------------------------
 
 _backup_lock = asyncio.Lock()
+_backup_loop_active = False
+
+
+def is_backup_loop_active() -> bool:
+    """Vrai tant que la boucle de sauvegarde automatique tourne dans ce processus."""
+    return _backup_loop_active
 
 
 async def run_automatic_backup() -> dict:
@@ -424,38 +435,41 @@ async def run_automatic_backup() -> dict:
         return {"skipped": True}
 
     async with _backup_lock:
-        label = (get_config("BACKUP_LABEL") or "auto")[:40]
-        result = await create_database_dump_file(label)
-
-        try:
-            retention = max(0, int(get_config("BACKUP_RETENTION") or "6"))
-        except (TypeError, ValueError):
-            retention = 6
-        removed = cleanup_old_dumps(retention)
+        settings = get_backup_settings()
+        result = await create_database_dump_file(settings["label"])
+        removed = cleanup_old_dumps(settings["retention"])
 
         print(f"[BACKUP] Sauvegarde créée : {result['filename']} ({result['size_display']}), "
-              f"retention={retention}, supprimées={len(removed)}")
-        return {**result, "cleaned": removed, "retention": retention}
+              f"retention={settings['retention']}, supprimées={len(removed)}")
+        return {**result, "cleaned": removed, "retention": settings["retention"]}
 
 
 async def _backup_loop():
-    while True:
-        try:
-            enabled = (get_config("BACKUP_ENABLED") or "true").lower() == "true"
-            if enabled:
-                try:
-                    interval_hours = max(0.25, float(get_config("BACKUP_INTERVAL_HOURS") or "2"))
-                except (TypeError, ValueError):
-                    interval_hours = 2.0
-                await run_automatic_backup()
-                print(f"[BACKUP] Prochaine sauvegarde dans {interval_hours} h")
-                await asyncio.sleep(interval_hours * 3600)
-            else:
-                print("[BACKUP] Sauvegardes automatiques désactivées")
-                await asyncio.sleep(3600)
-        except Exception as e:
-            print(f"[BACKUP] Erreur lors de la sauvegarde automatique : {e}")
-            await asyncio.sleep(300)
+    global _backup_loop_active
+    _backup_loop_active = True
+    try:
+        while True:
+            try:
+                settings = get_backup_settings()
+                if not settings["enabled"]:
+                    print("[BACKUP] Sauvegardes automatiques désactivées")
+                    await asyncio.sleep(60)
+                    continue
+
+                # Échéance calculée depuis le dernier dump : le serveur peut
+                # redémarrer (dev --reload, déploiement) sans créer de
+                # sauvegarde supplémentaire, et l'intervalle reste respecté.
+                delay = seconds_until_next_backup(settings["interval_hours"])
+                if delay <= 0:
+                    await run_automatic_backup()
+                    delay = max(seconds_until_next_backup(settings["interval_hours"]), 1.0)
+                print(f"[BACKUP] Prochaine sauvegarde dans {delay / 3600:.2f} h")
+                await asyncio.sleep(delay)
+            except Exception as e:
+                print(f"[BACKUP] Erreur lors de la sauvegarde automatique : {e}")
+                await asyncio.sleep(300)
+    finally:
+        _backup_loop_active = False
 
 
 def start_scheduler():
@@ -484,9 +498,12 @@ def start_scheduler():
     else:
         print("[SCHEDULER] Rappel RH des primes validées désactivé")
 
+    # La boucle est toujours démarrée : elle lit BACKUP_ENABLED à chaque
+    # réveil, donc activer/désactiver les sauvegardes depuis l'interface prend
+    # effet sans redémarrer le serveur.
+    tasks.append(asyncio.create_task(_backup_loop()))
     if (get_config("BACKUP_ENABLED") or "true").lower() == "true":
         print("[SCHEDULER] Sauvegardes automatiques activées")
-        tasks.append(asyncio.create_task(_backup_loop()))
     else:
         print("[SCHEDULER] Sauvegardes automatiques désactivées")
 

@@ -584,6 +584,11 @@ export const deleteDatabaseDump = async (filename) => {
   return data;
 };
 
+export const getBackupSchedule = async () => {
+  const { data } = await api.get('/admin/database/backup-schedule');
+  return data;
+};
+
 // --- Autres primes types ---
 export const getOtherPrimesTypes = async () => {
   const { data } = await api.get('/admin/other-primes-types');

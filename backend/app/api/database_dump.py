@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -501,8 +501,93 @@ def cleanup_old_dumps(retention: int) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Planification des sauvegardes automatiques (partagée avec le planificateur)
+# ---------------------------------------------------------------------------
+
+def get_backup_settings() -> dict:
+    """Paramètres BACKUP_* : base de configuration d'abord, sinon défauts."""
+    from app.config import get_config
+
+    def _number(key, default, minimum=0.0):
+        try:
+            value = float(get_config(key) or default)
+        except (TypeError, ValueError):
+            value = float(default)
+        return max(minimum, value)
+
+    return {
+        "enabled": (get_config("BACKUP_ENABLED") or "true").lower() == "true",
+        "interval_hours": max(0.25, _number("BACKUP_INTERVAL_HOURS", 2)),
+        "retention": int(_number("BACKUP_RETENTION", 6)),
+        "label": (get_config("BACKUP_LABEL") or "auto")[:40],
+    }
+
+
+def latest_dump():
+    """(filename, datetime) du dump le plus récent, ou None."""
+    if not os.path.isdir(DUMPS_DIR):
+        return None
+    best = None
+    for fname in os.listdir(DUMPS_DIR):
+        if not fname.endswith('.sql') or not _DUMP_FILE_RE.match(fname):
+            continue
+        mtime = datetime.fromtimestamp(os.path.getmtime(os.path.join(DUMPS_DIR, fname)))
+        if best is None or mtime > best[1]:
+            best = (fname, mtime)
+    return best
+
+
+def seconds_until_next_backup(interval_hours: float) -> float:
+    """
+    Délai (secondes) avant la prochaine sauvegarde automatique, 0 = due.
+
+    L'échéance est calculée à partir du dump le plus récent (et non depuis le
+    démarrage du processus) : un redémarrage du serveur ne déclenche donc pas
+    de sauvegarde supplémentaire tant que l'intervalle n'est pas écoulé.
+    """
+    last = latest_dump()
+    if last is None:
+        return 0.0
+    due = last[1] + timedelta(hours=float(interval_hours))
+    return max(0.0, (due - datetime.now()).total_seconds())
+
+
+# ---------------------------------------------------------------------------
 # Endpoints API
 # ---------------------------------------------------------------------------
+
+def _utc(dt):
+    """Horodatage serveur (naïf = heure UTC du conteneur) en UTC aware pour l'UI."""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+@router.get("/database/backup-schedule")
+async def get_backup_schedule(admin: User = Depends(require_admin)):
+    """Planification des sauvegardes automatiques (page « Sauvegardes complètes »)."""
+    from app import scheduler
+
+    settings = get_backup_settings()
+    last = latest_dump()
+    now = datetime.now()
+    delay = seconds_until_next_backup(settings["interval_hours"])
+    return {
+        # Mêmes clés (chaînes) que « Paramètres système » : l'interface les
+        # édite puis les renvoie telles quelles via /system-config/bulk.
+        "BACKUP_ENABLED": "true" if settings["enabled"] else "false",
+        "BACKUP_INTERVAL_HOURS": f"{settings['interval_hours']:g}",
+        "BACKUP_RETENTION": str(settings["retention"]),
+        "BACKUP_LABEL": settings["label"],
+        **settings,
+        "last_backup": last[0] if last else None,
+        "last_backup_at": _utc(last[1]) if last else None,
+        "delay_seconds": delay if settings["enabled"] else None,
+        "next_backup_at": _utc(now + timedelta(seconds=delay)) if settings["enabled"] else None,
+        "scheduler_active": scheduler.is_backup_loop_active(),
+        "server_time": _utc(now),
+    }
+
 
 class DatabaseDumpCreate(BaseModel):
     label: str = "backup"
@@ -551,7 +636,7 @@ async def list_database_dumps(admin: User = Depends(require_admin)):
             "size_display": f"{fsize / 1024:.1f} Ko" if fsize >= 1024 else f"{fsize} o",
             "num_tables": num_tables,
             "num_inserts": num_inserts,
-            "modified_at": datetime.fromtimestamp(os.path.getmtime(fpath)),
+            "modified_at": _utc(datetime.fromtimestamp(os.path.getmtime(fpath))),
         })
     return {"dumps": files}
 
