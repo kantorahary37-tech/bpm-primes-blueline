@@ -703,24 +703,23 @@ const [filterMonth, setFilterMonth] = useState('');
                   <CurrencyTotals items={serviceGroup.items} seeAmounts={seeAmounts} size="sm" className="ml-1" />
                 </div>
                 {!svcCollapsed && (
-                <BonusTable
-                  bonuses={serviceGroup.items}
-                  getValidStep={getValidStep}
-                  canSelect={canSelect}
-                  selectedBonuses={selectedBonuses}
-                  onToggleSelect={toggleSelect}
-                  onSelectAll={() => selectSection(serviceGroup.items)}
-                  onClearSelection={() => deselectSection(serviceGroup.items)}
+                <CurrencySplitTables
+                  items={serviceGroup.items}
                   seeAmounts={seeAmounts}
-                  initiatorMap={initiatorMap}
-                  onView={(id) => navigate(`/bonuses/${id}`)}
-                  onValidate={handleValidate}
-                  onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
-                  badgeClass={getBadgeClass}
-                  statusLabel={statusLabel}
-                  sortBy={sortBy}
-                  sortDir={sortDir}
-                  onSort={handleTableSort}
+                  tableProps={{
+                    getValidStep, canSelect, selectedBonuses,
+                    onToggleSelect: toggleSelect,
+                    seeAmounts,
+                    initiatorMap,
+                    onView: (id) => navigate(`/bonuses/${id}`),
+                    onValidate: handleValidate,
+                    onEdit: (id) => navigate(`/bonuses/edit/${id}`),
+                    badgeClass: getBadgeClass,
+                    statusLabel,
+                    sortBy, sortDir, onSort: handleTableSort,
+                    onSelectAll: selectSection,
+                    onClearSelection: deselectSection,
+                  }}
                 />
                 )}
               </div>
@@ -784,24 +783,23 @@ const [filterMonth, setFilterMonth] = useState('');
               </div>
             ) : (
               <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-                <BonusTable
-                  bonuses={visible}
-                  getValidStep={getValidStep}
-                  canSelect={canSelect}
-                  selectedBonuses={selectedBonuses}
-                  onToggleSelect={toggleSelect}
-                  onSelectAll={() => selectSection(visible)}
-                  onClearSelection={() => deselectSection(visible)}
+                <CurrencySplitTables
+                  items={visible}
                   seeAmounts={seeAmounts}
-                  initiatorMap={initiatorMap}
-                  onView={(id) => navigate(`/bonuses/${id}`)}
-                  onValidate={handleValidate}
-                  onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
-                  badgeClass={getBadgeClass}
-                  statusLabel={statusLabel}
-                  sortBy={sortBy}
-                  sortDir={sortDir}
-                  onSort={handleTableSort}
+                  tableProps={{
+                    getValidStep, canSelect, selectedBonuses,
+                    onToggleSelect: toggleSelect,
+                    seeAmounts,
+                    initiatorMap,
+                    onView: (id) => navigate(`/bonuses/${id}`),
+                    onValidate: handleValidate,
+                    onEdit: (id) => navigate(`/bonuses/edit/${id}`),
+                    badgeClass: getBadgeClass,
+                    statusLabel,
+                    sortBy, sortDir, onSort: handleTableSort,
+                    onSelectAll: selectSection,
+                    onClearSelection: deselectSection,
+                  }}
                 />
                 {remaining > 0 && (
                   <button onClick={() => setSectionExpand(prev => ({ ...prev, [section.key]: !showAll }))}
@@ -842,24 +840,23 @@ const [filterMonth, setFilterMonth] = useState('');
           </div>
           {!monthCollapsed && (
           <div className="p-3 bg-white rounded-b-xl border border-t-0 border-gray-200">
-            <BonusTable
-              bonuses={items}
-              getValidStep={getValidStep}
-              canSelect={canSelect}
-              selectedBonuses={selectedBonuses}
-              onToggleSelect={toggleSelect}
-              onSelectAll={() => selectSection(items)}
-              onClearSelection={() => deselectSection(items)}
+            <CurrencySplitTables
+              items={items}
               seeAmounts={seeAmounts}
-              initiatorMap={initiatorMap}
-              onView={(id) => navigate(`/bonuses/${id}`)}
-              onValidate={handleValidate}
-              onEdit={(id) => navigate(`/bonuses/edit/${id}`)}
-              badgeClass={getBadgeClass}
-              statusLabel={statusLabel}
-              sortBy={sortBy}
-              sortDir={sortDir}
-              onSort={handleTableSort}
+              tableProps={{
+                getValidStep, canSelect, selectedBonuses,
+                onToggleSelect: toggleSelect,
+                seeAmounts,
+                initiatorMap,
+                onView: (id) => navigate(`/bonuses/${id}`),
+                onValidate: handleValidate,
+                onEdit: (id) => navigate(`/bonuses/edit/${id}`),
+                badgeClass: getBadgeClass,
+                statusLabel,
+                sortBy, sortDir, onSort: handleTableSort,
+                onSelectAll: selectSection,
+                onClearSelection: deselectSection,
+              }}
             />
           </div>
           )}
@@ -1074,5 +1071,75 @@ const [filterMonth, setFilterMonth] = useState('');
     </div>
   );
 };
+
+// --- Découpe par devise --------------------------------------------------
+// Les primes en Ariary et celles en euro ne doivent jamais être mélangées
+// dans un même tableau : chaque groupe peut contenir un tableau par devise.
+const bonusCurrency = (b) => b?.employee?.currency || 'Ar';
+
+const CURRENCY_SPLIT_LABELS = { Ar: 'Ariary (Ar)', EUR: 'Euro (€)' };
+const currencySplitLabel = (currency) => CURRENCY_SPLIT_LABELS[currency] || currency;
+
+const splitBonusesByCurrency = (items) => {
+  const buckets = {};
+  (items || []).forEach((b) => {
+    const cur = bonusCurrency(b);
+    (buckets[cur] = buckets[cur] || []).push(b);
+  });
+  const entries = Object.entries(buckets)
+    .sort(([a], [b]) => (a === 'Ar' ? -1 : b === 'Ar' ? 1 : a.localeCompare(b)));
+  // Une seule devise (ou aucun élément) → tableau unique, sans séparateur
+  if (entries.length <= 1) return [[null, items || []]];
+  return entries;
+};
+
+/**
+ * Tableau de primes découpé par devise.
+ *
+ * Si le groupe contient plusieurs devises, chaque devise obtient son propre
+ * tableau avec son étiquette et son total ; sinon le rendu reste identique à
+ * l'ancien tableau unique.
+ *
+ * @param {Array} items       primes du groupe (mois, statut, service…)
+ * @param {boolean} seeAmounts
+ * @param {Object} tableProps props de BonusTable hors `bonuses`,
+ *                             `onSelectAll` et `onClearSelection` (ceux-ci
+ *                             reçoivent les primes du sous-tableau).
+ */
+function CurrencySplitTables({ items, seeAmounts, tableProps }) {
+  const buckets = splitBonusesByCurrency(items);
+
+  if (buckets.length === 1) {
+    return (
+      <BonusTable
+        bonuses={items}
+        {...tableProps}
+        onSelectAll={() => tableProps.onSelectAll(items)}
+        onClearSelection={() => tableProps.onClearSelection(items)}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {buckets.map(([currency, currencyItems]) => (
+        <div key={currency}>
+          <div className="flex items-center gap-2 mb-1.5 px-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+              {currencySplitLabel(currency)}
+            </span>
+            <CurrencyTotals items={currencyItems} seeAmounts={seeAmounts} size="sm" />
+          </div>
+          <BonusTable
+            bonuses={currencyItems}
+            {...tableProps}
+            onSelectAll={() => tableProps.onSelectAll(currencyItems)}
+            onClearSelection={() => tableProps.onClearSelection(currencyItems)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default BonusesList;
