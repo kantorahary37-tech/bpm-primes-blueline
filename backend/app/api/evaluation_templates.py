@@ -74,7 +74,7 @@ async def _can_edit_employee_evaluation(user: User, emp: Employee) -> bool:
       ou uniquement leur propre fiche employé s'ils n'ont aucun service affecté."""
     if _is_broad(user):
         return True
-    if emp.manager_id == user.id:
+    if emp and emp.manager_id == user.id:  # Adding null check
         return True
     if user.is_directeur:
         return emp.department == user.department
@@ -125,9 +125,6 @@ async def save_evaluation_templates(
     data: EvaluationTemplateSaveRequest,
     user: User = Depends(get_current_user),
 ):
-    if not (user.is_admin or user.is_dg or user.is_drh or user.is_validator_n1 or user.is_directeur):
-        raise HTTPException(403, "Vous n'avez pas le droit de modifier les modeles d'evaluation")
-
     emp = await Employee.filter(id=data.employee_id).first()
     if not emp:
         raise HTTPException(404, "Employe introuvable")
@@ -243,15 +240,24 @@ async def get_all_templates(user: User = Depends(get_current_user)):
         employees = await Employee.filter(is_active=True, is_archived=False, dept_str=user.dept_str).prefetch_related("service_group").order_by("name")
     else:
         # N+1/N+2 : leurs services affectés (+ les employés dont ils sont le
-        # manager, même hors département) ; sans affectation → son département
-        query = Employee.filter(is_active=True, is_archived=False)
-        query = apply_department_scope(query, user)
-        query = apply_employee_scope(query, await employee_scope(user))
-        employees = await query.prefetch_related("service_group").order_by("name")
+        # manager, même hors département) ; sans affectation → leur département
+        sg_ids, _, managed_ids = await employee_scope(user)
+        
+        if sg_ids:  # N+1/N+2 avec services affectés
+            # Accès aux employés de leurs services affectés, sans restriction de département
+            query = Employee.filter(is_active=True, is_archived=False)
+            query = apply_employee_scope(query, (sg_ids, None, managed_ids))
+            employees = await query.prefetch_related("service_group").order_by("name")
+        else:  # N+1/N+2 sans affectation ou manager sans rôle spécifique
+            # Appliquer la restriction de département
+            query = Employee.filter(is_active=True, is_archived=False)
+            query = apply_department_scope(query, user)
+            query = apply_employee_scope(query, (None, None, managed_ids))  # Passer seulement les employés gérés
+            employees = await query.prefetch_related("service_group").order_by("name")
     result = []
 
     # Cache service_group_id → nom pour éviter une requête par employé
-    all_sg_ids = {e.service_group_id for e in employees if e.service_group_id}
+    all_sg_ids = {e.service_group_id for e in employees if e.service_group_id}  # This should be fine
     sg_names = {
         sg.id: sg.name
         for sg in await ServiceGroup.filter(id__in=list(all_sg_ids))
@@ -272,7 +278,7 @@ async def get_all_templates(user: User = Depends(get_current_user)):
             "employee_name": emp.name,
             "matricule": emp.matricule,
             "department": emp.department or "",
-            "service_group": sg_names.get(emp.service_group_id, ""),
+            "service_group": sg_names.get(emp.service_group_id, "") if emp.service_group_id else "",
             "service_group_id": emp.service_group_id,
             "quantitative": quanti if quanti else [DEFAULT_QUANTI[i] | {"id": None} for i in range(len(DEFAULT_QUANTI))],
             "qualitative": quali if quali else [DEFAULT_QUALI[i] | {"id": None} for i in range(len(DEFAULT_QUALI))],
@@ -291,7 +297,11 @@ async def delete_template(template_id: int, user: User = Depends(get_current_use
     if not tpl:
         raise HTTPException(404, "Critere introuvable")
 
-    emp = await Employee.filter(id=tpl.employee_id).first()
+    # Get employee through the relationship - using the foreign key field name
+    emp = await Employee.get_or_none(id=tpl.employee_id)  # Use get_or_none to safely fetch
+    if not emp:
+        raise HTTPException(404, "Employe introuvable")
+        
     if not await _can_edit_employee_evaluation(user, emp):
         raise HTTPException(403, "Vous ne pouvez modifier que les evaluations de votre périmètre (département/service)")
 
@@ -304,7 +314,7 @@ async def delete_all_employee_templates(employee_id: int, user: User = Depends(g
     if not _can_view_evaluation(user):
         raise HTTPException(403, "Acces reserve aux administrateurs et validateurs")
 
-    emp = await Employee.filter(id=employee_id).first()
+    emp = await Employee.get_or_none(id=employee_id)  # Use get_or_none to safely fetch
     if not emp:
         raise HTTPException(404, "Employe introuvable")
 

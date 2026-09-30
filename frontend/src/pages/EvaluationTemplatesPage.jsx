@@ -33,13 +33,10 @@ export default function EvaluationTemplatesPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Rôles à portée globale : voit tout, regroupement par département
-  const isBroad = currentUser?.is_admin || currentUser?.is_dg || currentUser?.is_drh
-  // Directeur et N2 : périmètre département, regroupement par service
-  const isScopedDept = !isBroad && (currentUser?.is_directeur || currentUser?.is_validator_n2)
-  // N1 : périmètre services affectés (ou département), regroupement par service
-  const isScopedN1 = !isBroad && !currentUser?.is_directeur && currentUser?.is_validator_n1
-  const isScopedDirector = isScopedDept || isScopedN1
+  // Only allow access to validators and admins
+  if (!currentUser?.is_admin && !currentUser?.is_directeur && !currentUser?.is_validator_n1 && !currentUser?.is_validator_n2 && !currentUser?.is_dg && !currentUser?.is_drh) {
+    return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs, directeurs et validateurs.</p></div></div>
+  }
 
   const filteredTemplates = templates.filter(t =>
     t.employee_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -47,13 +44,8 @@ export default function EvaluationTemplatesPage() {
     t.department?.toLowerCase().includes(search.toLowerCase())
   )
 
+  // Simple grouping by department
   const groupedByDept = filteredTemplates.reduce((acc, t) => {
-    if (isScopedDirector) {
-      const key = t.service_group || 'Sans service'
-      if (!acc[key]) acc[key] = []
-      acc[key].push(t)
-      return acc
-    }
     const dept = t.department || 'Sans departement'
     if (!acc[dept]) acc[dept] = []
     acc[dept].push(t)
@@ -89,19 +81,22 @@ export default function EvaluationTemplatesPage() {
       })
       toast.success('Modele sauvegarde !')
       await load()
-    } catch {
-      toast.error('Erreur lors de la sauvegarde')
+    } catch (error) {
+      console.error('Save error:', error);
+      const errorMessage = error.response?.data?.detail || 'Erreur lors de la sauvegarde';
+      toast.error(errorMessage);
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDeleteCriteria = (section, id) => {
+  const handleDeleteCriteria = (section, id, index) => {
     if (!id) {
+      // For unsaved criteria (without id), remove by index position
       if (section === 'quanti') {
-        setEditQuantitative(prev => prev.filter((_, i) => i !== [...prev].findIndex(c => !c.id)))
+        setEditQuantitative(prev => prev.filter((_, i) => i !== index));
       } else {
-        setEditQualitative(prev => prev.filter((_, i) => i !== [...prev].findIndex(c => !c.id)))
+        setEditQualitative(prev => prev.filter((_, i) => i !== index));
       }
       return
     }
@@ -118,8 +113,12 @@ export default function EvaluationTemplatesPage() {
         setEditQualitative(prev => prev.filter(c => c.id !== confirmDelete.id))
       }
       toast.success('Critere supprime')
-    } catch {
-      toast.error('Erreur lors de la suppression')
+      // Reload templates to reflect changes in the main list
+      await load()
+    } catch (error) {
+      console.error('Delete error:', error);
+      const errorMessage = error.response?.data?.detail || 'Erreur lors de la suppression';
+      toast.error(errorMessage);
     }
     setConfirmDelete(null)
   }
@@ -143,10 +142,6 @@ export default function EvaluationTemplatesPage() {
   }
 
   const totalCoeff = (list) => list.reduce((s, c) => s + (parseFloat(c.coeff) || 0), 0)
-
-  if (!currentUser?.is_admin && !currentUser?.is_directeur && !currentUser?.is_validator_n1 && !currentUser?.is_validator_n2 && !currentUser?.is_dg && !currentUser?.is_drh) {
-    return <div className="page-container"><div className="card-blueline p-8 text-center"><p className="text-base-content/60">Acces reserve aux administrateurs, directeurs et validateurs.</p></div></div>
-  }
 
   const selectedTemplate = selectedEmp ? templates.find(t => t.employee_id === selectedEmp) : null
 
@@ -238,7 +233,7 @@ export default function EvaluationTemplatesPage() {
                     )}
                   </div>
                   <button onClick={handleSave} disabled={saving || (totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10}
-                    className="btn btn-sm bg-brand-600 hover:bg-brand-700 text-white border-0 disabled:bg-gray-300 disabled:text-gray-500">
+                    className="btn btn-sm bg-brand-600 hover:bg-brand-600 text-white border-0 disabled:bg-gray-300 disabled:text-gray-500">
                     {saving ? 'Sauvegarde...' : 'Sauvegarder'}
                   </button>
                 </div>
@@ -269,7 +264,7 @@ export default function EvaluationTemplatesPage() {
                             onChange={(e) => updateCriteria('quanti', i, 'coeff', e.target.value)}
                             className="input input-bordered input-sm w-16 text-center font-semibold bg-white" />
                         </div>
-                        <button onClick={() => handleDeleteCriteria('quanti', c.id)}
+                        <button onClick={() => handleDeleteCriteria('quanti', c.id, i)}
                           className="p-1.5 rounded-lg text-base-content/20 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
                           title="Supprimer">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -279,6 +274,14 @@ export default function EvaluationTemplatesPage() {
                       </div>
                     ))}
                   </div>
+                  {/* Warning message if total coefficient is not 10 */}
+                  {(totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10 && (
+                    <div className="px-4 py-2">
+                      <p className="text-xs text-red-500 font-medium">
+                        Le total des coefficients doit être égal à 10 avant de sauvegarder
+                      </p>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 px-4 py-3 bg-base-50 border-t border-base-100">
                     <input type="text" placeholder="Ajouter un critere..." value={newQuanti.criteria_name}
                       onChange={(e) => setNewQuanti({ ...newQuanti, criteria_name: e.target.value })}
@@ -319,7 +322,7 @@ export default function EvaluationTemplatesPage() {
                             onChange={(e) => updateCriteria('quali', i, 'coeff', e.target.value)}
                             className="input input-bordered input-sm w-16 text-center font-semibold bg-white" />
                         </div>
-                        <button onClick={() => handleDeleteCriteria('quali', c.id)}
+                        <button onClick={() => handleDeleteCriteria('quali', c.id, i)}
                           className="p-1.5 rounded-lg text-base-content/20 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
                           title="Supprimer">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -329,6 +332,14 @@ export default function EvaluationTemplatesPage() {
                       </div>
                     ))}
                   </div>
+                  {/* Warning message if total coefficient is not 10 */}
+                  {(totalCoeff(editQuantitative) + totalCoeff(editQualitative)) !== 10 && (
+                    <div className="px-4 py-2">
+                      <p className="text-xs text-red-500 font-medium">
+                        Le total des coefficients doit être égal à 10 avant de sauvegarder
+                      </p>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 px-4 py-3 bg-base-50 border-t border-base-100">
                     <input type="text" placeholder="Ajouter un critere..." value={newQuali.criteria_name}
                       onChange={(e) => setNewQuali({ ...newQuali, criteria_name: e.target.value })}
