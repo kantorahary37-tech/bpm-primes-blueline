@@ -91,30 +91,33 @@ export default function EvaluationTemplatesPage() {
   }
 
   const handleDeleteCriteria = (section, id, index) => {
-    if (!id) {
-      // For unsaved criteria (without id), remove by index position
-      if (section === 'quanti') {
-        setEditQuantitative(prev => prev.filter((_, i) => i !== index));
-      } else {
-        setEditQualitative(prev => prev.filter((_, i) => i !== index));
-      }
-      return
-    }
-    setConfirmDelete({ section, id })
+    // Critères sauvegardés (id) et critères par défaut (sans id) passent
+    // tous par la confirmation avant suppression.
+    setConfirmDelete({ section, id: id ?? null, index })
   }
 
   const doDelete = async () => {
     if (!confirmDelete) return
+    const { section, id, index } = confirmDelete
     try {
-      await deleteEvaluationTemplate(confirmDelete.id)
-      if (confirmDelete.section === 'quanti') {
-        setEditQuantitative(prev => prev.filter(c => c.id !== confirmDelete.id))
+      if (id) {
+        await deleteEvaluationTemplate(id)
+        if (section === 'quanti') {
+          setEditQuantitative(prev => prev.filter(c => c.id !== id))
+        } else {
+          setEditQualitative(prev => prev.filter(c => c.id !== id))
+        }
+        // Reload templates to reflect changes in the main list
+        await load()
       } else {
-        setEditQualitative(prev => prev.filter(c => c.id !== confirmDelete.id))
+        // Critère non sauvegardé (défaut) : suppression locale par position
+        if (section === 'quanti') {
+          setEditQuantitative(prev => prev.filter((_, i) => i !== index))
+        } else {
+          setEditQualitative(prev => prev.filter((_, i) => i !== index))
+        }
       }
       toast.success('Critere supprime')
-      // Reload templates to reflect changes in the main list
-      await load()
     } catch (error) {
       console.error('Delete error:', error);
       const errorMessage = error.response?.data?.detail || 'Erreur lors de la suppression';
