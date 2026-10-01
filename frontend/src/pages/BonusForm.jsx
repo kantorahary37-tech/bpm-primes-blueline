@@ -2253,7 +2253,7 @@ export default function BonusForm() {
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.5"
+                      <input type="number" min="0" max="10" step="0.1"
                         value={item.note}
                           onChange={(e) => handleEvalChange(quantitative, setQuantitative, i, 'note', e.target.value, 'quanti')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
@@ -2351,7 +2351,7 @@ export default function BonusForm() {
                         className="w-16 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <input type="number" min="0" max="10" step="0.5"
+                      <input type="number" min="0" max="10" step="0.1"
                         value={item.note}
                           onChange={(e) => handleEvalChange(qualitative, setQualitative, i, 'note', e.target.value, 'quali')}
                         className="w-20 px-2 py-1 rounded border border-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 text-sm text-center" />
