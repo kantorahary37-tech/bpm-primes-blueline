@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getUsers, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment } from '../services/api'
+import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getUsers, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment, adminGetUserScopeEmployees, adminGetUserBypassEmployees } from '../services/api'
 import Modal from '../components/Modal'
 import { useConfirm } from '../components/ConfirmModal'
 import { ldapSyncToast, apiErrorToast } from '../utils/toastHelpers'
-import toast from '../utils/toast'
-import { EditIcon, TrashIcon, SearchIcon, PlusIcon, UsersIcon, ChevronLeftIcon, ChevronDownIcon } from '../components/Icons'
+import toast from 'react-hot-toast'
+import { EditIcon, TrashIcon, SearchIcon, PlusIcon, UsersIcon, ChevronLeftIcon, ChevronDownIcon, UsersIcon as UsersIcon2 } from '../components/Icons'
 
 const PAGE_SIZE = 15
 
@@ -658,6 +658,11 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
     is_dg: false,
     is_admin: false,
   })
+  const [directig, setDirectig] = useState(false)
+  const [selectedEmployees, setSelectedEmployees] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [employeesLoading, setEmployeesLoading] = useState(false)
   const [localAssignments, setLocalAssignments] = useState([])
   const [showAdd, setShowAdd] = useState(false)
   const [newServiceId, setNewServiceId] = useState('')
@@ -686,6 +691,47 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
     setNewServiceId('')
   }, [assignments])
 
+  useEffect(() => {
+    if (user) {
+      // Charger les employés du périmètre de CE user : exactement ceux qu'il
+      // voit dans sa page Employés et pour lesquels il peut créer une prime.
+      const loadEmployees = async () => {
+        setEmployeesLoading(true)
+        try {
+          const [scopeData, bypassIds] = await Promise.all([
+            adminGetUserScopeEmployees(user.id),
+            adminGetUserBypassEmployees(user.id).catch(() => []),
+          ])
+          setEmployees(scopeData || [])
+          // Pré-cocher la config "Passer directement à DG" déjà enregistrée
+          setDirectig((bypassIds || []).length > 0)
+          setSelectedEmployees(bypassIds || [])
+        } catch {
+          setEmployees([])
+        } finally {
+          setEmployeesLoading(false)
+        }
+      };
+      loadEmployees();
+    } else {
+      setEmployees([])
+    }
+    // Reset recherche à chaque utilisateur ouvert (la sélection et la case
+    // directig sont pré-cochées depuis la config enregistrée ci-dessus)
+    setEmployeeSearch('')
+  }, [user])
+
+  const filteredEmployees = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase()
+    if (!q) return employees
+    return employees.filter(e =>
+      e.name?.toLowerCase().includes(q) ||
+      e.matricule?.toLowerCase().includes(q) ||
+      e.department?.toLowerCase().includes(q) ||
+      e.service_group?.toLowerCase().includes(q)
+    )
+  }, [employees, employeeSearch])
+
   const usedServiceIds = localAssignments.map(a => a.service_group_id)
   // Un validateur N+1 ne s'assigne que des services de son propre département
   const userServices = user?.department
@@ -712,6 +758,9 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
       is_drh: form.is_drh,
       is_dg: form.is_dg,
       is_admin: form.is_admin,
+      bypass_director: directig,
+      directig,
+      employees: selectedEmployees,
     })
   }
 
@@ -881,6 +930,87 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
               ))}
             </div>
           </div>
+
+          {/* Passer directement à DG pour ces employés */}
+          <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${directig ? 'bg-gray-50 border-gray-300' : 'border-gray-200 hover:border-gray-300'}`}>
+            <input
+              type="checkbox"
+              className="checkbox checkbox-xs border-amber-300 checked:bg-amber-500"
+              checked={directig}
+              onChange={e => setDirectig(e.target.checked)}
+            />
+            <span className="text-xs font-medium">Passer directement à DG pour les employés sélectionnés</span>
+          </label>
+
+          {directig && (
+            <p className="text-[11px] text-amber-600 mt-1">
+              Après validation par cet utilisateur en N+1, les primes des employés sélectionnés passeront directement en attente de validation DG (sans l'étape Directeur). Le Directeur n'interviendra pas pour ces employés.
+            </p>
+          )}
+
+          {/* Sélection des employés */}
+          {directig && (
+            <div>
+              <label className="label py-1"><span className="label-text text-xs font-medium">Employés de son périmètre</span></label>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Employés que {user?.name?.split(' ')[0] || 'cet utilisateur'} voit dans sa page Employés et pour lesquels il peut créer une prime. Ses validations N+1 enverront leurs primes directement en attente DG.
+              </p>
+              <div className="relative mt-1">
+                <SearchIcon className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Rechercher un employé (nom, matricule, service...)"
+                  className="input input-bordered input-sm w-full pl-8 bg-gray-50 focus:bg-white"
+                  value={employeeSearch}
+                  onChange={e => setEmployeeSearch(e.target.value)}
+                />
+                {employeeSearch && (
+                  <button onClick={() => setEmployeeSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+              {selectedEmployees.length > 0 && (
+                <p className="text-[11px] text-blue-600 mt-1">{selectedEmployees.length} employé{selectedEmployees.length > 1 ? 's' : ''} sélectionné{selectedEmployees.length > 1 ? 's' : ''}</p>
+              )}
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50/50 p-2 mt-1">
+                {employeesLoading ? (
+                  <div className="flex justify-center py-3"><span className="loading loading-spinner loading-sm"></span></div>
+                ) : (
+                  <>
+                    {filteredEmployees.map((emp, idx) => (
+                      <label key={emp.id ?? idx} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${selectedEmployees.includes(emp.id) ? 'bg-white border border-blue-200' : 'bg-white/60 border border-transparent hover:bg-white'}`}>
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-xs rounded border-gray-300 checked:bg-blue-600"
+                          checked={selectedEmployees.includes(emp.id)}
+                          onChange={() => {
+                            setSelectedEmployees(prev => {
+                              const next = [...prev];
+                              if (next.includes(emp.id)) {
+                                return next.filter(id => id !== emp.id);
+                              } else {
+                                return [...next, emp.id];
+                              }
+                            });
+                          }}
+                        />
+                        <span className="text-xs text-gray-700 font-medium">{emp.name}</span>
+                        <span className="text-[10px] text-gray-400">{emp.matricule}</span>
+                        {emp.department && <span className="text-[10px] text-gray-400">· {emp.department}</span>}
+                        {emp.service_group && <span className="text-[10px] text-blue-500">· {emp.service_group}</span>}
+                      </label>
+                    ))}
+                    {!filteredEmployees.length && (
+                      <p className="text-xs text-gray-400 py-2 text-center">
+                        {employees.length ? 'Aucun employé ne correspond à la recherche.' : 'Aucun employé dans son périmètre.'}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
             <button type="button" onClick={onClose} className="btn btn-ghost btn-sm">Annuler</button>

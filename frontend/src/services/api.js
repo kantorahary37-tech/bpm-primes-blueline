@@ -319,6 +319,24 @@ export const adminCreateUser = async (userData) => {
   return data;
 };
 
+export const adminCreateUserPrimeBatch = async (userId, employeeIds) => {
+  const { data } = await api.post(`/admin/users/${userId}/prime-batch`, { employee_ids: employeeIds });
+  return data;
+};
+
+// Employés visibles par ce user dans SA page Employés (périmètre N+1/manager)
+export const adminGetUserScopeEmployees = async (userId) => {
+  const { data } = await api.get(`/admin/users/${userId}/scope-employees`);
+  return data;
+};
+
+// Employés configurés en "Passer directement à DG" pour ce user :
+// après sa validation N+1, leurs primes passent directement en attente DG.
+export const adminGetUserBypassEmployees = async (userId) => {
+  const { data } = await api.get(`/admin/users/${userId}/bypass-employees`);
+  return data;
+};
+
 export const adminLdapSync = async () => {
   const { data } = await api.post('/admin/ldap-sync');
   return data;

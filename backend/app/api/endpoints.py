@@ -268,7 +268,15 @@ async def batch_validate_bonuses(
                     results.append(BatchValidateResult(bonus_id=bonus_id, success=False, error="Étape invalide"))
                     continue
 
-                if bonus.status != expected_status:
+                # Config "Passer directement à DG" : une prime de la liste de ce
+                # validateur peut être validée par lui en N+1 alors qu'elle est
+                # déjà en attente DG (créée directement par le DG par ex.).
+                n1_bypass_dg = (
+                    request.step == "N1"
+                    and user.bypass_director
+                    and await user.bypass_employees.filter(id=bonus.employee_id).exists()
+                )
+                if bonus.status != expected_status and not n1_bypass_dg:
                     results.append(BatchValidateResult(
                         bonus_id=bonus_id, success=False,
                         error=f"Statut actuel '{bonus.status}', attendait '{expected_status}'"
@@ -285,13 +293,20 @@ async def batch_validate_bonuses(
             )
 
             if request.action == "VALIDER":
-                bonus.status = {
-                    "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
-                    "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
-                    "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
-                    "DG": ValidationStatus.VALIDE,
-                    "DRH": ValidationStatus.EN_ATTENTE_DG,
-                }[request.step]
+                if request.step == "N1" and user.bypass_director and not bonus.pass_to_n2 \
+                        and await user.bypass_employees.filter(id=bonus.employee_id).exists():
+                    # Config "Passer directement à DG" : ce user est configuré
+                    # pour cet employé → sa validation N+1 envoie la prime
+                    # directement en attente DG, sans l'étape Directeur.
+                    bonus.status = ValidationStatus.EN_ATTENTE_DG
+                else:
+                    bonus.status = {
+                        "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
+                        "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
+                        "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
+                        "DG": ValidationStatus.VALIDE,
+                        "DRH": ValidationStatus.EN_ATTENTE_DG,
+                    }[request.step]
 
                 if bonus.status == ValidationStatus.VALIDE:
                     await Validation.create(
@@ -316,6 +331,11 @@ async def batch_validate_bonuses(
                             n2_user = await User.get_or_none(id=bonus.n2_user_id)
                             if n2_user and n2_user.id != user.id:
                                 notif_recipients.append(n2_user)
+                        elif bonus.status == ValidationStatus.EN_ATTENTE_DG:
+                            # Bypass DG : notifier directement le DG, pas de Directeur.
+                            dg = await User.filter(is_dg=True, is_admin=False).first()
+                            if dg and dg.id != user.id:
+                                notif_recipients.append(dg)
                         else:
                             directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                             if directeur and directeur.id != user.id:
@@ -1291,7 +1311,15 @@ async def validate_bonus(
         expected_status = expected_status_map.get(step)
         if not expected_status:
             raise HTTPException(400, "Étape de validation invalide")
-        if bonus.status != expected_status:
+        # Config "Passer directement à DG" : une prime de la liste de ce
+        # validateur peut être validée par lui en N+1 alors qu'elle est
+        # déjà en attente DG (créée directement par le DG par ex.).
+        n1_bypass_dg = (
+            step == "N1"
+            and user.bypass_director
+            and await user.bypass_employees.filter(id=bonus.employee_id).exists()
+        )
+        if bonus.status != expected_status and not n1_bypass_dg:
             raise HTTPException(
                 400,
                 f"Action impossible : la prime est au statut '{bonus.status}', "
@@ -1310,13 +1338,20 @@ async def validate_bonus(
     
     # Mise à jour du statut selon l'étape et l'action
     if validation.action == "VALIDER":
-        bonus.status = {
-            "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
-            "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
-            "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
-            "DG": ValidationStatus.VALIDE,
-            "DRH": ValidationStatus.EN_ATTENTE_DG,
-        }[step]
+        if step == "N1" and user.bypass_director and not bonus.pass_to_n2 \
+                and await user.bypass_employees.filter(id=bonus.employee_id).exists():
+            # Config "Passer directement à DG" : ce user est configuré
+            # pour cet employé → sa validation N+1 envoie la prime
+            # directement en attente DG, sans l'étape Directeur.
+            bonus.status = ValidationStatus.EN_ATTENTE_DG
+        else:
+            bonus.status = {
+                "N1": ValidationStatus.EN_ATTENTE_N2 if bonus.pass_to_n2 else ValidationStatus.EN_ATTENTE_DIRECTEUR,
+                "N2": ValidationStatus.EN_ATTENTE_DIRECTEUR,
+                "DIRECTEUR": ValidationStatus.EN_ATTENTE_DG,
+                "DG": ValidationStatus.VALIDE,
+                "DRH": ValidationStatus.EN_ATTENTE_DG,
+            }[step]
         
         # Clôture automatique si DG valide
         if bonus.status == ValidationStatus.VALIDE:
@@ -1343,6 +1378,11 @@ async def validate_bonus(
                     n2_user = await User.get_or_none(id=bonus.n2_user_id)
                     if n2_user and n2_user.id != user.id:
                         notif_recipients.append(n2_user)
+                elif bonus.status == ValidationStatus.EN_ATTENTE_DG:
+                    # Bypass DG : notifier directement le DG, pas de Directeur.
+                    dg = await User.filter(is_dg=True, is_admin=False).first()
+                    if dg and dg.id != user.id:
+                        notif_recipients.append(dg)
                 else:
                     directeur = await User.filter(is_directeur=True, is_admin=False, dept_str=employee.dept_str).first()
                     if directeur and directeur.id != user.id:

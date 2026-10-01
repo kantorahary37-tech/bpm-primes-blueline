@@ -427,6 +427,57 @@ try:
 except Exception as e:
     print(f"N+2 role columns check skipped: {e}")
 
+print("Ensuring bypass_director columns exist...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    # user.bypass_director : rôle de l'utilisateur (passer directement au DG)
+    cur.execute("""
+        ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "bypass_director" BOOLEAN NOT NULL DEFAULT FALSE;
+    """)
+    # bonus.bypass_director : la prime saute l'étape Directeur
+    cur.execute("""
+        ALTER TABLE bonus ADD COLUMN IF NOT EXISTS "bypass_director" BOOLEAN NOT NULL DEFAULT FALSE;
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("bypass_director columns OK")
+except Exception as e:
+    print(f"bypass_director columns check skipped: {e}")
+
+print("Ensuring user_bypass_employees table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    # Table de liaison M2M : config "Passer directement à DG" — pour chaque
+    # user configuré, la liste des employés dont ses primes validées en N+1
+    # passeront directement en attente DG (sans l'étape Directeur).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "user_bypass_employees" (
+            "user_id" INT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+            "employee_id" INT NOT NULL REFERENCES "employee" ("id") ON DELETE CASCADE
+        );
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS "idx_user_bypass_employees_user_id"
+        ON "user_bypass_employees" ("user_id");
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS "idx_user_bypass_employees_employee_id"
+        ON "user_bypass_employees" ("employee_id");
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("user_bypass_employees table OK")
+except Exception as e:
+    print(f"user_bypass_employees table check skipped: {e}")
+
 print("Ensuring primereminderexecution table exists...")
 try:
     import psycopg2

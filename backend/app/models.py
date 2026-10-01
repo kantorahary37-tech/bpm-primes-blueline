@@ -83,11 +83,17 @@ class User(models.Model):
     is_drh = fields.BooleanField(default=False)
     # Boolean : est Directeur Général ?
     is_dg = fields.BooleanField(default=False)
+    # Boolean : pass directement à DG, on ne vérifie pas la cette étape Directeur ?
+    bypass_director = fields.BooleanField(default=False)
     # Boolean : est Administrateur (tous les privilèges) ?
     is_admin = fields.BooleanField(default=False)
     # Groupes de services gérés (N+1) : un N+1 peut être affecté à plusieurs services,
     # et ne peut créer/valider que les primes des employés de ses services affectés.
     service_groups = fields.ManyToManyField('models.ServiceGroup', related_name='managers', through='user_servicegroup')
+    # Employés dont les primes de ce user passent directement en attente DG après
+    # sa validation N+1, sans passer par l'étape Directeur (config "Passer
+    # directement à DG", sélectionnée dans la modale d'édition utilisateur).
+    bypass_employees = fields.ManyToManyField('models.Employee', related_name='bypass_managers', through='user_bypass_employees')
     # Mot de passe hashé
     password_hash = fields.CharField(max_length=255, null=True)
     # Token de réinitialisation de mot de passe
@@ -230,6 +236,8 @@ class Bonus(models.Model):
     pass_to_n2 = fields.BooleanField(default=False)
     # Utilisateur N+2 sélectionné pour valider cette prime
     n2_user = fields.ForeignKeyField('models.User', related_name='n2_bonuses', null=True)
+    # Passer directement à DG, on ne vérifie pas l'étape Directeur ?
+    bypass_director = fields.BooleanField(default=False)
     # Statut de validation de la prime
     status = fields.CharEnumField(ValidationStatus, default=ValidationStatus.INITIALISE)
     # Devise de la prime (copie de employee.currency à la création — l'employé

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
-from typing import Optional
-from app.models import User, Department, Employee, ServiceGroup, UserServiceAssignment
+from typing import Optional, List
+from app.models import User, Department, Employee, ServiceGroup, UserServiceAssignment, Bonus, ValidationStatus
 from app.auth import get_current_user, get_password_hash
 from app.ldap_helpers import connect, first, full_name, matricule, dept_name, escape_ldap, LDAP_ATTRS
 from app.schemas import UserResponse, EmployeeResponse, UserServiceAssignmentResponse, UserServiceAssignmentCreate, UserServiceAssignmentUpdate
@@ -59,6 +59,16 @@ class UserUpdateRequest(BaseModel):
     is_drh: Optional[bool] = None
     is_dg: Optional[bool] = None
     is_admin: Optional[bool] = None
+    bypass_director: Optional[bool] = None
+    directig: Optional[bool] = None
+    employees: Optional[List[int]] = None
+
+
+async def _get_user_or_404(user_id: int) -> User:
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    return user
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
@@ -90,7 +100,52 @@ async def admin_update_user(user_id: int, data: UserUpdateRequest, admin: User =
         user.is_dg = data.is_dg
     if data.is_admin is not None:
         user.is_admin = data.is_admin
+    if data.bypass_director is not None:
+        user.bypass_director = data.bypass_director
+
     await user.save()
+
+    if data.directig:
+        # Configuration "Passer directement à DG" : on enregistre uniquement le
+        # rôle (user.bypass_director) et la liste des employés concernés. Aucune
+        # prime n'est créée ici : quand ce user validera une prime en N+1 pour un
+        # de ces employés, elle passera directement en attente DG (sans l'étape
+        # Directeur). Le montant est donc vérifié au moment de la création de la
+        # prime, pas ici.
+        if data.employees is not None:
+            if not data.employees:
+                # Liste vide : on réinitialise la config.
+                user.bypass_director = False
+                await user.save()
+                await user.bypass_employees.clear()
+            else:
+                user.bypass_director = True
+                await user.save()
+                valid_emps = []
+                for emp_id in data.employees:
+                    employee = await Employee.get_or_none(id=emp_id)
+                    if not employee:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Employé introuvable : {emp_id}",
+                        )
+                    if employee.is_archived or not employee.is_active:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"L'employé {employee.name} est archivé ou inactif : impossible de l'ajouter.",
+                        )
+                    # Les employés doivent appartenir au périmètre du user
+                    # configuré (ceux pour lesquels il crée et valide des primes).
+                    if not await employee_in_scope(user, employee):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"{employee.name} n'est pas dans le périmètre de {user.name}.",
+                        )
+                    valid_emps.append(employee)
+                await user.bypass_employees.clear()
+                if valid_emps:
+                    # add() attend des instances, pas des IDs.
+                    await user.bypass_employees.add(*valid_emps)
     return user
 
 
@@ -156,11 +211,138 @@ async def admin_create_user(data: CreateUserRequest, admin: User = Depends(requi
     return user
 
 
-async def _get_user_or_404(user_id: int) -> User:
-    user = await User.get_or_none(id=user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-    return user
+class UserPrimeBatchRequest(BaseModel):
+    employee_ids: List[int]
+
+
+@router.post("/users/{user_id}/prime-batch", response_model=List[int])
+async def admin_create_user_prime_batch(
+    data: UserPrimeBatchRequest,
+    user_id: int,
+    admin: User = Depends(require_admin_or_director),
+):
+    """Crée une prime EN_ATTENTE_DG pour chaque employé sélectionné.
+
+    Les primes créées partent directement en attente de validation DG,
+    sans passer par l'étape Directeur.
+    """
+    user = await _get_user_or_404(user_id)
+    if not (admin.is_admin or admin.is_directeur):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux administrateurs ou directeurs",
+        )
+    _check_user_scope(admin, user)
+
+    employee_ids = data.employee_ids or []
+    if not employee_ids:
+        return []
+
+    created_ids = []
+    created_employees = []
+    for emp_id in employee_ids:
+        employee = await Employee.get_or_none(id=emp_id)
+        if not employee:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Employé introuvable : {emp_id}",
+            )
+        if employee.is_archived:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"L'employé {employee.name} est archivé : impossible de créer une prime pour lui.",
+            )
+        # Vérification du périmètre : l'admin ou le directeur peut créer des
+        # primes pour les employés qui sont dans son périmètre.
+        if not await employee_in_scope(admin, employee):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Vous ne pouvez pas créer une prime pour {employee.name} (hors périmètre).",
+            )
+        created_employee = await employee
+        created_employees.append(created_employee)
+
+        emp_currency = emp_currency_code(created_employee)
+        emp_symbol = await currency_symbol(emp_currency)
+        primemax = await PrimeMax.filter(
+            dept_str=created_employee.dept_str,
+            bonus_type=BonusType.ASTREINTE,
+            currency=emp_currency,
+        ).first()
+
+        # Pour le batch, on crée une prime astreinte (type par défaut) à
+        # partir du taux de l'employé, ou du plafond si existant.
+        amount = None
+        if created_employee.astreinte_rate is not None:
+            amount = Decimal(str(created_employee.astreinte_rate))
+        elif primemax is not None:
+            amount = primemax.amount
+
+        if amount is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Aucun montant disponible pour créer la prime de {employee.name}.",
+            )
+
+        total_amount = amount
+        bonus = await Bonus.create(
+            employee_id=employee.id,
+            start_date=date.today(),
+            end_date=date.today(),
+            bonus_type=BonusType.ASTREINTE,
+            total_amount=total_amount,
+            currency=emp_currency,
+            created_by_id=admin.id,
+            status=ValidationStatus.EN_ATTENTE_DG,
+        )
+        created_ids.append(bonus.id)
+
+    return created_ids
+
+
+@router.get("/users/{user_id}/bypass-employees")
+async def admin_get_user_bypass_employees(user_id: int, admin: User = Depends(require_admin_or_director)):
+    """Liste des IDs d'employés configurés en "Passer directement à DG"
+    pour ce user : après sa validation N+1, les primes de ces employés
+    passent directement en attente DG (sans l'étape Directeur).
+    """
+    user = await _get_user_or_404(user_id)
+    _check_user_scope(admin, user)
+    rows = await user.bypass_employees.all().values("id")
+    return [r["id"] for r in rows]
+
+
+@router.get("/users/{user_id}/scope-employees")
+async def admin_list_user_scope_employees(user_id: int, admin: User = Depends(require_admin_or_director)):
+    """Liste des employés visibles par le user ``user_id`` dans SA page Employés.
+
+    Réutilise exactement la même logique de périmètre que GET /employees/ :
+    département du user + employés dont il est le manager, restreint à ses
+    services affectés pour un N+1/N+2. Utilisé par la modale "Passer
+    directement à DG" pour ne proposer que les employés pour lesquels ce user
+    peut réellement créer une prime.
+    """
+    user = await _get_user_or_404(user_id)
+    _check_user_scope(admin, user)
+
+    query = Employee.all().filter(is_active=True, is_archived=False).prefetch_related('service_group')
+    if user.is_admin or user.is_dg or user.is_drh:
+        pass  # portée globale
+    else:
+        query = apply_department_scope(query, user)
+        query = apply_employee_scope(query, await employee_scope(user))
+
+    employees = await query.order_by("name")
+    return [
+        {
+            "id": e.id,
+            "matricule": e.matricule,
+            "name": e.name,
+            "department": e.dept_str,
+            "service_group": (e.service_group.name if e.service_group else None),
+        }
+        for e in employees
+    ]
 
 
 async def _assignment_to_response(assignment: UserServiceAssignment) -> dict:
@@ -515,6 +697,20 @@ from app.models import ConfigSnapshot
 from datetime import datetime
 import os, json, re
 from fastapi.responses import FileResponse
+from app.auth import get_current_user, get_password_hash
+from app.ldap_helpers import connect, first, full_name, matricule, dept_name, escape_ldap, LDAP_ATTRS
+from app.schemas import UserResponse, EmployeeResponse, UserServiceAssignmentResponse, UserServiceAssignmentCreate, UserServiceAssignmentUpdate
+from app.models import User, Department, Employee, ServiceGroup, UserServiceAssignment, Bonus, ValidationStatus, BonusType, PrimeMax
+from app.permissions import (
+    employee_in_scope,
+    employee_scope,
+    apply_employee_scope,
+    apply_department_scope,
+    managed_employee_ids,
+)
+from app.currency_format import employee_currency_code as emp_currency_code, currency_symbol
+from decimal import Decimal
+from datetime import date
 
 SNAPSHOTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "snapshots")
 

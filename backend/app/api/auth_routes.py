@@ -67,13 +67,21 @@ async def login(data: LoginRequest, request: Request):
         raise HTTPException(status_code=429, detail=message)
 
     user = await User.get_or_none(email=data.email)
-    if not user or not verify_password(data.password, user.password_hash):
+    if not user or not user.password_hash:
+        record_failed_attempt(client_ip)
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    try:
+        password_ok = verify_password(data.password, user.password_hash)
+    except Exception:
+        record_failed_attempt(client_ip)
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not password_ok:
         record_failed_attempt(client_ip)
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     reset_attempts(client_ip)
     token = create_access_token({"sub": str(user.id)})
-    return {"access_token": token, "token_type": "bearer"}
+    return Token(access_token=token, token_type="bearer")
 
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user)):

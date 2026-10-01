@@ -51,6 +51,7 @@ class UserBase(BaseModel):
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
     is_admin: Optional[bool] = False
+    bypass_director: Optional[bool] = False
 
     _dept = field_validator('department', mode='before')(dept_to_str)
 
@@ -133,9 +134,11 @@ class ServiceManagersAssignRequest(BaseModel):
 class UserServiceAssignmentCreate(BaseModel):
     service_group_id: int
     n1_id: Optional[int] = None
+    bypass_director: Optional[bool] = None
 
 class UserServiceAssignmentUpdate(BaseModel):
     n1_id: Optional[int] = None
+    bypass_director: Optional[bool] = None
 
 class UserServiceAssignmentResponse(BaseModel):
     id: int
@@ -145,6 +148,7 @@ class UserServiceAssignmentResponse(BaseModel):
     n1_id: Optional[int] = None
     n1_name: Optional[str] = None
     n1_email: Optional[str] = None
+    bypass_director: Optional[bool] = False
     created_at: datetime
     class Config: from_attributes = True
 
@@ -170,6 +174,7 @@ class BonusBase(BaseModel):
     total_amount: float
     pass_to_n2: Optional[bool] = False
     n2_user_id: Optional[int] = None
+    bypass_director: Optional[bool] = False
 
 # Schéma de création de prime
 class BonusCreate(BonusBase): pass
@@ -181,6 +186,7 @@ class BonusResponse(BonusBase):
     paid_at: Optional[datetime] = None
     pass_to_n2: Optional[bool] = False
     n2_user_id: Optional[int] = None
+    bypass_director: Optional[bool] = False
     created_by_id: int
     created_at: datetime
     updated_at: datetime
