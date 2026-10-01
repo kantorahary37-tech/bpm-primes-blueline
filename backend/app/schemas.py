@@ -277,6 +277,19 @@ class CurrencyResponse(BaseModel):
     active: bool = True
     class Config: from_attributes = True
 
+# --- Départements ---
+class DepartmentCreate(BaseModel):
+    name: str
+
+class DepartmentUpdate(BaseModel):
+    name: str
+
+class DepartmentResponse(BaseModel):
+    id: int
+    name: str
+    employee_count: int = 0
+    class Config: from_attributes = True
+
 class AuditLogResponse(BaseModel):
     id: int
     bonus_id: int

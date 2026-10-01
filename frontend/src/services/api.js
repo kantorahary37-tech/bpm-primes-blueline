@@ -51,6 +51,27 @@ export const getUsers = async () => {
   return data;
 };
 
+// --- Départements (administration) ---
+export const getDepartments = async () => {
+  const { data } = await api.get('/departments/');
+  return data;
+};
+
+export const createDepartment = async (name) => {
+  const { data } = await api.post('/departments/', { name });
+  return data;
+};
+
+export const renameDepartment = async (id, name) => {
+  const { data } = await api.put(`/departments/${id}`, { name });
+  return data;
+};
+
+export const deleteDepartment = async (id) => {
+  const { data } = await api.delete(`/departments/${id}`);
+  return data;
+};
+
 export const getEmployees = async (department = null, search = null) => {
   const params = {};
   if (department) params.department = department;
