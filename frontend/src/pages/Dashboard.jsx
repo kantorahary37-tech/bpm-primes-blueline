@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getBonuses, getEmployees } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { roleStatuses } from '../utils/roleQueues';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -63,6 +64,13 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
+  // Statuts réellement dans la file du compte connecté (même règle que la liste
+  // des primes et que le rappel email) : sans ce filtre, le compteur « En attente »
+  // compte toutes les primes non terminées — y compris celles déjà passées à
+  // l'étape DG — alors que la liste n'en affiche qu'une partie (8 en attente
+  // côté Directeur avec une liste vide).
+  const myQueue = useMemo(() => roleStatuses(user), [user]);
+
   const stats = useMemo(() => {
     const total = bonuses.length;
 
@@ -79,11 +87,11 @@ const Dashboard = () => {
       }
     }
 
-    const pending = bonuses.filter(b => b.status !== 'Validé' && b.status !== 'Rejeté' && b.status !== 'Prime validée' && b.status !== 'Prime rejetée').length;
-    const validated = bonuses.filter(b => b.status === 'Validé' || b.status === 'Prime validée').length;
+    const pending = bonuses.filter(b => myQueue.includes(b.status) && b.status !== 'Prime validée' && b.status !== 'Prime rejetée').length;
+    const validated = bonuses.filter(b => b.status === 'Prime validée').length;
 
     return { total, pending, validated, byType, validatedByType, employees: employees.length };
-  }, [bonuses, employees]);
+  }, [bonuses, employees, myQueue]);
 
   const { monthlyData, donutData, monthLabels } = useMemo(() => {
     const colors = { mensuel: '#2563eb', astreinte: '#7c3aed', commission: '#d97706', commission_gc: '#b45309', inconnu: '#9ca3af' };

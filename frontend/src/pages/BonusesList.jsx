@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
 import toast from '../utils/toast';
+import { ALL_STATUSES, roleStatuses, defaultStatusFor } from '../utils/roleQueues';
 import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon, ChevronDownIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 import BonusTable from '../components/BonusTable';
@@ -25,33 +26,11 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
-const ALL_STATUSES = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DRH', 'En attente DG', 'Prime validée', 'Prime rejetée'];
-
-// Statuts proposés dans le filtre : chaque rôle ne filtre que sur son flux :
-// Directeur : En attente Directeur · DRH : En attente DRH (créées par un DRH) / Prime validée · N+1 : Initialisé · N+2 : Initialisé / En attente N+2 · DG : En attente DG · Admin : tous
-const roleStatuses = (user) => {
-  if (!user) return [];
-  if (user.is_admin) return ALL_STATUSES;
-  if (user.is_dg) return ['En attente DG'];
-  if (user.is_drh) return ['En attente DRH', 'Prime validée'];
-  if (user.is_directeur) return ['En attente Directeur'];
-  if (user.is_validator_n2) return ['Initialisé', 'En attente N+2'];
-  if (user.is_validator_n1) return ['Initialisé'];
-  return [];
-};
-
-const defaultStatusFor = (user) => {
-  if (!user) return '';
-  if (user.is_admin) return '';
-  if (user.is_dg) return 'En attente DG';
-  // DRH : aucun filtre par défaut → voit d'un coup la file « En attente DRH »
-  // (primes créées par un DRH) et les « Prime validée » à traiter.
-  if (user.is_drh) return '';
-  if (user.is_directeur) return 'En attente Directeur';
-  if (user.is_validator_n2) return 'En attente N+2';
-  if (user.is_validator_n1) return 'Initialisé';
-  return '';
-};
+// Statuts proposés dans le filtre et statut pré-sélectionné : chaque rôle ne filtre
+// que sur son flux (Directeur : En attente Directeur · DRH : En attente DRH / Prime
+// validée · N+1 : Initialisé · N+2 : Initialisé / En attente N+2 · DG : En attente DG
+// · Admin : tous). Règle partagée avec le dashboard, le Kanban et le backend
+// (permissions.actionable_statuses) — voir utils/roleQueues.js.
 
 const BonusesList = () => {
   const { user } = useAuth();

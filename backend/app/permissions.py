@@ -2,11 +2,47 @@
 
 from tortoise.expressions import Q
 
-from app.models import Employee, User, UserServiceAssignment
+from app.models import Employee, User, UserServiceAssignment, ValidationStatus
 
 # Rôles avec une portée plus large que celle d'un N+1 : ils ne sont jamais
 # restreints aux services affectés d'un N+1.
 BROAD_ROLES = ('is_admin', 'is_dg', 'is_drh', 'is_directeur')
+
+
+def actionable_statuses(user: User) -> list:
+    """
+    Règle UNIQUE de la « file » d'un rôle : les statuts sur lesquels cet
+    utilisateur doit agir, donc les seules primes qui comptent comme « en
+    attente » pour lui.
+
+    Source de vérité partagée par TOUS les points d'entrée qui comptent ou
+    listent des primes à valider :
+      - ``list_bonuses`` / ``export_bonuses`` / ``export_bonuses_xlsx``
+        (filtre par défaut),
+      - ``scheduler.collect_pending_by_actor`` (rappel quotidien),
+      - l'IHM (compteur « En attente » du dashboard, liste, Kanban).
+
+    Sans cette centralisation, chaque écran réimplémentait la règle : le
+    dashboard comptait alors TOUTES les primes non terminales, y compris celles
+    déjà passées à l'étape DG, alors que la liste n'en montrait qu'une partie
+    (d'où un compteur « 8 en attente » avec une liste vide côté Directeur).
+
+    L'ordre des tests est significatif : un compte cumulant plusieurs rôles
+    (Directeur + N+1, DG + Directeur...) est traité par son rôle le plus large.
+    """
+    if user.is_admin:
+        return list(ValidationStatus)
+    if user.is_dg:
+        return [ValidationStatus.EN_ATTENTE_DG]
+    if user.is_drh:
+        return [ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE]
+    if user.is_directeur:
+        return [ValidationStatus.EN_ATTENTE_DIRECTEUR]
+    if user.is_validator_n2:
+        return [ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2]
+    if user.is_validator_n1:
+        return [ValidationStatus.INITIALISE]
+    return []
 
 
 def is_broad_role(user: User) -> bool:

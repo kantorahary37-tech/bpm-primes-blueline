@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
 import { ArrowLeftIcon } from '../components/Icons';
+import { roleStatuses } from '../utils/roleQueues';
 
 const STATUS_COLUMNS = ['Initialisé', 'En attente N+2', 'En attente Directeur', 'En attente DRH', 'En attente DG', 'Prime validée'];
 
@@ -57,13 +58,7 @@ const BonusKanban = () => {
       .finally(() => setLoading(false));
   }, [type]);
 
-  const myStatuses = user?.is_admin ? []
-    : user?.is_dg ? ['En attente DG']
-    : user?.is_drh ? ['En attente DRH', 'Prime validée']
-    : user?.is_directeur ? ['En attente Directeur']
-    : user?.is_validator_n2 ? ['Initialisé', 'En attente N+2']
-    : user?.is_validator_n1 ? ['Initialisé']
-    : [];
+  const myStatuses = roleStatuses(user);
 
   const columns = STATUS_COLUMNS.map(status => ({
     status,

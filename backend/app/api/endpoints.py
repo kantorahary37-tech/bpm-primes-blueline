@@ -7,6 +7,7 @@ from tortoise.expressions import Q
 from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
 from app.permissions import (
+    actionable_statuses,
     employee_in_scope,
     employee_scope,
     apply_employee_scope,
@@ -678,33 +679,13 @@ async def list_bonuses(
         # restriction appliquée à la validation.
         query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
 
-        # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban)
-        # Chaque rôle ne voit que les primes au statut qu'il doit traiter :
-        #   - DG : en attente DG
-        #   - DRH : primes créées par un DRH (en attente DRH) + primes validées
-        #   - Directeur : en attente Directeur
-        #   - N+1 : initialisées
-        #   - Admin : tous les statuts
-        all_statuses_list = [s for s in ValidationStatus]
-        # Filtre par défaut (aucun statut explicite) → chaque rôle ne voit que son flux :
-        #   - DG : en attente DG · DRH : primes validées · Directeur : en attente Directeur
-        #   - N+1 : initialisées · Admin : tous les statuts
-        if user.is_admin:
-            default_statuses = all_statuses_list
-        elif user.is_dg:
-            default_statuses = [ValidationStatus.EN_ATTENTE_DG]
-        elif user.is_drh:
-            default_statuses = [ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE]
-        elif user.is_directeur:
-            default_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
-        elif user.is_validator_n2:
-            default_statuses = [ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2]
-        elif user.is_validator_n1:
-            default_statuses = [ValidationStatus.INITIALISE]
-        else:
-            default_statuses = []
+        # Filtrer les statuts selon le rôle de l'utilisateur (sauf si all_statuses pour Kanban).
+        # Règle partagée avec les exports, les rappels email et l'IHM
+        # (permissions.actionable_statuses) : un rôle ne voit par défaut que les
+        # primes qu'il doit réellement traiter.
+        default_statuses = actionable_statuses(user)
         # Le filtre statut explicite reste accessible sur tous les statuts pour tous les rôles
-        filterable_statuses = all_statuses_list
+        filterable_statuses = list(ValidationStatus)
 
         if all_statuses:
             pass  # Kanban : toutes les primes du département, tous statuts
@@ -815,21 +796,8 @@ async def export_bonuses(
     # Filtre périmètre pour un N+1/N+2 restreint (cohérent avec /bonuses/)
     query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
 
-    # Filtre statut selon le rôle
-    if user.is_admin:
-        allowed_statuses = [s for s in ValidationStatus]
-    elif user.is_dg:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
-    elif user.is_drh:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE]
-    elif user.is_directeur:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
-    elif user.is_validator_n2:
-        allowed_statuses = [ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2]
-    elif user.is_validator_n1:
-        allowed_statuses = [ValidationStatus.INITIALISE]
-    else:
-        allowed_statuses = []
+    # Filtre statut selon le rôle (règle partagée : permissions.actionable_statuses)
+    allowed_statuses = actionable_statuses(user)
 
     if status:
         status_enum = ValidationStatus(status)
@@ -942,21 +910,8 @@ async def export_bonuses_xlsx(
     # Filtre périmètre pour un N+1/N+2 restreint (cohérent avec /bonuses/)
     query = apply_employee_scope(query, await employee_scope(user), rel="employee__")
 
-    # Filtre statut selon le rôle
-    if user.is_admin:
-        allowed_statuses = [s for s in ValidationStatus]
-    elif user.is_dg:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DG]
-    elif user.is_drh:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE]
-    elif user.is_directeur:
-        allowed_statuses = [ValidationStatus.EN_ATTENTE_DIRECTEUR]
-    elif user.is_validator_n2:
-        allowed_statuses = [ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2]
-    elif user.is_validator_n1:
-        allowed_statuses = [ValidationStatus.INITIALISE]
-    else:
-        allowed_statuses = []
+    # Filtre statut selon le rôle (règle partagée : permissions.actionable_statuses)
+    allowed_statuses = actionable_statuses(user)
 
     if status:
         status_enum = ValidationStatus(status)
