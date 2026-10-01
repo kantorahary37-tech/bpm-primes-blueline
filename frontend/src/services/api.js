@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { installQueryCache, clearQueryCache } from './queryCache';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -10,6 +11,10 @@ api.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+installQueryCache(api);
+
+export { clearQueryCache };
 
 export const login = async (email, password) => {
   const { data } = await api.post('/auth/login', { email, password });
@@ -247,13 +252,15 @@ export const deletePrimeMax = async (id) => {
   return data;
 };
 
+// Rafraîchies toutes les 30 s par NotificationDropdown : `cacheTtl: 0` les
+// exclut du cache GET, sinon la cloche resterait figée sur la première réponse.
 export const getNotifications = async () => {
-  const { data } = await api.get('/notifications');
+  const { data } = await api.get('/notifications', { cacheTtl: 0 });
   return data;
 };
 
 export const getUnreadCount = async () => {
-  const { data } = await api.get('/notifications/unread-count');
+  const { data } = await api.get('/notifications/unread-count', { cacheTtl: 0 });
   return data;
 };
 
