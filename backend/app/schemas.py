@@ -284,10 +284,21 @@ class DepartmentCreate(BaseModel):
 class DepartmentUpdate(BaseModel):
     name: str
 
+class DepartmentManagerAssign(BaseModel):
+    user_id: int
+
+class DepartmentManagerResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    poste: Optional[str] = None
+
 class DepartmentResponse(BaseModel):
     id: int
     name: str
     employee_count: int = 0
+    # Directeur du département (utilisateur portant le rôle is_directeur).
+    director: Optional[DepartmentManagerResponse] = None
     class Config: from_attributes = True
 
 class AuditLogResponse(BaseModel):

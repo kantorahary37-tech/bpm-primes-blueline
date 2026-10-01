@@ -15,9 +15,14 @@ from app.api.departments import (
     create_department,
     rename_department,
     delete_department,
+    get_department_manager,
+    list_manager_candidates,
+    assign_department_manager,
+    clear_department_manager,
     RESERVED_NAME,
 )
 from app.api.admin import require_admin
+from app.schemas import DepartmentManagerAssign
 
 
 async def make_admin(email="admin@test.mg"):
@@ -229,3 +234,135 @@ async def test_delete_reserved_and_unknown(db):
     with pytest.raises(Exception) as exc:
         await delete_department(99999, admin)
     assert exc.value.status_code == 404
+
+# ── Directeur du département ──────────────────────────────────────────────
+# Le « directeur » est l'utilisateur du département portant `is_directeur` :
+# c'est la convention déjà utilisée par _department_manager() et le scheduler.
+
+async def test_list_includes_director(db):
+    admin = await make_admin()
+    dept = await Department.create(name="Commercial")
+    dir_user = await User.create(
+        email="dir@test.mg", name="Rakoto", dept_str="Commercial", dept=dept, is_directeur=True
+    )
+    rows = await list_departments()
+    row = next(r for r in rows if r["name"] == "Commercial")
+    assert row["director"]["id"] == dir_user.id
+    assert row["director"]["name"] == "Rakoto"
+
+
+async def test_list_director_null_when_absent(db):
+    admin = await make_admin()
+    await Department.create(name="Vide")
+    rows = await list_departments()
+    row = next(r for r in rows if r["name"] == "Vide")
+    assert row["director"] is None
+
+
+async def test_assign_director_sets_role(db):
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    user = await User.create(email="n1@test.mg", name="Hanitra", dept_str="RH", dept=dept)
+
+    res = await assign_department_manager(dept.id, DepartmentManagerAssign(user_id=user.id), admin)
+    assert res["director"]["id"] == user.id
+
+    refreshed = await User.get(id=user.id)
+    assert refreshed.is_directeur is True, "le rôle Directeur n'a pas été posé"
+
+
+async def test_assign_replaces_previous_director(db):
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    first = await User.create(email="a@test.mg", name="A", dept_str="RH", dept=dept, is_directeur=True)
+    second = await User.create(email="b@test.mg", name="B", dept_str="RH", dept=dept)
+
+    await assign_department_manager(dept.id, DepartmentManagerAssign(user_id=second.id), admin)
+
+    assert (await User.get(id=second.id)).is_directeur is True
+    assert (await User.get(id=first.id)).is_directeur is False, "l'ancien directeur a gardé le rôle"
+
+    res = await get_department_manager(dept.id, admin)
+    assert res.id == second.id
+
+
+async def test_assign_rejects_user_from_other_department(db):
+    admin = await make_admin()
+    rh = await Department.create(name="RH")
+    other = await Department.create(name="Compta")
+    outsider = await User.create(email="x@test.mg", name="X", dept_str="Compta", dept=other)
+    with pytest.raises(Exception) as exc:
+        await assign_department_manager(rh.id, DepartmentManagerAssign(user_id=outsider.id), admin)
+    assert exc.value.status_code == 400
+    assert (await User.get(id=outsider.id)).is_directeur is False
+
+
+async def test_assign_rejects_admin_and_dg(db):
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    dg = await User.create(
+        email="dg@test.mg", name="DG", dept_str="RH", dept=dept, is_dg=True, is_directeur=False
+    )
+    with pytest.raises(Exception) as exc:
+        await assign_department_manager(dept.id, DepartmentManagerAssign(user_id=dg.id), admin)
+    assert exc.value.status_code == 400
+
+
+async def test_assign_unknown_user_and_department(db):
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    with pytest.raises(Exception) as exc:
+        await assign_department_manager(dept.id, DepartmentManagerAssign(user_id=99999), admin)
+    assert exc.value.status_code == 404
+    with pytest.raises(Exception) as exc:
+        await assign_department_manager(99999, DepartmentManagerAssign(user_id=admin.id), admin)
+    assert exc.value.status_code == 404
+
+
+async def test_candidates_excludes_admin_and_dg(db):
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    await User.create(email="plain@test.mg", name="Plain", dept_str="RH", dept=dept)
+    await User.create(email="dg2@test.mg", name="DG2", dept_str="RH", dept=dept, is_dg=True)
+    await User.create(email="elsewhere@test.mg", name="Other", dept_str="Compta")
+
+    rows = await list_manager_candidates(dept.id, admin)
+    emails = [u.email for u in rows]
+    assert "plain@test.mg" in emails
+    assert "dg2@test.mg" not in emails, "le DG ne doit pas être proposé"
+    assert "admin@test.mg" not in emails, "l'admin global ne doit pas être proposé"
+    assert "elsewhere@test.mg" not in emails, "un utilisateur d'un autre département a fuité"
+
+
+async def test_clear_director(db):
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    user = await User.create(
+        email="dir2@test.mg", name="Dir", dept_str="RH", dept=dept, is_directeur=True
+    )
+    res = await clear_department_manager(dept.id, admin)
+    assert res["director"] is None
+    assert (await User.get(id=user.id)).is_directeur is False
+
+
+async def test_get_or_clear_director_when_absent(db):
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    with pytest.raises(Exception) as exc:
+        await get_department_manager(dept.id, admin)
+    assert exc.value.status_code == 404
+    with pytest.raises(Exception) as exc:
+        await clear_department_manager(dept.id, admin)
+    assert exc.value.status_code == 404
+
+
+async def test_rename_keeps_director(db):
+    """Le directeur est résolu via dept_str : le renommage doit le préserver."""
+    admin = await make_admin()
+    dept = await Department.create(name="RH")
+    user = await User.create(
+        email="dir3@test.mg", name="Dir", dept_str="RH", dept=dept, is_directeur=True
+    )
+    res = await rename_department(dept.id, DepartmentUpdate(name="RH & Paie"), admin)
+    assert res["director"] is not None, "le directeur a été perdu au renommage"
+    assert res["director"]["id"] == user.id

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getUsers, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment, adminGetUserScopeEmployees, adminGetUserBypassEmployees } from '../services/api'
+import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getDepartments, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment, adminGetUserScopeEmployees, adminGetUserBypassEmployees } from '../services/api'
 import Modal from '../components/Modal'
 import { useConfirm } from '../components/ConfirmModal'
 import { ldapSyncToast, apiErrorToast } from '../utils/toastHelpers'
@@ -62,9 +62,11 @@ export default function UsersPage() {
 
   const loadDepartments = useCallback(async () => {
     try {
-      const data = await getUsers()
-      const depts = [...new Set(data.map(u => u.department).filter(Boolean))].sort()
-      setDepartments(depts)
+      // Source de vérité : la table des départements.
+      // Dériver la liste des utilisateurs faisait disparaître les départements
+      // nouvellement créés, tant qu'aucun utilisateur ne leur était rattaché.
+      const data = await getDepartments()
+      setDepartments(data.map(d => d.name).sort())
     } catch {}
   }, [])
 

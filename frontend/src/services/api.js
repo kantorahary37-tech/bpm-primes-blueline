@@ -72,6 +72,26 @@ export const deleteDepartment = async (id) => {
   return data;
 };
 
+export const getDepartmentManager = async (id) => {
+  const { data } = await api.get(`/departments/${id}/manager`);
+  return data;
+};
+
+export const getManagerCandidates = async (id) => {
+  const { data } = await api.get(`/departments/${id}/manager-candidates`);
+  return data;
+};
+
+export const assignDepartmentManager = async (id, userId) => {
+  const { data } = await api.put(`/departments/${id}/manager`, { user_id: userId });
+  return data;
+};
+
+export const clearDepartmentManager = async (id) => {
+  const { data } = await api.delete(`/departments/${id}/manager`);
+  return data;
+};
+
 export const getEmployees = async (department = null, search = null) => {
   const params = {};
   if (department) params.department = department;

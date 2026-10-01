@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { getDepartments, createDepartment, renameDepartment, deleteDepartment } from '../services/api'
+import {
+  getDepartments, createDepartment, renameDepartment, deleteDepartment,
+  getManagerCandidates, assignDepartmentManager, clearDepartmentManager,
+} from '../services/api'
 import Modal from '../components/Modal'
 import { useConfirm } from '../components/ConfirmModal'
 import { apiErrorToast } from '../utils/toastHelpers'
 import toast from '../utils/toast'
 import {
   BuildingIcon, PlusIcon, EditIcon, TrashIcon, SearchIcon,
-  UsersIcon, ExclamationIcon, XMarkIcon,
+  UsersIcon, ExclamationIcon, XMarkIcon, UserIcon,
 } from '../components/Icons'
 
 const MAX_NAME_LENGTH = 50
@@ -57,6 +60,12 @@ export default function DepartmentsPage() {
   const [editing, setEditing] = useState(null)
   const [formName, setFormName] = useState('')
   const [formError, setFormError] = useState('')
+  // Modale « Directeur du département »
+  const [managerFor, setManagerFor] = useState(null)
+  const [candidates, setCandidates] = useState([])
+  const [candidatesLoading, setCandidatesLoading] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [savingManager, setSavingManager] = useState(false)
   const nameRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -146,6 +155,76 @@ export default function DepartmentsPage() {
       apiErrorToast(err, isNew ? 'Création impossible' : 'Renommage impossible')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const openManager = async (dept) => {
+    setManagerFor(dept)
+    setSelectedUserId(dept.director?.id ? String(dept.director.id) : '')
+    setCandidatesLoading(true)
+    setCandidates([])
+    try {
+      const data = await getManagerCandidates(dept.id)
+      setCandidates(Array.isArray(data) ? data : [])
+    } catch (err) {
+      apiErrorToast(err, 'Impossible de charger les utilisateurs du département')
+    } finally {
+      setCandidatesLoading(false)
+    }
+  }
+
+  const closeManager = () => {
+    if (savingManager) return
+    setManagerFor(null)
+    setCandidates([])
+    setSelectedUserId('')
+  }
+
+  async function handleSaveManager(e) {
+    e?.preventDefault()
+    if (savingManager || !managerFor) return
+    if (!selectedUserId) {
+      toast.error('Sélectionnez un utilisateur.')
+      return
+    }
+    setSavingManager(true)
+    try {
+      await assignDepartmentManager(managerFor.id, Number(selectedUserId))
+      const chosen = candidates.find((c) => String(c.id) === String(selectedUserId))
+      toast.success(`« ${chosen?.name || 'Directeur'} » est désormais directeur de « ${managerFor.name} »`)
+      setManagerFor(null)
+      await load()
+    } catch (err) {
+      apiErrorToast(err, 'Affectation impossible')
+    } finally {
+      setSavingManager(false)
+    }
+  }
+
+  async function handleClearManager() {
+    if (savingManager || !managerFor) return
+    const ok = await confirm({
+      title: 'Retirer le directeur ?',
+      message: `« ${managerFor.director?.name || 'Le directeur actuel'} » ne sera plus directeur de « ${managerFor.name} ».`,
+      details: [
+        'Les primes en attente de validation Directeur resteront sans validateur désigné.',
+        'La notification de ces primes ne sera plus envoyée.',
+      ],
+      confirmText: 'Retirer',
+      tone: 'warning',
+    })
+    if (!ok) return
+
+    setSavingManager(true)
+    try {
+      await clearDepartmentManager(managerFor.id)
+      toast.success(`Directeur de « ${managerFor.name} » retiré`)
+      setManagerFor(null)
+      await load()
+    } catch (err) {
+      apiErrorToast(err, 'Retrait impossible')
+    } finally {
+      setSavingManager(false)
     }
   }
 
@@ -294,6 +373,13 @@ export default function DepartmentsPage() {
                   </div>
                   <div className="flex gap-0.5 shrink-0">
                     <button
+                      onClick={() => openManager(dept)}
+                      className="btn btn-ghost btn-xs text-gray-400 hover:text-purple-600"
+                      title={dept.director ? `Directeur : ${dept.director.name}` : 'Définir le directeur'}
+                    >
+                      <UserIcon className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => openEdit(dept)}
                       className="btn btn-ghost btn-xs text-gray-400 hover:text-blue-600"
                       title="Renommer"
@@ -311,11 +397,25 @@ export default function DepartmentsPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${count ? 'bg-emerald-500' : 'bg-gray-300'}`}
-                    style={{ width: count ? '100%' : '0%' }}
-                  />
+                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                    <UserIcon className="w-3.5 h-3.5" />
+                  </div>
+                  {dept.director ? (
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-gray-400 leading-none">Directeur</p>
+                      <p className="text-xs font-medium text-gray-800 truncate" title={dept.director.email}>
+                        {dept.director.name}
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => openManager(dept)}
+                      className="text-[11px] text-gray-400 hover:text-blue-600 transition-colors text-left"
+                    >
+                      + Définir un directeur
+                    </button>
+                  )}
                 </div>
               </div>
             )
@@ -377,6 +477,103 @@ export default function DepartmentsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modale : directeur du département */}
+      <Modal
+        open={!!managerFor}
+        onClose={closeManager}
+        title={managerFor ? `Directeur de « ${managerFor.name} »` : 'Directeur'}
+        size="sm"
+      >
+        {managerFor && (
+          <form onSubmit={handleSaveManager} className="space-y-4">
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Le directeur valide les primes de son département à l'étape « Validation
+              Directeur » et reçoit les notifications de rappel correspondantes.
+            </p>
+
+            {managerFor.director && (
+              <div className="flex items-center justify-between gap-2 bg-purple-50 border border-purple-100 rounded-lg p-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-semibold shrink-0">
+                    {managerFor.director.name?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-purple-900 truncate">
+                      {managerFor.director.name}
+                    </p>
+                    <p className="text-[11px] text-purple-600 truncate">{managerFor.director.email}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearManager}
+                  disabled={savingManager}
+                  className="btn btn-ghost btn-xs text-purple-700 hover:bg-purple-100 shrink-0"
+                >
+                  Retirer
+                </button>
+              </div>
+            )}
+
+            <div>
+              <label className="label py-1">
+                <span className="label-text text-xs font-medium">
+                  {managerFor.director ? 'Remplacer par' : 'Utilisateur'}
+                </span>
+              </label>
+              {candidatesLoading ? (
+                <div className="flex items-center gap-2 py-2 text-xs text-gray-400">
+                  <span className="loading loading-spinner loading-xs"></span> Chargement...
+                </div>
+              ) : candidates.length === 0 ? (
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-[11px] text-amber-700 space-y-1">
+                  <p className="font-semibold">Aucun utilisateur dans ce département.</p>
+                  <p>
+                    Affectez d'abord des utilisateurs à « {managerFor.name} » depuis
+                    l'écran Utilisateurs : le directeur doit appartenir au département.
+                  </p>
+                </div>
+              ) : (
+                <select
+                  className="select select-bordered select-sm w-full bg-gray-50 focus:bg-white"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                >
+                  <option value="">— Sélectionner —</option>
+                  {candidates.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                      {u.poste ? ` — ${u.poste}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {candidates.length > 1 && managerFor.director && (
+              <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                Le rôle « Directeur » sera retiré de {managerFor.director.name} : un
+                département ne peut avoir qu'un seul directeur.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <button type="button" onClick={closeManager} className="btn btn-sm btn-ghost" disabled={savingManager}>
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="btn btn-sm border-0 text-white bg-purple-600 hover:bg-purple-700"
+                disabled={savingManager || candidatesLoading || candidates.length === 0}
+              >
+                {savingManager && <span className="loading loading-spinner loading-xs"></span>}
+                Affecter
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       {confirmElement}
