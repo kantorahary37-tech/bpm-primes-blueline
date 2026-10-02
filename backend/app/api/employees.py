@@ -9,11 +9,13 @@ from app.models import Employee, User, Department, Bonus, ServiceGroup
 from app.schemas import *
 from app.auth import get_current_user
 from app.permissions import (
+    can_manage_plafonds,
     employee_in_scope,
     employee_scope,
     apply_employee_scope,
     apply_department_scope,
     n1_service_group_ids,
+    PLAFOND_RATE_FIELDS,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -35,7 +37,10 @@ async def list_employees(
     # Restriction par département : les non-admin ne voient que leur département
     # (plus les employés dont ils sont le manager, même hors département),
     # et un N+1/N+2 avec des services affectés uniquement les employés de ceux-ci.
-    if user.is_admin or user.is_dg or user.is_drh:
+    # Exception : les rôles à portée globale et les utilisateurs autorisés à
+    # modifier les plafonds voient tous les employés (page Plafonds : les taux
+    # spéciaux couvrent tous les départements).
+    if user.is_admin or user.is_dg or user.is_drh or can_manage_plafonds(user):
         if department:
             query = query.filter(dept_str=department)
     else:
@@ -157,10 +162,22 @@ async def update_employee(emp_id: int, data: EmployeeUpdate, user: User = Depend
     emp = await Employee.get_or_none(id=emp_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    # Un N+1/N+2 restreint ne peut modifier qu'un employé de ses services
-    if not await employee_in_scope(user, emp):
-        raise HTTPException(status_code=403, detail="Vous ne pouvez modifier que les employés de vos services affectés")
     update_data = data.dict(exclude_unset=True)
+
+    # Un utilisateur autorisé à modifier les plafonds peut régler les taux
+    # spéciaux (astreinte / mensuel) de n'importe quel employé — c'est
+    # exactement ce que fait la page Plafonds — mais uniquement ces champs.
+    rates_only = bool(update_data) and set(update_data).issubset(PLAFOND_RATE_FIELDS)
+    if not await employee_in_scope(user, emp):
+        if not (can_manage_plafonds(user) and rates_only):
+            raise HTTPException(status_code=403, detail="Vous ne pouvez modifier que les employés de vos services affectés")
+        # Hors périmètre : seuls les taux spéciaux sont acceptés.
+        forbidden = set(update_data) - set(PLAFOND_RATE_FIELDS)
+        if forbidden:
+            raise HTTPException(
+                status_code=403,
+                detail="Vous ne pouvez modifier que les taux spéciaux (astreinte / mensuel) de cet employé",
+            )
 
     # Réaffectation du manager : réservée aux Admin/DG/DRH, car elle change
     # qui peut voir et créer des primes pour cet employé.

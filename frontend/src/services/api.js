@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { installQueryCache, clearQueryCache } from './queryCache';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -10,6 +11,10 @@ api.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+installQueryCache(api);
+
+export { clearQueryCache };
 
 export const login = async (email, password) => {
   const { data } = await api.post('/auth/login', { email, password });
@@ -43,6 +48,47 @@ export const resetPassword = async (token, newPassword) => {
 
 export const getUsers = async () => {
   const { data } = await api.get('/users/');
+  return data;
+};
+
+// --- Départements (administration) ---
+export const getDepartments = async () => {
+  const { data } = await api.get('/departments/');
+  return data;
+};
+
+export const createDepartment = async (name) => {
+  const { data } = await api.post('/departments/', { name });
+  return data;
+};
+
+export const renameDepartment = async (id, name) => {
+  const { data } = await api.put(`/departments/${id}`, { name });
+  return data;
+};
+
+export const deleteDepartment = async (id) => {
+  const { data } = await api.delete(`/departments/${id}`);
+  return data;
+};
+
+export const getDepartmentManager = async (id) => {
+  const { data } = await api.get(`/departments/${id}/manager`);
+  return data;
+};
+
+export const getManagerCandidates = async (id) => {
+  const { data } = await api.get(`/departments/${id}/manager-candidates`);
+  return data;
+};
+
+export const assignDepartmentManager = async (id, userId) => {
+  const { data } = await api.put(`/departments/${id}/manager`, { user_id: userId });
+  return data;
+};
+
+export const clearDepartmentManager = async (id) => {
+  const { data } = await api.delete(`/departments/${id}/manager`);
   return data;
 };
 
@@ -247,13 +293,15 @@ export const deletePrimeMax = async (id) => {
   return data;
 };
 
+// Rafraîchies toutes les 30 s par NotificationDropdown : `cacheTtl: 0` les
+// exclut du cache GET, sinon la cloche resterait figée sur la première réponse.
 export const getNotifications = async () => {
-  const { data } = await api.get('/notifications');
+  const { data } = await api.get('/notifications', { cacheTtl: 0 });
   return data;
 };
 
 export const getUnreadCount = async () => {
-  const { data } = await api.get('/notifications/unread-count');
+  const { data } = await api.get('/notifications/unread-count', { cacheTtl: 0 });
   return data;
 };
 

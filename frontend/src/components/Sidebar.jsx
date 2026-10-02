@@ -6,6 +6,7 @@ const navItems = [
   { path: '/employees', label: 'Employés', icon: '👥' },
   { path: '/services', label: 'Services', icon: '🧩', roles: ['is_validator_n1', 'is_directeur', 'is_drh', 'is_dg', 'is_admin'] },
   { path: '/bonuses', label: 'Primes', icon: '💰' },
+  { path: '/admin/config', label: 'Configuration', icon: '⚙️', roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'can_modify_plafonds'] },
   { path: '/settings/primemax', label: 'Configuration', icon: '⚙️', roles: ['can_modify_plafonds'], desc: 'Plafonds des Primes' },
   { path: '/admin/evaluation-templates', label: 'Évaluation', icon: '📋', roles: ['is_admin', 'is_directeur'] },
   { path: '/admin/users', label: 'Utilisateurs', icon: '👤', roles: ['is_admin', 'is_directeur'] },
@@ -30,7 +31,7 @@ export default function Sidebar({ open, onClose }) {
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             {navItems.filter(item => {
               if (item.roles && !item.roles.some(r => user?.[r])) return false;
-              if (item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh)) return false;
+              if (item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh || user?.can_modify_plafonds)) return false;
               return true;
             }).map((item) => {
               const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path))

@@ -6,6 +6,7 @@ import { SystemConfigProvider } from './contexts/SystemConfigContext'
 import { CurrenciesProvider } from './contexts/CurrenciesContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
+import DepartmentsPage from './pages/DepartmentsPage'
 import BonusesList from './pages/BonusesList'
 import BonusFlowsPage from './pages/BonusFlowsPage'
 import BonusKanban from './pages/BonusKanban'
@@ -62,9 +63,10 @@ function AppContent() {
       <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg', 'is_admin']}><ArchivePage /></RestrictedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/services" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1', 'is_validator_n2']}><ServicesPage /></RestrictedRoute>} />
+      <Route path="/admin/departments" element={<RestrictedRoute roles={['is_admin']}><DepartmentsPage /></RestrictedRoute>} />
       <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><UsersPage /></RestrictedRoute>} />
       <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2']}><EvaluationTemplatesPage /></RestrictedRoute>} />
-      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur']}><AdminConfigPage /></RestrictedRoute>} />
+      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'can_modify_plafonds']}><AdminConfigPage /></RestrictedRoute>} />
       {/* Rappels DG/RH déplacés dans Configuration → Déclencheurs email (tab=emailTriggers) */}
       <Route path="/admin/prime-reminder" element={<Navigate to="/admin/config?tab=emailTriggers" replace />} />
       <Route path="/admin/rh-reminder" element={<Navigate to="/admin/config?tab=emailTriggers" replace />} />

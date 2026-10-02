@@ -51,6 +51,7 @@ class UserBase(BaseModel):
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
     is_admin: Optional[bool] = False
+    can_modify_plafonds: Optional[bool] = False
     bypass_director: Optional[bool] = False
 
     _dept = field_validator('department', mode='before')(dept_to_str)
@@ -275,6 +276,30 @@ class CurrencyResponse(BaseModel):
     label: str = ''
     is_system: bool = False
     active: bool = True
+    class Config: from_attributes = True
+
+# --- Départements ---
+class DepartmentCreate(BaseModel):
+    name: str
+
+class DepartmentUpdate(BaseModel):
+    name: str
+
+class DepartmentManagerAssign(BaseModel):
+    user_id: int
+
+class DepartmentManagerResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    poste: Optional[str] = None
+
+class DepartmentResponse(BaseModel):
+    id: int
+    name: str
+    employee_count: int = 0
+    # Directeur du département (utilisateur portant le rôle is_directeur).
+    director: Optional[DepartmentManagerResponse] = None
     class Config: from_attributes = True
 
 class AuditLogResponse(BaseModel):

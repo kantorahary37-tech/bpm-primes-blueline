@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { login as apiLogin, signup as apiSignup, getMe } from '../services/api';
+import { login as apiLogin, signup as apiSignup, getMe, clearQueryCache } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const data = await apiLogin(email, password);
+    clearQueryCache();
     localStorage.setItem('token', data.access_token);
     setToken(data.access_token);
     const me = await getMe();
@@ -30,6 +31,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    clearQueryCache();
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);

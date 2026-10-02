@@ -3,7 +3,7 @@ import { getPrimeMax, createPrimeMax, updatePrimeMax, deletePrimeMax, getEmploye
 import { useAuth } from '../contexts/AuthContext';
 import { useSystemConfig } from '../contexts/SystemConfigContext';
 import { useCurrencies } from '../contexts/CurrenciesContext';
-import { MoonIcon, CalendarIcon, CheckIcon, XCircleIcon, LockIcon } from '../components/Icons';
+import { MoonIcon, CalendarIcon, CheckIcon, XCircleIcon, LockIcon, SearchIcon } from '../components/Icons';
 import Modal from '../components/Modal';
 
 const ALL_TYPES = [
@@ -22,7 +22,11 @@ const PlafondsPage = () => {
   const { user } = useAuth();
   const { canSeeAmounts } = useSystemConfig();
   const seeAmounts = canSeeAmounts(user);
-  const showPlafond = seeAmounts && !user?.is_validator_n1;
+  // Rôles à portée globale (admin/DG/DRH) ou utilisateur coche « Autoriser à
+  // modifier les plafonds » : accès à tous les départements et à tous les taux
+  // spéciaux, quel que soit son département.
+  const fullAccess = !!(user?.is_admin || user?.is_dg || user?.is_drh || user?.can_modify_plafonds);
+  const showPlafond = seeAmounts && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_directeur || user?.is_validator_n1 || user?.is_validator_n2 || user?.can_modify_plafonds);
   const { currencies, symbolFor } = useCurrencies();
   const [plafonds, setPlafonds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +36,7 @@ const PlafondsPage = () => {
   const [rateModalDept, setRateModalDept] = useState('');
   const [rateModalValues, setRateModalValues] = useState({});
   const [rateModalInitial, setRateModalInitial] = useState([]);
+  const [rateModalSearch, setRateModalSearch] = useState('');
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [mensuelEmployees, setMensuelEmployees] = useState([]);
@@ -39,6 +44,13 @@ const PlafondsPage = () => {
   const [mensuelRateModalDept, setMensuelRateModalDept] = useState('');
   const [mensuelRateModalValues, setMensuelRateModalValues] = useState({});
   const [mensuelRateModalInitial, setMensuelRateModalInitial] = useState([]);
+  const [mensuelRateModalSearch, setMensuelRateModalSearch] = useState('');
+
+  const filterBySearch = (list, q) => {
+    const s = q.trim().toLowerCase();
+    if (!s) return list;
+    return list.filter(e => (e.name || '').toLowerCase().includes(s) || (e.matricule || '').toLowerCase().includes(s));
+  };
 
   const fetchPlafonds = async () => {
     try {
@@ -85,8 +97,6 @@ const PlafondsPage = () => {
     fetchAllEmployees();
   }, []);
 
-  const canEdit = (p) => user?.is_admin || user?.is_dg || user?.is_drh || p.department === user?.department;
-
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce plafond ?')) return;
     try {
@@ -124,6 +134,7 @@ const PlafondsPage = () => {
 
   const openRateModal = (dept) => {
     setRateModalDept(dept);
+    setRateModalSearch('');
     const values = {};
     astrEmployees.filter(e => e.department === dept).forEach(e => {
       if (e.astreinte_rate != null) values[e.id] = e.astreinte_rate.toString();
@@ -151,6 +162,7 @@ const PlafondsPage = () => {
 
   const openMensuelRateModal = (dept) => {
     setMensuelRateModalDept(dept);
+    setMensuelRateModalSearch('');
     const values = {};
     mensuelEmployees.filter(e => e.department === dept).forEach(e => {
       if (e.mensuel_rate != null) values[e.id] = e.mensuel_rate.toString();
@@ -185,8 +197,7 @@ const PlafondsPage = () => {
       <div className="mb-4">
         <h1 className="text-xl font-bold text-gray-900">Plafonds des Primes</h1>
         <p className="text-sm text-gray-400">
-          {user?.is_admin || user?.is_dg || user?.is_drh
-            ? 'Accès total — cliquer un montant pour le modifier'
+          {fullAccess ? 'Accès total — cliquer un montant pour le modifier'
             : `Vous ne pouvez modifier que les plafonds de votre département (${user?.department})`}
         </p>
       </div>
@@ -218,7 +229,7 @@ const PlafondsPage = () => {
             </thead>
             <tbody>
               {departments.map(dept => {
-                const canEditDept = user?.is_admin || user?.is_dg || user?.is_drh || dept === user?.department;
+                const canEditDept = fullAccess || dept === user?.department;
                 return (
                   <tr key={dept} className={!canEditDept ? 'opacity-50' : 'hover'}>
                     <td className="font-medium text-gray-900">{dept}</td>
@@ -265,7 +276,7 @@ const PlafondsPage = () => {
           </table>
         </div>
 
-        {(user?.is_admin || user?.is_dg || user?.is_drh) && (
+        {fullAccess && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-2 flex items-center gap-2 border-b bg-violet-50 text-violet-700 border-violet-200">
               <MoonIcon className="w-4 h-4" />
@@ -307,7 +318,7 @@ const PlafondsPage = () => {
           </div>
         )}
 
-        {(user?.is_admin || user?.is_dg || user?.is_drh) && (
+        {fullAccess && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-2 flex items-center gap-2 border-b bg-amber-50 text-amber-700 border-amber-200">
               <CalendarIcon className="w-4 h-4" />
@@ -352,6 +363,16 @@ const PlafondsPage = () => {
 
       <Modal open={showRateModal} onClose={() => setShowRateModal(false)} title={`Taux spéciaux — ${rateModalDept}`} size="lg">
         <div className="space-y-3">
+          <div className="relative">
+            <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input type="text" value={rateModalSearch} onChange={(e) => setRateModalSearch(e.target.value)}
+              placeholder="Rechercher par nom ou matricule…"
+              className="w-full pl-8 pr-8 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500" />
+            {rateModalSearch && (
+              <button onClick={() => setRateModalSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm leading-none">✕</button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <input type="number" id="bulkRate" placeholder="Taux commun"
               className="w-28 px-2 py-1 rounded border border-gray-200 text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
@@ -376,13 +397,19 @@ const PlafondsPage = () => {
             }} className="btn btn-xs btn-ghost text-gray-500">Tout effacer</button>
           </div>
           <div className="space-y-1 max-h-72 overflow-y-auto border border-gray-200 rounded-lg p-1">
-            {astrEmployees.filter(e => e.department === rateModalDept).map(emp => {
+            {(() => {
+            const list = filterBySearch(astrEmployees.filter(e => e.department === rateModalDept), rateModalSearch);
+            if (list.length === 0) {
+              return <div className="text-sm text-gray-400 italic text-center py-6">Aucun employé trouvé pour « {rateModalSearch} »</div>;
+            }
+            return list.map(emp => {
               const val = rateModalValues[emp.id];
               const hasVal = val !== undefined && val !== '';
               return (
                 <div key={emp.id}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${hasVal ? 'bg-violet-50 border border-violet-200' : 'hover:bg-gray-50 border border-transparent'}`}>
-                  <span className="text-sm font-medium flex-1">{emp.name}</span>
+                  <span className="text-sm font-medium flex-1 truncate">{emp.name}</span>
+                  {emp.matricule && <span className="text-xs text-gray-400 shrink-0">{emp.matricule}</span>}
                   <input type="number" value={val || ''}
                     onChange={(e) => setRateModalValues(prev => ({ ...prev, [emp.id]: e.target.value }))}
                     placeholder="Défaut"
@@ -393,7 +420,8 @@ const PlafondsPage = () => {
                     <span className="text-xs text-violet-600 w-16 text-right">{parseInt(val).toLocaleString('fr-FR')} {symbolFor(emp.currency)}</span>}
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
           <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
             <button onClick={() => setShowRateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
@@ -406,6 +434,16 @@ const PlafondsPage = () => {
 
       <Modal open={showMensuelRateModal} onClose={() => setShowMensuelRateModal(false)} title={`Taux spéciaux Mensuel — ${mensuelRateModalDept}`} size="lg">
         <div className="space-y-3">
+          <div className="relative">
+            <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input type="text" value={mensuelRateModalSearch} onChange={(e) => setMensuelRateModalSearch(e.target.value)}
+              placeholder="Rechercher par nom ou matricule…"
+              className="w-full pl-8 pr-8 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500" />
+            {mensuelRateModalSearch && (
+              <button onClick={() => setMensuelRateModalSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm leading-none">✕</button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <input type="number" id="bulkMensuelRate" placeholder="Montant commun"
               className="w-28 px-2 py-1 rounded border border-gray-200 text-sm text-center focus:outline-none focus:ring-2 focus:ring-amber-500/30" />
@@ -430,13 +468,19 @@ const PlafondsPage = () => {
             }} className="btn btn-xs btn-ghost text-gray-500">Tout effacer</button>
           </div>
           <div className="space-y-1 max-h-72 overflow-y-auto border border-gray-200 rounded-lg p-1">
-            {mensuelEmployees.filter(e => e.department === mensuelRateModalDept).map(emp => {
+            {(() => {
+            const list = filterBySearch(mensuelEmployees.filter(e => e.department === mensuelRateModalDept), mensuelRateModalSearch);
+            if (list.length === 0) {
+              return <div className="text-sm text-gray-400 italic text-center py-6">Aucun employé trouvé pour « {mensuelRateModalSearch} »</div>;
+            }
+            return list.map(emp => {
               const val = mensuelRateModalValues[emp.id];
               const hasVal = val !== undefined && val !== '';
               return (
                 <div key={emp.id}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${hasVal ? 'bg-amber-50 border border-amber-200' : 'hover:bg-gray-50 border border-transparent'}`}>
-                  <span className="text-sm font-medium flex-1">{emp.name}</span>
+                  <span className="text-sm font-medium flex-1 truncate">{emp.name}</span>
+                  {emp.matricule && <span className="text-xs text-gray-400 shrink-0">{emp.matricule}</span>}
                   <input type="number" value={val || ''}
                     onChange={(e) => setMensuelRateModalValues(prev => ({ ...prev, [emp.id]: e.target.value }))}
                     placeholder="Défaut"
@@ -447,7 +491,8 @@ const PlafondsPage = () => {
                     <span className="text-xs text-amber-600 w-16 text-right">{parseInt(val).toLocaleString('fr-FR')} {symbolFor(emp.currency)}</span>}
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
           <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
             <button onClick={() => setShowMensuelRateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>

@@ -39,6 +39,10 @@ def _check_director_role_edit(admin: User, data):
         return
     if data.is_admin or data.is_dg or data.is_drh:
         raise HTTPException(status_code=403, detail="Un directeur ne peut pas attribuer les rôles admin, DG ou DRH")
+    # « Autoriser à modifier les plafonds » donne un accès transverse à tous
+    # les départements : réservé à l'admin / DG / DRH.
+    if getattr(data, 'can_modify_plafonds', None):
+        raise HTTPException(status_code=403, detail="Seuls les administrateurs, le DG ou la DRH peuvent autoriser la modification des plafonds")
 
 
 @router.get("/users", response_model=list[UserResponse])
@@ -59,6 +63,7 @@ class UserUpdateRequest(BaseModel):
     is_drh: Optional[bool] = None
     is_dg: Optional[bool] = None
     is_admin: Optional[bool] = None
+    can_modify_plafonds: Optional[bool] = None
     bypass_director: Optional[bool] = None
     directig: Optional[bool] = None
     employees: Optional[List[int]] = None
@@ -100,6 +105,8 @@ async def admin_update_user(user_id: int, data: UserUpdateRequest, admin: User =
         user.is_dg = data.is_dg
     if data.is_admin is not None:
         user.is_admin = data.is_admin
+    if data.can_modify_plafonds is not None:
+        user.can_modify_plafonds = data.can_modify_plafonds
     if data.bypass_director is not None:
         user.bypass_director = data.bypass_director
 
@@ -179,6 +186,7 @@ class CreateUserRequest(BaseModel):
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
     is_admin: Optional[bool] = False
+    can_modify_plafonds: Optional[bool] = False
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -207,6 +215,7 @@ async def admin_create_user(data: CreateUserRequest, admin: User = Depends(requi
         is_drh=data.is_drh,
         is_dg=data.is_dg,
         is_admin=data.is_admin,
+        can_modify_plafonds=data.can_modify_plafonds,
     )
     return user
 

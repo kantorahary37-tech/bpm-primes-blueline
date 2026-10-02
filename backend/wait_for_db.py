@@ -540,4 +540,22 @@ try:
 except Exception as e:
     print(f"ldapyncexecution table check skipped: {e}")
 
+print("Ensuring user.can_modify_plafonds column exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    # Case « Autoriser à modifier les plafonds » (page Utilisateurs) :
+    # accès aux plafonds de tous les départements + taux spéciaux globaux.
+    cur.execute("""
+        ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "can_modify_plafonds" BOOLEAN NOT NULL DEFAULT FALSE;
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("user can_modify_plafonds column OK")
+except Exception as e:
+    print(f"user can_modify_plafonds column check skipped: {e}")
+
 print("Starting application...")

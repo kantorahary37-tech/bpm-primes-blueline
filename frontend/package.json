@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:cache": "node queryCache.spec.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

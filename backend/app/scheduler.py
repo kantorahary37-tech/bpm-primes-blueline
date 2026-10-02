@@ -27,7 +27,7 @@ from app.email_service import send_validation_reminder_email, send_deadline_remi
 from app.email_trigger_service import log_trigger_execution
 from app.currency_format import format_amount_with_currency
 from app.config import get_config
-from app.permissions import n1_service_group_ids
+from app.permissions import n1_service_group_ids, actionable_statuses
 
 router = APIRouter()
 
@@ -69,6 +69,11 @@ def _service_name(emp) -> str | None:
 # Étapes Directeur, validation DRH (primes créées par un DRH) et DRH (traitement).
 # NB : l'étape DG est volontairement absente — les comptes DG sont couverts
 # par le dédié « Rappel DG » (synthèse groupée des primes en attente DG).
+#
+# Ce tableau ne sert qu'à trouver les CANDIDATS (rôle large + département) ; le
+# filtre qui décide réellement de l'envoi est ``actionable_statuses`` ci-dessous.
+# Sans lui, un compte cumulant plusieurs rôles (Directeur + DRH, par ex.) recevait
+# dans le même rappel des primes déjà sorties de SON flux.
 STEPS = {
     ValidationStatus.EN_ATTENTE_DIRECTEUR: ("Validation Directeur", {"is_directeur": True}, True),
     ValidationStatus.EN_ATTENTE_DRH: ("Validation DRH", {"is_drh": True}, False),
@@ -88,6 +93,12 @@ async def collect_pending_by_actor() -> dict:
             validators = await (query.filter(dept_str=emp.dept_str).all() if dept_scoped else query.all())
             amount = await format_amount_with_currency(bonus.total_amount, emp)
             for v in validators:
+                # Règle unique (partagée avec la liste des primes et l'IHM) : on ne
+                # retient que les primes réellement dans la file du destinataire.
+                # C'est ce garde-fou qui empêche un Directeur d'être rappelé pour
+                # des primes déjà passées à l'étape DG.
+                if status not in actionable_statuses(v):
+                    continue
                 actors.setdefault(v.id, {"user": v, "items": []})["items"].append({
                     "employee_name": emp.name,
                     "type_label": TYPE_LABELS.get(bonus.bonus_type.value, bonus.bonus_type.value),
@@ -104,7 +115,7 @@ async def send_daily_reminders() -> dict:
     sent = failed = 0
     for entry in (await collect_pending_by_actor()).values():
         user, items = entry["user"], entry["items"]
-        if not user.email:
+        if not user.email or not items:
             continue
         if await send_validation_reminder_email(user.email, user.name, items):
             sent += 1
@@ -191,6 +202,13 @@ async def collect_deadline_pending_by_actor() -> dict:
     amount_cache = {}
 
     async def _add(user: User, bonus: Bonus, status_label: str):
+        # Même garde-fou que collect_pending_by_actor : la prime doit être dans la
+        # file du destinataire, sinon aucun rappel n'est envoyé pour elle.
+        # Évite qu'un compte à rôles cumulés reçoive un rappel pour une étape
+        # qui n'est pas la sienne (ex. un Directeur aussi N+1 déjà destitué
+        # d'une prime partie chez le DG).
+        if bonus.status not in actionable_statuses(user):
+            return
         emp = bonus.employee
         # Un même bonus peut être ajouté pour plusieurs validateurs : le montant
         # (et sa devise) est formaté une seule fois par prime.
