@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from enum import Enum
 from tortoise.expressions import Q
-from app.models import User, Employee, Bonus, Validation, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
+from app.models import User, Employee, Bonus, Validation, ValidationAttachment, PrimeMax, AuditLog, Notification, ValidationStatus, Currency
 from app.auth import get_current_user
 from app.permissions import (
     actionable_statuses,
@@ -15,6 +15,7 @@ from app.permissions import (
     managed_employee_ids,
 )
 from app.api.commission_gc import can_access_gc, COMMISSION_GC_DEPARTMENT
+from app.api.upload import UPLOAD_DIR
 from app.email_service import send_bonus_notification_email, send_bonus_batch_notification_email
 from app.currency_format import format_amount_with_currency
 from app.schemas import *
@@ -227,6 +228,19 @@ async def batch_validate_bonuses(
 ):
     results = []
     batch_notifs = {}
+
+    # Pièce jointe facultative (N+1 / N+2) : un seul fichier pour toute la
+    # sélection, rattaché à chacune des primes validées. Réservée aux étapes qui
+    # aboutissent au Directeur, et le fichier doit réellement exister.
+    attachment_name = None
+    if request.attachment and request.step in ("N1", "N2"):
+        attachment_name = os.path.basename(request.attachment.filename)
+        if not os.path.isfile(os.path.join(UPLOAD_DIR, attachment_name)):
+            raise HTTPException(
+                status_code=400,
+                detail="Pièce jointe introuvable : téléversez le fichier avant de valider.",
+            )
+
     for bonus_id in request.bonus_ids:
         try:
             bonus = await Bonus.get_or_none(id=bonus_id).prefetch_related('employee', 'employee__service_group')
@@ -284,7 +298,7 @@ async def batch_validate_bonuses(
                     ))
                     continue
 
-            await Validation.create(
+            validation_row = await Validation.create(
                 bonus_id=bonus.id,
                 validator_id=user.id,
                 step=request.step,
@@ -292,6 +306,17 @@ async def batch_validate_bonuses(
                 note=request.note,
                 motif_rejet=request.motif_rejet,
             )
+
+            if attachment_name:
+                await ValidationAttachment.create(
+                    validation_id=validation_row.id,
+                    bonus_id=bonus.id,
+                    dept_str=bonus.employee.dept_str,
+                    stored_name=attachment_name,
+                    original_name=request.attachment.original_name,
+                    size=request.attachment.size or 0,
+                    uploaded_by_id=user.id,
+                )
 
             if request.action == "VALIDER":
                 if request.step == "N1" and user.bypass_director and not bonus.pass_to_n2 \
@@ -1268,8 +1293,22 @@ async def validate_bonus(
                 f"attendait '{expected_status}' pour l'étape {step}."
             )
     
+    # Pièce jointe facultative (N+1 / N+2) : le fichier a déjà été téléversé
+    # via POST /upload, on rattache sa référence à l'étape de validation pour
+    # que le Directeur du département puisse la consulter. Réservée aux étapes
+    # qui aboutissent au Directeur, et le fichier doit réellement exister —
+    # contrôlé AVANT d'écrire quoi que ce soit.
+    attachment_name = None
+    if validation.attachment and step in ("N1", "N2"):
+        attachment_name = os.path.basename(validation.attachment.filename)
+        if not os.path.isfile(os.path.join(UPLOAD_DIR, attachment_name)):
+            raise HTTPException(
+                status_code=400,
+                detail="Pièce jointe introuvable : téléversez le fichier avant de valider.",
+            )
+
     # Création de l'enregistrement de validation (validator_id depuis le JWT)
-    await Validation.create(
+    validation_row = await Validation.create(
         bonus_id=bonus.id,
         validator_id=user.id,
         step=step,
@@ -1277,6 +1316,17 @@ async def validate_bonus(
         note=validation.note,
         motif_rejet=validation.motif_rejet,
     )
+
+    if attachment_name:
+        await ValidationAttachment.create(
+            validation_id=validation_row.id,
+            bonus_id=bonus.id,
+            dept_str=bonus.employee.dept_str,
+            stored_name=attachment_name,
+            original_name=validation.attachment.original_name,
+            size=validation.attachment.size or 0,
+            uploaded_by_id=user.id,
+        )
     
     # Mise à jour du statut selon l'étape et l'action
     if validation.action == "VALIDER":

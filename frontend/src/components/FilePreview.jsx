@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-import { getFileBlob, openFile } from '../services/api';
+import { getFileBlob, downloadFile } from '../services/api';
 import { DownloadIcon, EyeIcon, XMarkIcon } from './Icons';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -22,8 +22,8 @@ function isPdf(name) {
   return getExt(name) === 'pdf';
 }
 
-export default function FilePreview({ file, compact = false }) {
-  const [expanded, setExpanded] = useState(false);
+export default function FilePreview({ file, compact = false, defaultExpanded = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [blobUrl, setBlobUrl] = useState(null);
   const [numPages, setNumPages] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +59,7 @@ export default function FilePreview({ file, compact = false }) {
 
   if (!file?.url) return null;
 
-  const handleDownload = () => openFile(file.url);
+  const handleDownload = () => downloadFile(file.url, file.original_name);
 
   const togglePreview = () => {
     if (!canPreview) {

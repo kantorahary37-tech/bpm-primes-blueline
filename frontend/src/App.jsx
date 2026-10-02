@@ -14,6 +14,7 @@ import BonusForm from './pages/BonusForm'
 import BonusTypeSelect from './pages/BonusTypeSelect'
 import BonusDetail from './pages/BonusDetail'
 import PlafondsPage from './pages/PlafondsPage'
+import AttachmentsPage from './pages/AttachmentsPage'
 import ValidatedBonuses from './pages/ValidatedBonuses'
 import ArchivePage from './pages/ArchivePage'
 import Employees from './pages/Employees'
@@ -61,6 +62,7 @@ function AppContent() {
       <Route path="/kanban/:type" element={<ProtectedRoute><BonusKanban /></ProtectedRoute>} />
       <Route path="/validated" element={<ProtectedRoute><ValidatedBonuses /></ProtectedRoute>} />
       <Route path="/archive" element={<RestrictedRoute roles={['is_drh', 'is_dg', 'is_admin']}><ArchivePage /></RestrictedRoute>} />
+      <Route path="/attachments" element={<RestrictedRoute roles={['is_drh', 'is_dg', 'is_admin', 'is_directeur']}><AttachmentsPage /></RestrictedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/services" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1', 'is_validator_n2']}><ServicesPage /></RestrictedRoute>} />
       <Route path="/admin/departments" element={<RestrictedRoute roles={['is_admin']}><DepartmentsPage /></RestrictedRoute>} />

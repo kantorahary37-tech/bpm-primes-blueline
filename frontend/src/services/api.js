@@ -264,8 +264,8 @@ export const validateBonus = async (bonusId, validationData, step) => {
   return data;
 };
 
-export const batchValidateBonuses = async (bonusIds, action, step, motif_rejet = null) => {
-  const { data } = await api.post('/bonuses/batch/validate', { bonus_ids: bonusIds, action, step, motif_rejet });
+export const batchValidateBonuses = async (bonusIds, action, step, motif_rejet = null, attachment = null) => {
+  const { data } = await api.post('/bonuses/batch/validate', { bonus_ids: bonusIds, action, step, motif_rejet, attachment });
   return data;
 };
 
@@ -330,16 +330,51 @@ const resolveUploadPath = (url) => {
   return url;
 };
 
+// Le type MIME renvoyé par l'API doit être conservé : sans lui le navigateur
+// affiche les octets du fichier en texte au lieu de le télécharger.
+const blobFrom = (data) => new Blob([data], { type: data.type || 'application/octet-stream' });
+
 export const openFile = async (url) => {
   const { data } = await api.get(resolveUploadPath(url), { responseType: 'blob' });
-  const blobUrl = URL.createObjectURL(new Blob([data]));
+  const blobUrl = URL.createObjectURL(blobFrom(data));
   window.open(blobUrl, '_blank');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+};
+
+// Télécharge le fichier sous son nom d'origine (window.open ignore
+// l'attribut download d'un blob).
+export const downloadFile = async (url, filename) => {
+  const { data } = await api.get(resolveUploadPath(url), { responseType: 'blob' });
+  const blobUrl = URL.createObjectURL(blobFrom(data));
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename || 'fichier';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 };
 
 export const getFileBlob = async (url) => {
   const { data } = await api.get(resolveUploadPath(url), { responseType: 'blob' });
-  return URL.createObjectURL(new Blob([data]));
+  return URL.createObjectURL(blobFrom(data));
+};
+
+// Pièces jointes déposées par les validateurs (N+1 / N+2) — page Pièces jointes
+export const getValidationAttachments = async (params = {}) => {
+  const { data } = await api.get('/validation-attachments/', { params });
+  return data;
+};
+
+// Services des déposants (pour le filtre de la page)
+export const getValidationAttachmentServices = async () => {
+  const { data } = await api.get('/validation-attachments/services');
+  return data;
+};
+
+export const deleteValidationAttachment = async (attachmentId) => {
+  const { data } = await api.delete(`/validation-attachments/${attachmentId}`);
+  return data;
 };
 
 export const getAdminUsers = async () => {

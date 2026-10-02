@@ -36,6 +36,9 @@ MEDIA_TYPES = {
 }
 
 
+MAX_SIZE = 10 * 1024 * 1024  # 10 Mo
+
+
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     if not file.filename:
@@ -46,7 +49,7 @@ async def upload_file(file: UploadFile = File(...)):
     filename = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
+    if len(content) > MAX_SIZE:
         raise HTTPException(400, "Fichier trop volumineux (max 10 Mo)")
     if not any(content.startswith(sig) for sig in MAGIC_BYTES.get(ext, [])):
         raise HTTPException(400, "Le contenu du fichier ne correspond pas a l'extension declaree")

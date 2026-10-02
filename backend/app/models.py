@@ -271,6 +271,34 @@ class Validation(models.Model):
     # Date de validation
     validated_at = fields.DatetimeField(auto_now_add=True)
 
+# Modèle Pièce jointe de validation (table "validationattachment")
+class ValidationAttachment(models.Model):
+    """Pièce jointe jointe par un validateur à l'étape N+1 / N+2.
+
+    Le fichier est d'abord téléversé via ``POST /upload`` (contrôle d'extension,
+    de signature et de taille) puis référencé ici : ``stored_name`` est le nom
+    uuid sur le disque, ``original_name`` le nom affiché. La prime et le
+    département de l'employé sont dénormalisés ici pour pouvoir lister les
+    pièces d'un département sans parcourir toutes les validations.
+    """
+    id = fields.IntField(pk=True)
+    # Validation à laquelle la pièce est rattachée (null = pièce déposée
+    # directement par un Directeur, hors étape de validation)
+    validation = fields.ForeignKeyField('models.Validation', related_name='attachments', null=True)
+    # Prime concernée (dénormalisé : filtre direct par département)
+    bonus = fields.ForeignKeyField('models.Bonus', related_name='attachments')
+    # Département de l'employé concerné (dénormalisé)
+    dept_str = fields.CharField(max_length=50, null=True, source_field='department', index=True)
+    # Nom du fichier sur le disque (uuid) et nom d'origine
+    stored_name = fields.CharField(max_length=255)
+    original_name = fields.CharField(max_length=255)
+    # Taille en octets
+    size = fields.IntField(default=0)
+    # Validateur ayant joint le fichier
+    uploaded_by = fields.ForeignKeyField('models.User', related_name='validation_attachments')
+    # Date de dépôt
+    created_at = fields.DatetimeField(auto_now_add=True)
+
 # Modèle Barème commission (table "commissionconfig")
 class CommissionConfig(models.Model):
     # Clé primaire

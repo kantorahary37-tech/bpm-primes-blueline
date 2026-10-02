@@ -558,4 +558,51 @@ try:
 except Exception as e:
     print(f"user can_modify_plafonds column check skipped: {e}")
 
+
+
+print("Ensuring validationattachment table exists...")
+try:
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    
+    # Pièces jointes déposées par un N+1 / N+2 à la validation d'une prime,
+    # consultables par le Directeur du département.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "validationattachment" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "validation_id" INT REFERENCES "validation" ("id") ON DELETE CASCADE,
+            "bonus_id" INT NOT NULL REFERENCES "bonus" ("id") ON DELETE CASCADE,
+            "department" VARCHAR(50),
+            "stored_name" VARCHAR(255) NOT NULL,
+            "original_name" VARCHAR(255) NOT NULL,
+            "size" INT NOT NULL DEFAULT 0,
+            "uploaded_by_id" INT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    
+    
+    # Une pièce peut être déposée par un Directeur sans passer par une étape de
+    # validation → la colonne validation_id devient nullable.
+    cur.execute("""
+        ALTER TABLE "validationattachment" ALTER COLUMN "validation_id" DROP NOT NULL;
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validationattachment_department
+        ON "validationattachment" ("department");
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_validationattachment_bonus
+        ON "validationattachment" ("bonus_id");
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+except Exception as e:
+    print("validationattachment table OK")
+except Exception as e:
+    print(f"validationattachment table check skipped: {e}")
+
 print("Starting application...")

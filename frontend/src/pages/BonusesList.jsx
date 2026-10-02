@@ -8,6 +8,7 @@ import toast from '../utils/toast';
 import { ALL_STATUSES, roleStatuses, defaultStatusFor } from '../utils/roleQueues';
 import { DownloadIcon, FilterIcon, ChevronLeftIcon, TrashIcon, ChevronDownIcon } from '../components/Icons';
 import Modal from '../components/Modal';
+import AttachmentInput from '../components/AttachmentInput';
 import BonusTable from '../components/BonusTable';
 import CurrencyTotals from '../components/CurrencyTotals';
 
@@ -51,6 +52,9 @@ const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [loading, setLoading] = useState(true);
   const [confirmBonus, setConfirmBonus] = useState(null);
+  // Pièce jointe facultative jointe par le N+1 / N+2 à l'étape de validation
+  const [validationAttachment, setValidationAttachment] = useState(null);
+  const [validating, setValidating] = useState(false);
   const [payConfirm, setPayConfirm] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportColumns, setExportColumns] = useState(EXPORT_COLUMNS_LIST);
@@ -183,19 +187,35 @@ const [filterMonth, setFilterMonth] = useState('');
   }, [typeFilter, statusFilter, depFilter, viewMode]);
 
   const handleValidate = async (bonusId, step) => {
+    setValidationAttachment(null);
     setConfirmBonus({ bonusId, step });
+  };
+
+  // Le N+1 et le N+2 transmettent une pièce jointe facultative au Directeur
+  const attachmentAllowed = (step) => step === 'N1' || step === 'N2';
+
+  const closeConfirm = () => {
+    setConfirmBonus(null);
+    setValidationAttachment(null);
   };
 
   const confirmValidate = async () => {
     if (!confirmBonus) return;
+    setValidating(true);
     try {
-      await validateBonus(confirmBonus.bonusId, { action: 'VALIDER' }, confirmBonus.step);
+      await validateBonus(
+        confirmBonus.bonusId,
+        { action: 'VALIDER', attachment: attachmentAllowed(confirmBonus.step) ? validationAttachment : null },
+        confirmBonus.step,
+      );
       toast.success('Prime validée avec succès !');
-      setConfirmBonus(null);
+      closeConfirm();
       fetchBonuses(queryParams);
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de la validation");
-      setConfirmBonus(null);
+      closeConfirm();
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -203,8 +223,14 @@ const [filterMonth, setFilterMonth] = useState('');
     const step = getCommonStep();
     if (!step) return;
     const ids = [...selectedBonuses];
+    setValidating(true);
     try {
-      const res = await batchValidateBonuses(ids, 'VALIDER', step);
+      // Une seule pièce jointe pour toute la sélection : elle est rattachée à
+      // chacune des primes validées (le fichier n'est pas par employé).
+      const res = await batchValidateBonuses(
+        ids, 'VALIDER', step, null,
+        attachmentAllowed(step) ? validationAttachment : null,
+      );
       const errors = (res.results || []).filter((r) => !r.success);
       if (res.total_success === 0 && errors.length > 0) {
         toast.error(`Aucune prime validée : ${errors[0].error}`);
@@ -214,11 +240,13 @@ const [filterMonth, setFilterMonth] = useState('');
         toast.success(`${res.total_success} prime(s) validée(s)`);
       }
       clearSelection();
-      setConfirmBonus(null);
+      closeConfirm();
       fetchBonuses(queryParams);
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de la validation par lot");
-      setConfirmBonus(null);
+      closeConfirm();
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -900,21 +928,43 @@ const [filterMonth, setFilterMonth] = useState('');
         </div>
       )}
 
-      <Modal open={!!confirmBonus} onClose={() => { setConfirmBonus(null); clearSelection(); }} title="Confirmer la validation" size="sm">
+      <Modal open={!!confirmBonus} onClose={() => { closeConfirm(); clearSelection(); }} title="Confirmer la validation" size="sm">
         {confirmBonus?.batch ? (
           <>
-            <p className="text-sm text-gray-600 mb-6">Valider les <strong>{selectedBonuses.size}</strong> prime(s) sélectionnée(s) ?</p>
+            <p className="text-sm text-gray-600 mb-4">Valider les <strong>{selectedBonuses.size}</strong> prime(s) sélectionnée(s) ?</p>
+            {attachmentAllowed(getCommonStep()) && (
+              <div className="mb-5">
+                <AttachmentInput
+                  value={validationAttachment}
+                  onChange={setValidationAttachment}
+                  hint="Un seul fichier pour toute la sélection — il sera rattaché à chaque prime validée."
+                />
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setConfirmBonus(null); }} className="btn btn-sm btn-ghost">Annuler</button>
-              <button onClick={confirmBatchValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
+              <button onClick={confirmBatchValidate} disabled={validating} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                {validating ? 'Validation...' : 'Valider'}
+              </button>
             </div>
           </>
         ) : (
           <>
-            <p className="text-sm text-gray-600 mb-6">Êtes-vous sûr de vouloir valider cette prime ?</p>
+            <p className="text-sm text-gray-600 mb-4">Êtes-vous sûr de vouloir valider cette prime ?</p>
+            {attachmentAllowed(confirmBonus?.step) && (
+              <div className="mb-5">
+                <AttachmentInput
+                  value={validationAttachment}
+                  onChange={setValidationAttachment}
+                  hint="PDF, image ou tableur — 10 Mo maximum. Le Directeur de votre département pourra le consulter."
+                />
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmBonus(null)} className="btn btn-sm btn-ghost">Annuler</button>
-              <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">Valider</button>
+              <button onClick={closeConfirm} className="btn btn-sm btn-ghost">Annuler</button>
+              <button onClick={confirmValidate} disabled={validating} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                {validating ? 'Validation...' : 'Valider'}
+              </button>
             </div>
           </>
         )}
