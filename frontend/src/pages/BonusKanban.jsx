@@ -96,16 +96,21 @@ const BonusKanban = () => {
                   <p className="text-center text-gray-400 text-xs py-8">Aucune prime</p>
                 ) : (
                   col.items.map(b => {
-                    const cardContent = (
-                      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-white transition-all ${
-                        isMyColumn
-                          ? 'border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer'
-                          : 'border-gray-100 opacity-60 cursor-default'
-                      }`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${
-                          isMyColumn ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'
+                    const isMine = isMyColumn || myStatuses.includes(b.status);
+                    // Peut-on modifier cette prime dans la page détail ?
+                    const canModify = isMine;
+
+                    const card = (
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-white transition-all ${isMine
+                          ? 'border-blue-200 hover:border-blue-300 hover:shadow-sm cursor-pointer'
+                          : 'border-gray-100 hover:border-gray-200'
                         }`}>
-                          {b.bonus_type === 'mensuel' ? 'M' : b.bonus_type === 'astreinte' ? 'A' : 'C'}
+                        {/* Indicateur : modifiable (pen) / lecture seule (œil) */}
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${canModify
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'bg-gray-100 text-gray-400'
+                          }`}>
+                          {canModify ? '✎' : '◉'}
                         </span>
                         <span className="text-[11px] text-gray-900 truncate min-w-0 flex-1">
                           <span className="font-medium" title={b.employee?.name || 'N/A'}>
@@ -115,16 +120,25 @@ const BonusKanban = () => {
                         <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${getBadgeClass(b.status)} ${b.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
                           {statusLabel(b)}
                         </span>
-                        <span className={`text-[10px] font-semibold shrink-0 ${isMyColumn ? 'text-blue-600' : 'text-gray-400'}`}>{seeAmounts ? `${b.total_amount} ${symbolFor(b.employee?.currency)}` : '••••••'}</span>
+                        <span className={`text-[10px] font-semibold shrink-0 ${isMine ? 'text-blue-600' : 'text-gray-400'}`}>{seeAmounts ? `${b.total_amount} ${symbolFor(b.employee?.currency)}` : '••••••'}</span>
                       </div>
                     );
 
-                    return isMyColumn ? (
-                      <Link key={b.id} to={`/bonuses/${b.id}`}>
-                        {cardContent}
+                    // Toutes les cartes sont cliquables → ouvrent la page détail
+                    // Vérification de l'ID pour éviter les liens cassés
+                    const bonusId = b.id;
+                    if (!bonusId) {
+                      console.warn('Bonus sans ID:', b);
+                      return (
+                        <div key={b.employee?.matricule || 'unknown'} className="text-xs text-red-400">
+                          ID manquant
+                        </div>
+                      );
+                    }
+                    return (
+                      <Link key={bonusId} to={`/bonuses/${bonusId}`}>
+                        {card}
                       </Link>
-                    ) : (
-                      <div key={b.id}>{cardContent}</div>
                     );
                   })
                 )}

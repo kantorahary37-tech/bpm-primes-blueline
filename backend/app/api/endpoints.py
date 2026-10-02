@@ -1172,25 +1172,12 @@ async def get_bonus(bonus_id: int, user: User = Depends(get_current_user)):
         if bonus.employee.dept_str != user.department and bonus.employee.manager_id != user.id:
             raise HTTPException(status_code=404, detail="Bonus introuvable")
 
-    # Vérifier que le statut est autorisé pour le rôle
-    if user.is_admin:
-        allowed = {s for s in ValidationStatus}
-    elif user.is_dg:
-        allowed = {ValidationStatus.EN_ATTENTE_DG}
-    elif user.is_drh:
-        allowed = {ValidationStatus.EN_ATTENTE_DRH, ValidationStatus.VALIDE}
-    elif user.is_directeur:
-        allowed = {ValidationStatus.EN_ATTENTE_DIRECTEUR}
-    elif user.is_validator_n2:
-        allowed = {ValidationStatus.INITIALISE, ValidationStatus.EN_ATTENTE_N2}
-    elif user.is_validator_n1:
-        allowed = {ValidationStatus.INITIALISE}
-    else:
-        allowed = set()
-
-    if bonus.status not in allowed:
-        raise HTTPException(status_code=404, detail="Bonus introuvable")
-
+    # Lecture : la visibilité est celle du périmètre (département / manager)
+    # vérifié ci-dessus — le même périmètre que le Kanban (all_statuses), qui
+    # affiche les primes de tout statut et dont toutes les cartes ouvrent cette
+    # page. La restriction par rôle porte sur les ACTIONS (modifier / valider /
+    # rejeter), déjà appliquées par les routes PUT et POST /validate ; la page
+    # détail affiche « Lecture seule » pour les statuts hors de la file du rôle.
     return bonus
 
 # Route GET pour l'historique des validations d'une prime

@@ -324,7 +324,7 @@ const BonusDetail = () => {
             <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${getBadgeClass(bonus.status)} ${bonus.was_rejected ? 'ring-1 ring-red-400' : ''}`}>
               {statusLabel(bonus)}
             </span>
-            {((bonus.status === 'En attente DG' && !user?.is_dg) || bonus.status === 'Prime validée') && (
+            {!canEditAsAdmin && !canModifyAsValidator && (
               <span className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
                 <LockIcon className="w-3 h-3" />
                 Lecture seule
