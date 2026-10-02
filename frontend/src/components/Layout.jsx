@@ -10,16 +10,16 @@ const mainNavItems = [
   { path: '/bonuses', label: 'Primes', icon: BonusesIcon, desc: 'Suivi et validation des primes' },
 ]
 
-// Menu déroulant regroupant Services, Flux et Plafonds pour alléger la barre de navigation
+// Menu déroulant regroupant Services et Flux pour alléger la barre de navigation
 const serviceNavItems = [
   { path: '/services', label: 'Services', icon: FolderIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'is_validator_n1', 'is_validator_n2'], desc: 'Services des employés par département' },
   { path: '/bonuses/flows', label: 'Flux', icon: ChartIcon, desc: 'Flux de validation des primes' },
-  { path: '/settings/primemax', label: 'Plafonds', icon: SettingsIcon, hideForAdmin: true, desc: 'Configuration des plafonds' },
 ]
 
 const adminNavItems = [
   { path: '/admin/departments', label: 'Départements', icon: BuildingIcon, roles: ['is_admin'], desc: 'Créer et gérer les départements' },
   { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'can_modify_plafonds'], desc: 'Plafonds des primes, barèmes et maintenance' },
+  { path: '/settings/primemax', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'can_modify_plafonds'], desc: 'Plafonds des Primes' },
   { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Consultation des archives' },
   { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2'], desc: 'Modèles d\'évaluation' },
   { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin', 'is_directeur'], desc: 'Gestion des comptes utilisateurs' },
