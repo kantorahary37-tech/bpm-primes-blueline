@@ -1,20 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-
-const BONUS_TYPE_DEPARTMENTS = {
-  mensuel: [
-    'Direction Achat', 'Direction Administrative et Financiere',
-    'Direction BBS', 'Direction Clientele', 'Direction Commerciale',
-    'Direction Communication et Marketing', 'Direction des Operations',
-    'Direction des Services Generaux', "Direction des Systemes d'Informations",
-    'Direction Generale', 'Direction Logistique', 'Direction Technique',
-  ],
-  astreinte: ['Direction BBS', 'Direction des Operations',
-              "Direction des Systemes d'Informations", 'Direction Technique'],
-  commission: ['Direction Commerciale'],
-  commission_gc: ['Direction Commerciale'],
-  commission_entreprise: ['Direction Commerciale', 'Direction Generale'],
-}
+import { useDepartments } from '../contexts/DepartmentsContext'
 
 const CalendarSvg = () => (
   <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -63,12 +49,12 @@ const types = [
 
 export default function BonusTypeSelect() {
   const { user } = useAuth()
+  const { allowsBonusType } = useDepartments()
   const navigate = useNavigate()
 
-  const isTypeAllowed = (typeId) => {
-    const allowed = BONUS_TYPE_DEPARTMENTS[typeId]
-    return allowed && user?.department ? allowed.includes(user.department) : true
-  }
+  // Types autorisés pour le département de l'utilisateur : configurés dans
+  // Administration → Départements (source de vérité : le serveur).
+  const isTypeAllowed = (typeId) => allowsBonusType(user?.department, typeId)
 
   return (
     <div>

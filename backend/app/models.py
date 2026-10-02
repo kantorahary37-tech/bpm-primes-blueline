@@ -55,6 +55,9 @@ class Currency(models.Model):
 class Department(models.Model):
     id = fields.IntField(pk=True)
     name = fields.CharField(max_length=50, unique=True)
+    # Types de primes gérés pour ce département (JSON : ["mensuel", "astreinte",
+    # "commission"]). Vide = valeur de repli historique (app.bonus_type_access).
+    bonus_types = fields.JSONField(null=True)
 
     def __str__(self):
         return self.name

@@ -605,4 +605,47 @@ except Exception as e:
 except Exception as e:
     print(f"validationattachment table check skipped: {e}")
 
+print("Ensuring department.bonus_types column exists...")
+try:
+    import json as _json
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgres://postgres:mysecretpassword@db:5432/bpm_primes_db"))
+    conn.autocommit = True
+    cur = conn.cursor()
+    # Types de primes gérés par département (cases à cocher de l'écran
+    # Départements). NULL = repli sur la règle historique.
+    cur.execute("""
+        ALTER TABLE "department" ADD COLUMN IF NOT EXISTS "bonus_types" JSONB;
+    """)
+    # Matérialise la règle historique pour les départements existants : le
+    # comportement reste identique, mais il devient configurable dans l'app.
+    # (Evenements temporaires : rollback si un UPDATE échoue.)
+    cur.execute("SAVEPOINT seed_bonus_types")
+    try:
+        from app.bonus_type_access import MANAGED_BONUS_TYPES, REGLE_HISTORIQUE
+        # REGLE_HISTORIQUE est indexé par type de prime : la valeur est la liste
+        # des départements qui l'autorisaient. On regroupe d'abord par
+        # département, sinon les types suivants écraseraient le précédent.
+        per_department = {}
+        for bonus_type in MANAGED_BONUS_TYPES:
+            for dept_name in REGLE_HISTORIQUE.get(bonus_type, ()):
+                per_department.setdefault(dept_name, []).append(bonus_type)
+        for dept_name, types in per_department.items():
+            ordered = [t for t in MANAGED_BONUS_TYPES if t in types]
+            cur.execute(
+                'UPDATE "department" SET "bonus_types" = %s::jsonb '
+                'WHERE "bonus_types" IS NULL AND "name" = %s',
+                (_json.dumps(ordered), dept_name),
+            )
+        cur.execute("RELEASE SAVEPOINT seed_bonus_types")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT seed_bonus_types")
+        raise
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("department bonus_types column OK")
+except Exception as e:
+    print(f"department bonus_types column check skipped: {e}")
+
 print("Starting application...")

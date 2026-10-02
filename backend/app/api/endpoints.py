@@ -16,6 +16,7 @@ from app.permissions import (
 )
 from app.api.commission_gc import can_access_gc, COMMISSION_GC_DEPARTMENT
 from app.api.upload import UPLOAD_DIR
+from app.bonus_type_access import department_allows, department_bonus_types
 from app.email_service import send_bonus_notification_email, send_bonus_batch_notification_email
 from app.currency_format import format_amount_with_currency
 from app.schemas import *
@@ -145,6 +146,18 @@ async def create_bonus(bonus: BonusCreate, user: User = Depends(get_current_user
         raise HTTPException(
             status_code=403,
             detail="Vous ne pouvez créer une prime que pour les employés de vos services affectés.",
+        )
+
+    # Types de primes autorisés pour le département de l'employé : configurés
+    # dans Administration → Départements (case à cocher par type). Vérification
+    # côté serveur — l'interface ne fait que refléter cette règle.
+    if not await department_allows(employee.dept_str, bonus.bonus_type):
+        allowed = await department_bonus_types(employee.dept_str)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Le type de prime '{bonus.bonus_type.value}' n'est pas autorisé pour le "
+                   f"département '{employee.dept_str}'. "
+                   f"Types autorisés : {', '.join(allowed) or 'aucun'}.",
         )
 
     if bonus.bonus_type != BonusType.ASTREINTE:

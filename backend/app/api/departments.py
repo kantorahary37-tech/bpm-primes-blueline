@@ -12,6 +12,11 @@ from app.schemas import (
 )
 from app.auth import get_current_user
 from app.api.admin import require_admin
+from app.bonus_type_access import (
+    MANAGED_BONUS_TYPES,
+    all_departments_bonus_types,
+    department_bonus_types,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -19,6 +24,26 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 # et protégé contre la modification/suppression.
 RESERVED_NAME = 'Inconnu'
 MAX_NAME_LENGTH = 50
+
+
+def _clean_bonus_types(raw: Optional[List[str]]) -> List[str]:
+    """Valide et normalise la liste de types de primes envoyée par l'admin."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise HTTPException(400, "Les types de primes doivent être une liste")
+    cleaned = []
+    for value in raw:
+        if value not in MANAGED_BONUS_TYPES:
+            raise HTTPException(
+                400,
+                f"Type de prime inconnu : {value}. "
+                f"Valeurs acceptées : {', '.join(MANAGED_BONUS_TYPES)}.",
+            )
+        if value not in cleaned:
+            cleaned.append(value)
+    # Ordre du modèle, pour une lecture stable côté interface
+    return [t for t in MANAGED_BONUS_TYPES if t in cleaned]
 
 
 def _director_payload(director: Optional[User]) -> Optional[dict]:
@@ -33,7 +58,7 @@ def _director_payload(director: Optional[User]) -> Optional[dict]:
 
 
 async def _department_payload(dept: Department, employee_count: int = None) -> dict:
-    """Charge le directeur du département.
+    """Charge le directeur du département et ses types de primes autorisés.
 
     Le « directeur » est l'utilisateur du département portant le rôle
     `is_directeur` : c'est déjà la convention utilisée par `_department_manager()`
@@ -48,6 +73,7 @@ async def _department_payload(dept: Department, employee_count: int = None) -> d
         "name": dept.name,
         "employee_count": employee_count,
         "director": _director_payload(director),
+        "bonus_types": await department_bonus_types(dept.name),
     }
 
 
@@ -60,6 +86,17 @@ async def list_departments():
         await _department_payload(d, getattr(d, 'employee_count', 0) or 0)
         for d in depts
     ]
+
+
+@router.get("/bonus-types")
+async def list_all_bonus_types():
+    """Types de primes autorisés par département.
+
+    Accessible à tout utilisateur authentifié : la page de création d'une prime
+    et le formulaire l'utilisent pour n'afficher que les types du département de
+    l'utilisateur (la règle reste vérifiée côté serveur à la création).
+    """
+    return await all_departments_bonus_types()
 
 
 async def _validate_name(name: str, exclude_id: int = None) -> str:
@@ -81,7 +118,13 @@ async def _validate_name(name: str, exclude_id: int = None) -> str:
 @router.post("/", response_model=DepartmentResponse, status_code=201)
 async def create_department(data: DepartmentCreate, _admin: User = Depends(require_admin)):
     name = await _validate_name(data.name)
-    dept = await Department.create(name=name)
+    # Un nouveau département part sur les trois types gérés : l'admin les
+    # ajuste ensuite dans « Modifier ».
+    bonus_types = _clean_bonus_types(data.bonus_types)
+    dept = await Department.create(
+        name=name,
+        bonus_types=bonus_types if bonus_types is not None else list(MANAGED_BONUS_TYPES),
+    )
     return await _department_payload(dept, 0)
 
 
@@ -91,11 +134,13 @@ async def rename_department(
     data: DepartmentUpdate,
     _admin: User = Depends(require_admin),
 ):
-    """Renomme un département.
+    """Renomme un département et met à jour son assignation de types de primes.
 
     `Employee.dept_str`, `User.dept_str` et `PrimeMax.dept_str` sont des copies
     dénormalisées du nom : sans cette synchronisation, les employés, les
     utilisateurs et les plafonds disparaîtraient du département renommé.
+    L'assignation des types vit sur `Department` (clé étrangère) : elle suit le
+    département sans synchronisation.
     """
     dept = await Department.get_or_none(id=department_id)
     if not dept:
@@ -104,7 +149,13 @@ async def rename_department(
         raise HTTPException(400, f"Le département « {RESERVED_NAME} » ne peut pas être renommé")
 
     name = await _validate_name(data.name, exclude_id=dept.id)
+    new_bonus_types = _clean_bonus_types(data.bonus_types)
+
+    # Assignation des types de primes uniquement (sans renommage)
     if name == dept.name:
+        if new_bonus_types is not None and new_bonus_types != dept.bonus_types:
+            dept.bonus_types = new_bonus_types
+            await dept.save()
         return await _department_payload(dept)
 
     old_name = dept.name
@@ -112,6 +163,8 @@ async def rename_department(
     await User.filter(dept_str=old_name).update(dept_str=name)
     await PrimeMax.filter(dept_str=old_name).update(dept_str=name)
     dept.name = name
+    if new_bonus_types is not None:
+        dept.bonus_types = new_bonus_types
     await dept.save()
 
     return await _department_payload(dept)

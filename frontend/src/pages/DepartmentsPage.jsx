@@ -5,6 +5,7 @@ import {
 } from '../services/api'
 import Modal from '../components/Modal'
 import { useConfirm } from '../components/ConfirmModal'
+import { MANAGED_BONUS_TYPES, BONUS_TYPE_LABELS } from '../constants/bonusTypes'
 import { apiErrorToast } from '../utils/toastHelpers'
 import toast from '../utils/toast'
 import {
@@ -59,6 +60,7 @@ export default function DepartmentsPage() {
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(null)
   const [formName, setFormName] = useState('')
+  const [formBonusTypes, setFormBonusTypes] = useState([])
   const [formError, setFormError] = useState('')
   // Modale « Directeur du département »
   const [managerFor, setManagerFor] = useState(null)
@@ -114,12 +116,21 @@ export default function DepartmentsPage() {
     setEditing('new')
     setFormName('')
     setFormError('')
+    // Un nouveau département part sur les trois types gérés
+    setFormBonusTypes(MANAGED_BONUS_TYPES)
   }
 
   const openEdit = (dept) => {
     setEditing(dept)
     setFormName(dept.name)
     setFormError('')
+    setFormBonusTypes(dept.bonus_types || [])
+  }
+
+  const toggleBonusType = (type) => {
+    setFormBonusTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type],
+    )
   }
 
   const closeModal = () => {
@@ -142,17 +153,29 @@ export default function DepartmentsPage() {
     setSaving(true)
     try {
       if (isNew) {
-        await createDepartment(formName.trim())
+        await createDepartment(formName.trim(), formBonusTypes)
         toast.success(`Département « ${formName.trim()} » créé`)
       } else {
         const previous = editing.name
-        await renameDepartment(editing.id, formName.trim())
-        toast.success(`« ${previous} » renommé en « ${formName.trim()} »`)
+        const renamed = previous !== formName.trim()
+        const typesChanged =
+          JSON.stringify([...(editing.bonus_types || [])].sort()) !==
+          JSON.stringify([...formBonusTypes].sort())
+        await renameDepartment(editing.id, formName.trim(), formBonusTypes)
+        if (renamed && typesChanged) {
+          toast.success(`« ${previous} » renommé en « ${formName.trim()} » · types de primes mis à jour`)
+        } else if (renamed) {
+          toast.success(`« ${previous} » renommé en « ${formName.trim()} »`)
+        } else if (typesChanged) {
+          toast.success(`Types de primes mis à jour pour « ${formName.trim()} »`)
+        } else {
+          toast.success('Aucune modification')
+        }
       }
       setEditing(null)
       await load()
     } catch (err) {
-      apiErrorToast(err, isNew ? 'Création impossible' : 'Renommage impossible')
+      apiErrorToast(err, isNew ? 'Création impossible' : 'Modification impossible')
     } finally {
       setSaving(false)
     }
@@ -417,6 +440,25 @@ export default function DepartmentsPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Types de primes autorisés (assignation gestion des primes) */}
+                <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] text-gray-400">Primes :</span>
+                  {MANAGED_BONUS_TYPES.map((type) => {
+                    const allowed = (dept.bonus_types || []).includes(type)
+                    return allowed ? (
+                      <span
+                        key={type}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100"
+                      >
+                        {BONUS_TYPE_LABELS[type] || type}
+                      </span>
+                    ) : null
+                  })}
+                  {(dept.bonus_types || []).length === 0 && (
+                    <span className="text-[10px] italic text-gray-300">aucun type géré</span>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -427,8 +469,8 @@ export default function DepartmentsPage() {
       <Modal
         open={!!editing}
         onClose={closeModal}
-        title={isNew ? 'Nouveau département' : 'Renommer le département'}
-        size="sm"
+        title={isNew ? 'Nouveau département' : 'Modifier le département'}
+        size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -462,6 +504,49 @@ export default function DepartmentsPage() {
               </ul>
             </div>
           )}
+
+          {/* Assignation gestion des primes : quels types de primes ce département
+              peut porter. Remplace l'ancienne liste figée dans le code. */}
+          <div className="border-t border-gray-100 pt-4">
+            <label className="label py-1">
+              <span className="label-text text-xs font-semibold">Assignation gestion des primes</span>
+            </label>
+            <p className="text-[11px] text-gray-400 mb-2">
+              Types de primes que les employés de ce département peuvent recevoir. Un type
+              décoché n'est plus proposé à la création d'une prime et le serveur le refuse.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {MANAGED_BONUS_TYPES.map((type) => {
+                const checked = formBonusTypes.includes(type)
+                return (
+                  <label
+                    key={type}
+                    className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors min-w-0 ${
+                      checked
+                        ? 'bg-blue-50 border-blue-300'
+                        : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm shrink-0"
+                      checked={checked}
+                      onChange={() => toggleBonusType(type)}
+                    />
+                    <span className="text-xs font-medium text-gray-700 truncate" title={BONUS_TYPE_LABELS[type] || type}>
+                      {BONUS_TYPE_LABELS[type] || type}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            {formBonusTypes.length === 0 && (
+              <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg p-2 mt-2">
+                Aucun type coché : aucune prime ne pourra être créée pour ce département
+                (hors types non gérés, qui restent disponibles).
+              </p>
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
             <button type="button" onClick={closeModal} className="btn btn-sm btn-ghost" disabled={saving}>

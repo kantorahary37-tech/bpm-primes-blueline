@@ -57,13 +57,21 @@ export const getDepartments = async () => {
   return data;
 };
 
-export const createDepartment = async (name) => {
-  const { data } = await api.post('/departments/', { name });
+// Types de primes autorisés par département (source de vérité côté serveur)
+export const getDepartmentBonusTypes = async () => {
+  const { data } = await api.get('/departments/bonus-types');
   return data;
 };
 
-export const renameDepartment = async (id, name) => {
-  const { data } = await api.put(`/departments/${id}`, { name });
+export const createDepartment = async (name, bonusTypes = undefined) => {
+  const payload = bonusTypes === undefined ? { name } : { name, bonus_types: bonusTypes };
+  const { data } = await api.post('/departments/', payload);
+  return data;
+};
+
+export const renameDepartment = async (id, name, bonusTypes = undefined) => {
+  const payload = bonusTypes === undefined ? { name } : { name, bonus_types: bonusTypes };
+  const { data } = await api.put(`/departments/${id}`, payload);
   return data;
 };
 

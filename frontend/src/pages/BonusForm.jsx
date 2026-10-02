@@ -4,6 +4,7 @@ import { createBonus, getEmployees, getBonus, updateBonus, getPrimeMax, uploadFi
 import { useAuth } from '../contexts/AuthContext'
 import { useSystemConfig } from '../contexts/SystemConfigContext'
 import { useCurrencies } from '../contexts/CurrenciesContext'
+import { useDepartments } from '../contexts/DepartmentsContext'
 import { ChartIcon, MoonIcon, CalendarIcon, ExclamationIcon, PlusIcon } from '../components/Icons'
 import toast from '../utils/toast'
 import Modal from '../components/Modal'
@@ -51,23 +52,15 @@ const DEFAULT_QUALI_CRITERIA = [
   "Travail d'équipe",
 ]
 
-const BONUS_TYPE_DEPARTMENTS = {
-  mensuel: [
-    'Direction Achat', 'Direction Administrative et Financiere',
-    'Direction BBS', 'Direction Clientele', 'Direction Commerciale',
-    'Direction Communication et Marketing', 'Direction des Operations',
-    'Direction des Services Generaux', "Direction des Systemes d'Informations",
-    'Direction Generale', 'Direction Logistique', 'Direction Technique',
-  ],
-  astreinte: ['Direction BBS', 'Direction des Operations',
-              "Direction des Systemes d'Informations", 'Direction Technique'],
-  commission: ['Direction Commerciale'],
-}
+// Les types de primes autorisés par département ne sont plus figés ici : ils
+// viennent de l'API (Administration → Départements → « Assignation gestion des
+// primes ») et sont revalidés par le serveur à la création de la prime.
 
 export default function BonusForm() {
   const { user: connectedUser } = useAuth()
   const { canSeeAmounts } = useSystemConfig()
   const { symbolFor } = useCurrencies()
+  const { allowsBonusType, departmentsForBonusType } = useDepartments()
   const seeAmounts = canSeeAmounts(connectedUser)
   const showPrimeMax = seeAmounts && !connectedUser?.is_validator_n1 && !connectedUser?.is_validator_n2
   const { type, id } = useParams()
@@ -734,10 +727,14 @@ export default function BonusForm() {
 
     const badDept = allEmpIds.some(id => {
       const e = employees.find(x => x.id === id)
-      return e && !BONUS_TYPE_DEPARTMENTS.astreinte.includes(e.department)
+      return e && !allowsBonusType(e.department, 'astreinte')
     })
     if (badDept) {
-      setError('Seuls les départements Direction BBS, Direction des Operations, Direction des Systemes d\'Informations, Direction Technique sont autorisés pour les primes d\'astreinte.')
+      const allowedDepts = departmentsForBonusType('astreinte')
+      setError(
+        `Un ou plusieurs employés sélectionnés appartiennent à un département qui n'a pas la prime d'astreinte autorisée. ` +
+        `Départements autorisés : ${allowedDepts.length ? allowedDepts.join(', ') : 'aucun'}.`,
+      )
       setLoading(false); return
     }
 
@@ -967,9 +964,12 @@ export default function BonusForm() {
     const id = parseInt(e.target.value)
     const emp = employees.find((x) => x.id === id)
     if (emp) {
-      const allowed = BONUS_TYPE_DEPARTMENTS[editType]
-      if (allowed && !allowed.includes(emp.department)) {
-        setError(`Le département "${emp.department}" n'est pas autorisé pour les primes ${editType === 'mensuel' ? 'mensuelles' : editType === 'astreinte' ? "d'astreinte" : 'de commission'}.`)
+      if (!allowsBonusType(emp.department, editType)) {
+        const allowedDepts = departmentsForBonusType(editType)
+        setError(
+          `Le département « ${emp.department} » n'est pas autorisé pour ce type de prime. ` +
+          `Départements autorisés : ${allowedDepts.length ? allowedDepts.join(', ') : 'aucun'}.`,
+        )
         setSelectedEmp(null)
         setEmployee({ department: '', service: '', name: '', function: '', matricule: '' })
         return
@@ -988,10 +988,14 @@ export default function BonusForm() {
     const allEmpIds = [selectedEmp?.id, ...(hasFreeAmountType ? [] : teamSelections)].filter(Boolean)
     const badDept = allEmpIds.some(id => {
       const e = employees.find(x => x.id === id)
-      return e && !BONUS_TYPE_DEPARTMENTS.mensuel.includes(e.department)
+      return e && !allowsBonusType(e.department, 'mensuel')
     })
     if (badDept) {
-      setError('Un ou plusieurs employés sélectionnés ne sont pas autorisés pour les primes mensuelles.')
+      const allowedDepts = departmentsForBonusType('mensuel')
+      setError(
+        `Un ou plusieurs employés sélectionnés appartiennent à un département qui n'a pas la prime mensuelle autorisée. ` +
+        `Départements autorisés : ${allowedDepts.length ? allowedDepts.join(', ') : 'aucun'}.`,
+      )
       setLoading(false); return
     }
     try {

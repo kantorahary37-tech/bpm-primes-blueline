@@ -317,9 +317,13 @@ class CurrencyResponse(BaseModel):
 # --- Départements ---
 class DepartmentCreate(BaseModel):
     name: str
+    # Types de primes gérés (mensuel / astreinte / commission). Absent = les trois.
+    bonus_types: Optional[List[str]] = None
 
 class DepartmentUpdate(BaseModel):
     name: str
+    # Si fourni, remplace l'assignation des types de primes du département.
+    bonus_types: Optional[List[str]] = None
 
 class DepartmentManagerAssign(BaseModel):
     user_id: int
@@ -336,6 +340,8 @@ class DepartmentResponse(BaseModel):
     employee_count: int = 0
     # Directeur du département (utilisateur portant le rôle is_directeur).
     director: Optional[DepartmentManagerResponse] = None
+    # Types de primes autorisés pour ce département (les 3 gérés).
+    bonus_types: List[str] = []
     class Config: from_attributes = True
 
 class AuditLogResponse(BaseModel):

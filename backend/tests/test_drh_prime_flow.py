@@ -27,7 +27,11 @@ async def make_user(email, name="Test User", **kwargs):
 
 
 async def make_employee(manager, dept_str="Direction Test", matricule="M1"):
-    dept = await Department.create(name=dept_str)
+    # bonus_types explicite : le département fictif autorise les types gérés,
+    # sinon la règle département/type (nouvelle) refuserait la prime.
+    dept = await Department.create(
+        name=dept_str, bonus_types=["mensuel", "astreinte", "commission"],
+    )
     return await Employee.create(
         matricule=matricule,
         name="Employe Test",
