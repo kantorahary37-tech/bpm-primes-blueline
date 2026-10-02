@@ -197,11 +197,20 @@ class BonusResponse(BonusBase):
     currency: Optional[str] = None
     class Config: from_attributes = True
 
+# Référence d'un fichier déjà téléversé via POST /upload
+class AttachmentRef(BaseModel):
+    filename: str
+    original_name: str
+    size: Optional[int] = 0
+
 # Schéma de création de validation
 class ValidationCreate(BaseModel):
     action: str
     note: Optional[str] = None
     motif_rejet: Optional[str] = None
+    # Pièce jointe facultative (N+1 / N+2) : le fichier a déjà été téléversé
+    # via POST /upload, on n'en conserve que la référence.
+    attachment: Optional[AttachmentRef] = None
 
 # Schéma pour validation par lot
 class BatchValidateRequest(BaseModel):
@@ -210,6 +219,10 @@ class BatchValidateRequest(BaseModel):
     step: str
     note: Optional[str] = None
     motif_rejet: Optional[str] = None
+    # Pièce jointe facultative (N+1 / N+2) : un seul fichier pour toute la
+    # sélection, rattaché à chacune des primes validées (le fichier n'est pas
+    # propre à un employé).
+    attachment: Optional[AttachmentRef] = None
 
 class BatchValidateResult(BaseModel):
     bonus_id: int
@@ -239,6 +252,29 @@ class ValidationResponse(BaseModel):
     motif_rejet: Optional[str] = None
     validated_at: datetime
     class Config: from_attributes = True
+
+# Pièce jointe de validation (page Pièces jointes du Directeur)
+class ValidationAttachmentResponse(BaseModel):
+    id: int
+    bonus_id: int
+    validation_id: Optional[int] = None
+    original_name: str
+    size: int = 0
+    url: str
+    step: Optional[str] = None
+    action: Optional[str] = None
+    uploaded_by_id: int
+    uploaded_by_name: Optional[str] = None
+    uploaded_by_service: Optional[str] = None
+    employee_id: Optional[int] = None
+    employee_name: Optional[str] = None
+    employee_matricule: Optional[str] = None
+    department: Optional[str] = None
+    bonus_type: Optional[str] = None
+    bonus_status: Optional[str] = None
+    total_amount: Optional[float] = None
+    currency: Optional[str] = None
+    created_at: datetime
 
 # Schéma de base pour Prime Max
 class PrimeMaxBase(BaseModel):

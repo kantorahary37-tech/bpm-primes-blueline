@@ -7,6 +7,7 @@ import { useCurrencies } from '../contexts/CurrenciesContext';
 import toast from '../utils/toast';
 import Timeline from '../components/Timeline';
 import Modal from '../components/Modal';
+import AttachmentInput from '../components/AttachmentInput';
 import { ArrowLeftIcon, CheckIcon, XCircleIcon, EditIcon, CalendarIcon, MoonIcon, ChartIcon, ClipboardIcon, DownloadIcon, ClockIcon, PlusIcon, LockIcon, PaperclipIcon, TrashIcon } from '../components/Icons';
 import FilePreview from '../components/FilePreview';
 
@@ -59,6 +60,8 @@ const BonusDetail = () => {
   const [motifRejet, setMotifRejet] = useState('');
   const [validating, setValidating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Pièce jointe facultative jointe par le N+1 / N+2 à l'étape de validation
+  const [validationAttachment, setValidationAttachment] = useState(null);
 
   useEffect(() => {
     Promise.all([getBonus(id), getBonusValidations(id)])
@@ -88,15 +91,23 @@ const BonusDetail = () => {
   const handleValidate = async () => {
     const step = getValidStep(bonus.status);
     if (!step) return;
+    setValidationAttachment(null);
     setShowValidateModal(true);
   };
+
+  // Le N+1 et le N+2 transmettent une pièce jointe facultative au Directeur
+  const attachmentAllowed = (step) => step === 'N1' || step === 'N2';
 
   const confirmValidate = async () => {
     const step = getValidStep(bonus.status);
     if (!step) return;
     setValidating(true);
     try {
-      await validateBonus(bonus.id, { action: 'VALIDER' }, step);
+      await validateBonus(
+        bonus.id,
+        { action: 'VALIDER', attachment: attachmentAllowed(step) ? validationAttachment : null },
+        step,
+      );
       toast.success('Prime validée avec succès !');
       setShowValidateModal(false);
       setTimeout(() => navigate('/bonuses'), 1500);
@@ -792,7 +803,16 @@ const BonusDetail = () => {
       </Modal>
 
       <Modal open={showValidateModal} onClose={() => setShowValidateModal(false)} title="Confirmer la validation" size="sm">
-        <p className="text-sm text-gray-600 mb-6">Êtes-vous sûr de vouloir valider cette prime ?</p>
+        <p className="text-sm text-gray-600 mb-4">Êtes-vous sûr de vouloir valider cette prime ?</p>
+        {attachmentAllowed(getValidStep(bonus.status)) && (
+          <div className="mb-5">
+            <AttachmentInput
+              value={validationAttachment}
+              onChange={setValidationAttachment}
+              hint="PDF, image ou tableur — 10 Mo maximum. Le Directeur de votre département pourra le consulter."
+            />
+          </div>
+        )}
         <div className="flex gap-2 justify-end">
           <button onClick={() => setShowValidateModal(false)} className="btn btn-sm btn-ghost">Annuler</button>
           <button onClick={confirmValidate} className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0" disabled={validating}>{validating ? 'Validation...' : 'Valider'}</button>
