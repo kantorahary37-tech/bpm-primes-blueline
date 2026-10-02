@@ -171,7 +171,7 @@ const AttachmentsPage = () => {
           {visibleDepts.length > 0 && (
             <select value={dept} onChange={(e) => setDept(e.target.value)} className={SELECT_CLASS}>
               <option value="">Tous les départements</option>
-              {visibleDepts.map(d => <option key={d} value={d}>{d}</option>)}
+              {visibleDepts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
             </select>
           )}
           <select value={service} onChange={(e) => setService(e.target.value)}
