@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../contexts/DepartmentsContext';
-import { getValidationAttachments, getValidationAttachmentServices, downloadFile, deleteValidationAttachment } from '../services/api';
+import { getValidationAttachments, getServices, downloadFile, deleteValidationAttachment } from '../services/api';
 import { PaperclipIcon, SearchIcon, DownloadIcon, EyeIcon, TrashIcon } from '../components/Icons';
 import FilePreview from '../components/FilePreview';
 import Modal from '../components/Modal';
@@ -115,13 +115,21 @@ const AttachmentsPage = () => {
     return () => clearTimeout(t);
   }, [searchInput, filterParams, canView, load]);
 
-  // Liste des services proposés par le filtre (une fois, au chargement)
+  // Services proposés par le filtre : ceux du département choisi (ou du
+  // département de l'utilisateur pour un Directeur — l'API restreint déjà).
+  // Quand le département change, la sélection service est réinitialisée si
+  // elle n'existe plus dans la nouvelle liste.
   useEffect(() => {
     if (!canView) return;
-    getValidationAttachmentServices()
-      .then(list => setServices(list || []))
+    const targetDept = isFullScope ? (dept || undefined) : undefined;
+    getServices(targetDept)
+      .then(list => {
+        const names = (list || []).map(s => s.name).filter(Boolean);
+        setServices(names);
+        setService(prev => (prev && names.includes(prev) ? prev : ''));
+      })
       .catch(() => setServices([]));
-  }, [canView]);
+  }, [canView, dept, isFullScope]);
 
   // Un Directeur n'a pas de filtre département : tout est déjà restreint côté API
   const visibleDepts = isFullScope ? departments : [];
