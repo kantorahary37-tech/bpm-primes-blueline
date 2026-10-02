@@ -66,7 +66,7 @@ function AppContent() {
       <Route path="/admin/departments" element={<RestrictedRoute roles={['is_admin']}><DepartmentsPage /></RestrictedRoute>} />
       <Route path="/admin/users" element={<RestrictedRoute roles={['is_admin', 'is_directeur']}><UsersPage /></RestrictedRoute>} />
       <Route path="/admin/evaluation-templates" element={<RestrictedRoute roles={['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2']}><EvaluationTemplatesPage /></RestrictedRoute>} />
-      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur']}><AdminConfigPage /></RestrictedRoute>} />
+      <Route path="/admin/config" element={<RestrictedRoute roles={['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'can_modify_plafonds']}><AdminConfigPage /></RestrictedRoute>} />
       {/* Rappels DG/RH déplacés dans Configuration → Déclencheurs email (tab=emailTriggers) */}
       <Route path="/admin/prime-reminder" element={<Navigate to="/admin/config?tab=emailTriggers" replace />} />
       <Route path="/admin/rh-reminder" element={<Navigate to="/admin/config?tab=emailTriggers" replace />} />

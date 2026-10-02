@@ -18,8 +18,8 @@ const serviceNavItems = [
 ]
 
 const adminNavItems = [
-  { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur'], desc: 'Paramètres généraux du système' },
   { path: '/admin/departments', label: 'Départements', icon: BuildingIcon, roles: ['is_admin'], desc: 'Créer et gérer les départements' },
+  { path: '/admin/config', label: 'Configuration', icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'can_modify_plafonds'], desc: 'Plafonds des primes, barèmes et maintenance' },
   { path: '/archive', label: 'Archive', icon: ArchiveIcon, roles: ['is_admin', 'is_dg', 'is_drh'], desc: 'Consultation des archives' },
   { path: '/admin/evaluation-templates', label: 'Évaluation', icon: ClipboardIcon, roles: ['is_admin', 'is_directeur', 'is_validator_n1', 'is_validator_n2'], desc: 'Modèles d\'évaluation' },
   { path: '/admin/users', label: 'Utilisateurs', icon: UsersIcon, roles: ['is_admin', 'is_directeur'], desc: 'Gestion des comptes utilisateurs' },
@@ -27,7 +27,7 @@ const adminNavItems = [
 
 function filterNavItems(items, user) {
   return items.filter(item =>
-    !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_validator_n1)) &&
+    !(item.hideForAdmin && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_validator_n1 || user?.can_modify_plafonds)) &&
     (!item.roles || item.roles.some(r => user?.[r]))
   )
 }

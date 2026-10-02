@@ -95,7 +95,8 @@ export default function UsersPage() {
         if (roleFilter === 'directeur' && !u.is_directeur) return false
         if (roleFilter === 'n1' && !u.is_validator_n1) return false
         if (roleFilter === 'n2' && !u.is_validator_n2) return false
-        if (roleFilter === 'collab' && (u.is_admin || u.is_dg || u.is_drh || u.is_directeur || u.is_validator_n1 || u.is_validator_n2)) return false
+        if (roleFilter === 'plafonds' && !u.can_modify_plafonds) return false
+        if (roleFilter === 'collab' && (u.is_admin || u.is_dg || u.is_drh || u.is_directeur || u.is_validator_n1 || u.is_validator_n2 || u.can_modify_plafonds)) return false
       }
       const userAss = assignmentsByUser[u.id] || []
       // Filtre département : match le département utilisateur OU le département d'un service assigné
@@ -264,6 +265,7 @@ export default function UsersPage() {
     if (u.is_directeur) badges.push(<span key="dir" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">Directeur</span>)
     if (u.is_validator_n1) badges.push(<span key="n1" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">N+1</span>)
     if (u.is_validator_n2) badges.push(<span key="n2" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-700 border border-teal-200">N+2</span>)
+    if (u.can_modify_plafonds) badges.push(<span key="cmplf" className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">Plafonds</span>)
     if (!badges.length) badges.push(<span key="collab" className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">Collaborateur</span>)
     return badges
   }
@@ -276,7 +278,8 @@ export default function UsersPage() {
     directeur: visibleUsers.filter(u => u.is_directeur).length,
     n1: visibleUsers.filter(u => u.is_validator_n1).length,
     n2: visibleUsers.filter(u => u.is_validator_n2).length,
-    collab: visibleUsers.filter(u => !u.is_admin && !u.is_dg && !u.is_drh && !u.is_directeur && !u.is_validator_n1 && !u.is_validator_n2).length,
+    plafonds: visibleUsers.filter(u => u.can_modify_plafonds).length,
+    collab: visibleUsers.filter(u => !u.is_admin && !u.is_dg && !u.is_drh && !u.is_directeur && !u.is_validator_n1 && !u.is_validator_n2 && !u.can_modify_plafonds).length,
   }), [visibleUsers])
 
   if (loading) return <div className="flex justify-center p-8"><span className="loading loading-spinner loading-lg"></span></div>
@@ -362,6 +365,7 @@ export default function UsersPage() {
           { key: 'directeur', label: 'Directeur', count: roleCounts.directeur, color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
           { key: 'n1', label: 'Valid. N+1', count: roleCounts.n1, color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
           { key: 'n2', label: 'Valid. N+2', count: roleCounts.n2, color: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100' },
+          { key: 'plafonds', label: 'Plafonds', count: roleCounts.plafonds, color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
           { key: 'collab', label: 'Collab.', count: roleCounts.collab, color: 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100' },
         ].filter(t => !isScopedDirector || !['', 'admin', 'dg', 'drh'].includes(t.key)).map(tab => (
           <button
@@ -659,6 +663,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
     is_drh: false,
     is_dg: false,
     is_admin: false,
+    can_modify_plafonds: false,
   })
   const [directig, setDirectig] = useState(false)
   const [selectedEmployees, setSelectedEmployees] = useState([])
@@ -683,6 +688,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
         is_drh: user.is_drh || false,
         is_dg: user.is_dg || false,
         is_admin: user.is_admin || false,
+        can_modify_plafonds: user.can_modify_plafonds || false,
       })
     }
   }, [user])
@@ -760,6 +766,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
       is_drh: form.is_drh,
       is_dg: form.is_dg,
       is_admin: form.is_admin,
+      can_modify_plafonds: form.can_modify_plafonds,
       bypass_director: directig,
       directig,
       employees: selectedEmployees,
@@ -918,6 +925,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
                 { key: 'is_drh', label: 'DRH', color: 'border-emerald-300 checked:bg-emerald-500', adminOnly: true },
                 { key: 'is_dg', label: 'Directeur Général', color: 'border-amber-300 checked:bg-amber-500', adminOnly: true },
                 { key: 'is_admin', label: 'Admin', color: 'border-red-300 checked:bg-red-500', adminOnly: true },
+                { key: 'can_modify_plafonds', label: 'Autoriser à modifier les plafonds', color: 'border-indigo-300 checked:bg-indigo-500', adminOnly: true },
               ].filter(r => !isScopedDirector || !r.adminOnly).map(r => (
                 <label key={r.key} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all
                   ${form[r.key] ? 'bg-gray-50 border-gray-300' : 'border-gray-200 hover:border-gray-300'}`}>
@@ -925,7 +933,7 @@ function EditUserModal({ user, onClose, onSave, onSaved, departments, serviceGro
                     type="checkbox"
                     className={`checkbox checkbox-xs ${r.color}`}
                     checked={form[r.key]}
-                    onChange={e => setForm({...form, [r.key]: e.target.checked})}
+                    onChange={e => setForm({ ...form, [r.key]: e.target.checked })}
                   />
                   <span className="text-xs font-medium">{r.label}</span>
                 </label>

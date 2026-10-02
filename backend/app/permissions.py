@@ -50,6 +50,25 @@ def is_broad_role(user: User) -> bool:
     return any(getattr(user, r) for r in BROAD_ROLES)
 
 
+def can_manage_plafonds(user: User) -> bool:
+    """True si l'utilisateur peut gérer les plafonds, quel que soit son
+    département.
+
+    Vrai pour les rôles admin / DG / DRH, et pour tout utilisateur coché
+    « Autoriser à modifier les plafonds » (case à cocher de la page
+    Utilisateurs, ``User.can_modify_plafonds``) : ce drapeau donne accès aux
+    plafonds de TOUS les départements ainsi qu'aux taux spéciaux
+    (astreinte / mensuel) de tous les employés.
+    """
+    return bool(
+        user.can_modify_plafonds or user.is_admin or user.is_dg or user.is_drh
+    )
+
+
+# Champs d'employé qui constituent les « taux spéciaux » de la page Plafonds.
+PLAFOND_RATE_FIELDS = ('astreinte_rate', 'mensuel_rate')
+
+
 # Note : il n'existe volontairement aucune permission de création manuelle
 # d'employé — les employés sont créés uniquement via LDAP (admin seul).
 

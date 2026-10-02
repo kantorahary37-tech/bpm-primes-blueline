@@ -51,6 +51,7 @@ class UserBase(BaseModel):
     is_drh: Optional[bool] = False
     is_dg: Optional[bool] = False
     is_admin: Optional[bool] = False
+    can_modify_plafonds: Optional[bool] = False
     bypass_director: Optional[bool] = False
 
     _dept = field_validator('department', mode='before')(dept_to_str)

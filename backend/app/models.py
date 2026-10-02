@@ -85,6 +85,8 @@ class User(models.Model):
     is_dg = fields.BooleanField(default=False)
     # Boolean : pass directement à DG, on ne vérifie pas la cette étape Directeur ?
     bypass_director = fields.BooleanField(default=False)
+    # Boolean : autoriser à modifier les plafonds (globaux ou départementaux)
+    can_modify_plafonds = fields.BooleanField(default=False)
     # Boolean : est Administrateur (tous les privilèges) ?
     is_admin = fields.BooleanField(default=False)
     # Groupes de services gérés (N+1) : un N+1 peut être affecté à plusieurs services,
