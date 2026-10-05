@@ -65,6 +65,10 @@ class UserResponse(UserBase):
     created_at: datetime
     # Matricule de l'employé correspondant (même nom + département), si existant
     matricule: Optional[str] = None
+    # Compte de secours hors LDAP (LDAP_LOCAL_ADMIN_EMAILS) : seul cas où le
+    # mot de passe local sert malgré l'authentification LDAP, donc seul cas où
+    # l'interface doit proposer de le définir / de le rétablir par défaut.
+    can_restore_default_password: bool = False
     class Config: from_attributes = True
 
 class SignUpResponse(BaseModel):

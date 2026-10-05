@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminResetPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getDepartments, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment, adminGetUserScopeEmployees, adminGetUserBypassEmployees } from '../services/api'
+import { getAdminUsers, adminUpdateUser, adminDeleteUser, adminSetPassword, adminResetDefaultPassword, adminCreateUser, adminLdapSync, adminLdapSearch, getDepartments, getServices, getUserServiceAssignments, createUserServiceAssignment, deleteUserServiceAssignment, adminGetUserScopeEmployees, adminGetUserBypassEmployees } from '../services/api'
 import Modal from '../components/Modal'
 import { useConfirm } from '../components/ConfirmModal'
 import { ldapSyncToast, apiErrorToast } from '../utils/toastHelpers'
@@ -34,6 +34,22 @@ export default function UsersPage() {
   const [ldapLoading, setLdapLoading] = useState(false)
   const [showLdap, setShowLdap] = useState(false)
   const [view, setView] = useState('table')
+  const [passwordUser, setPasswordUser] = useState(null)
+  const [passwordValue, setPasswordValue] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [resettingDefault, setResettingDefault] = useState(false)
+
+  // Les mots de passe locaux sont ignorés tant que l'annuaire LDAP
+  // authentifie les comptes : dans ce cas on n'affiche pas ces outils — sauf
+  // pour les comptes de secours hors LDAP, dont le mot de passe local reste le
+  // seul moyen d'entrer quand l'annuaire tombe.
+  const ldapAuthOn = !!currentUser?.ldap_auth_enabled
+  // Une ligne ne propose la clé que si son mot de passe local sert vraiment :
+  // toujours hors LDAP, et pour les comptes de secours même LDAP actif.
+  const canManageLocalPassword = (u) => !ldapAuthOn || u.can_restore_default_password
 
   const loadAllAssignments = useCallback(async (usersList) => {
     try {
@@ -190,12 +206,59 @@ export default function UsersPage() {
     }
   }
 
-  const handleResetPassword = async (userId) => {
+  const handleOpenPassword = (u) => {
+    setPasswordUser(u)
+    setPasswordValue('')
+    setPasswordConfirm('')
+  }
+
+  const handleSavePassword = async () => {
+    const WEAK_PASSWORDS = ['12345678', '123456789', '1234567890', 'password', 'password1', 'motdepasse', 'azertyui', 'qwertyui', 'abc12345']
+    if (passwordValue.length < 8 || new Set(passwordValue).size < 3 || WEAK_PASSWORDS.includes(passwordValue.toLowerCase())) {
+      toast.error('Mot de passe trop faible : 8 caractères minimum, au moins 3 caractères différents, et pas un mot de passe évident')
+      return
+    }
+    if (passwordValue !== passwordConfirm) {
+      toast.error('Les deux mots de passe ne correspondent pas')
+      return
+    }
+    setPasswordSaving(true)
     try {
-      await adminResetPassword(userId)
-      toast.success('Mot de passe réinitialisé à testprime')
+      await adminSetPassword(passwordUser.id, passwordValue)
+      toast.success(`Mot de passe de ${passwordUser.name} défini`)
+      setPasswordUser(null)
+      setPasswordValue('')
+      setPasswordConfirm('')
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Erreur')
+    } finally {
+      setPasswordSaving(false)
+    }
+  }
+
+  const handleRestoreDefaultPassword = async () => {
+    const ok = await confirm({
+      title: 'Rétablir le mot de passe par défaut',
+      message: `Le mot de passe local de ${passwordUser?.name} va être remplacé par la valeur de secours configurée.`,
+      details: [
+        'À utiliser si le mot de passe a été perdu.',
+        'Ce mot de passe est celui réappliqué par le script reset_admin_password.',
+      ],
+      confirmText: 'Rétablir',
+      tone: 'warning',
+    })
+    if (!ok) return
+    setResettingDefault(true)
+    try {
+      await adminResetDefaultPassword(passwordUser.id)
+      toast.success('Mot de passe par défaut rétabli')
+      setPasswordUser(null)
+      setPasswordValue('')
+      setPasswordConfirm('')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Erreur')
+    } finally {
+      setResettingDefault(false)
     }
   }
 
@@ -214,7 +277,7 @@ export default function UsersPage() {
 
   const handleCreateFromLdap = async (entry) => {
     try {
-      await adminCreateUser({
+      const res = await adminCreateUser({
         email: entry.email,
         name: entry.name,
         poste: entry.title,
@@ -222,6 +285,8 @@ export default function UsersPage() {
       })
       await loadUsers()
       setLdapResults(prev => prev.filter(r => r.email !== entry.email))
+      setNewPassword(res?.temporary_password || '')
+      setShowNewPassword(!!res?.temporary_password)
       toast.success(`${entry.name} créé avec succès`)
     } catch (e) {
       const msg = e.response?.data?.detail || 'Erreur lors de la création'
@@ -488,9 +553,11 @@ export default function UsersPage() {
                       <button onClick={() => setEditUser(u)} className="btn btn-ghost btn-xs text-gray-500 hover:text-blue-600" title="Modifier">
                         <EditIcon className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => handleResetPassword(u.id)} className="btn btn-ghost btn-xs text-gray-500 hover:text-amber-600" title="Réinitialiser le mot de passe">
-                        <LockIcon className="w-3.5 h-3.5" />
-                      </button>
+                      {canManageLocalPassword(u) && (
+                        <button onClick={() => handleOpenPassword(u)} className="btn btn-ghost btn-xs text-gray-500 hover:text-amber-600" title={u.can_restore_default_password ? 'Mot de passe du compte de secours hors LDAP' : 'Définir le mot de passe'}>
+                          <LockIcon className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button onClick={() => setShowDelete(u)} className="btn btn-ghost btn-xs text-gray-500 hover:text-red-600" title="Supprimer">
                         <TrashIcon className="w-3.5 h-3.5" />
                       </button>
@@ -564,6 +631,94 @@ export default function UsersPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Définition du mot de passe local (masquée si LDAP est actif) */}
+      <Modal open={!!passwordUser} onClose={() => !passwordSaving && setPasswordUser(null)} title="Définir le mot de passe" size="sm">
+        {passwordUser && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Mot de passe local de <strong className="text-gray-900">{passwordUser.name}</strong>
+              <br /><span className="text-xs text-gray-400">{passwordUser.email}</span>
+            </p>
+            {passwordUser.can_restore_default_password && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                <p className="text-[11px] text-amber-800">
+                  Compte de secours hors LDAP : ce mot de passe local reste le seul moyen de se connecter si
+                  l'annuaire est injoignable, même quand l'authentification LDAP est active.
+                </p>
+                <button
+                  onClick={handleRestoreDefaultPassword}
+                  disabled={passwordSaving || resettingDefault}
+                  className="btn btn-xs btn-outline border-amber-300 text-amber-800 hover:bg-amber-100"
+                >
+                  {resettingDefault ? <span className="loading loading-spinner loading-xs" /> : null}
+                  Rétablir le mot de passe par défaut
+                </button>
+              </div>
+            )}
+            <div className="form-control">
+              <span className="label-text text-xs text-gray-500 mb-1">Nouveau mot de passe</span>
+              <input
+                type="password"
+                value={passwordValue}
+                onChange={(e) => setPasswordValue(e.target.value)}
+                placeholder="8 caractères minimum"
+                className="input input-bordered input-sm w-full"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="form-control">
+              <span className="label-text text-xs text-gray-500 mb-1">Confirmer</span>
+              <input
+                type="password"
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                placeholder="Retaper le mot de passe"
+                className="input input-bordered input-sm w-full"
+                autoComplete="new-password"
+                onKeyDown={(e) => e.key === 'Enter' && handleSavePassword()}
+              />
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Communiquez-le à la personne concernée : il n'est stocké que sous forme de hash et ne pourra pas être relu ensuite.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setPasswordUser(null)} disabled={passwordSaving} className="btn btn-ghost btn-sm">Annuler</button>
+<button
+                  onClick={handleSavePassword}
+                  disabled={passwordSaving || resettingDefault || !passwordValue || passwordValue !== passwordConfirm}
+                  className="btn btn-sm bg-amber-500 hover:bg-amber-600 text-white border-0"
+                >
+                {passwordSaving ? <span className="loading loading-spinner loading-xs" /> : 'Définir'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Mot de passe provisoire généré à la création d'un compte */}
+      <Modal open={showNewPassword} onClose={() => setShowNewPassword(false)} title="Compte créé" size="sm">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            Un mot de passe provisoire a été généré pour ce compte. Notez-le : il ne sera plus affiché ensuite.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 px-3 py-2 bg-gray-100 rounded-lg font-mono text-sm break-all select-all">{newPassword}</code>
+            <button
+              onClick={() => { navigator.clipboard?.writeText(newPassword); toast.success('Copié') }}
+              className="btn btn-sm btn-ghost"
+            >
+              Copier
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Transmettez-le à la personne concernée. Elle pourra le changer depuis « Définir le mot de passe » sur cette page.
+          </p>
+          <div className="flex justify-end pt-1">
+            <button onClick={() => setShowNewPassword(false)} className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-0">Fermer</button>
+          </div>
+        </div>
       </Modal>
 
       {/* LDAP Search Modal */}

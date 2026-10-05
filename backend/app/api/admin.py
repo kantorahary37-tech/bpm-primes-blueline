@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import Optional, List
+import secrets
 from app.models import User, Department, Employee, ServiceGroup, UserServiceAssignment, Bonus, ValidationStatus
 from app.auth import get_current_user, get_password_hash
 from app.ldap_helpers import connect, first, full_name, matricule, dept_name, escape_ldap, LDAP_ATTRS
@@ -47,10 +48,21 @@ def _check_director_role_edit(admin: User, data):
 
 @router.get("/users", response_model=list[UserResponse])
 async def admin_list_users(admin: User = Depends(require_admin_or_director)):
+    from app.auth import can_use_local_password
+
     if _scoped_director(admin):
-        return await User.filter(dept_str=admin.dept_str).order_by("name")
-    users = await User.all().order_by("name")
-    return users
+        users = await User.filter(dept_str=admin.dept_str).order_by("name")
+    else:
+        users = await User.all().order_by("name")
+    # can_use_local_password est une fonction, pas un champ : on matérialise le
+    # résultat pour que le frontend sache quels comptes ont un mot de passe
+    # local encore utile quand LDAP est actif.
+    result = []
+    for u in users:
+        item = UserResponse.model_validate(u)
+        item.can_restore_default_password = can_use_local_password(u)
+        result.append(item)
+    return result
 
 
 class UserUpdateRequest(BaseModel):
@@ -166,13 +178,93 @@ async def admin_delete_user(user_id: int, admin: User = Depends(require_admin_or
     return {"message": "Utilisateur supprimé"}
 
 
-@router.post("/users/{user_id}/reset-password")
-async def admin_reset_password(user_id: int, admin: User = Depends(require_admin_or_director)):
+# Mots de passe devinables en une seconde : le nombre de caractères distincts
+# ne les distingue pas d'un mot de passe correct.
+_WEAK_PASSWORDS = frozenset({
+    "12345678", "123456789", "1234567890", "password", "password1",
+    "motdepasse", "azertyui", "qwertyui", "abc12345",
+})
+
+
+def _password_too_weak(password: str) -> bool:
+    """Un mot de passe local est refusé s'il est trop court, s'il ne contient
+    que peu de caractères différents (« aaaaaaaa ») ou s'il figure dans la
+    liste des mots de passe devinables : c'est le seul garde-fou quand
+    l'authentification LDAP est désactivée."""
+    if len(password) < 8 or len(set(password)) < 3:
+        return True
+    return password.lower() in _WEAK_PASSWORDS
+
+
+def _ldap_password_in_use() -> bool:
+    from app.ldap_helpers import ldap_auth_enabled
+    return ldap_auth_enabled()
+
+
+def _password_is_effective(user: User) -> bool:
+    """Le mot de passe local du compte sert-il réellement à la connexion ?
+
+    Non seulement quand LDAP est désactivé, mais aussi pour les comptes de
+    secours hors LDAP (cf. ``can_use_local_password``) : c'est justement quand
+    l'annuaire est injoignable que ce mot de passe local est le seul moyen
+    d'entrer, donc il doit rester modifiable.
+    """
+    from app.auth import can_use_local_password
+    return not _ldap_password_in_use() or can_use_local_password(user)
+
+
+class SetPasswordRequest(BaseModel):
+    password: str
+
+
+@router.post("/users/{user_id}/set-password")
+async def admin_set_password(user_id: int, data: SetPasswordRequest, admin: User = Depends(require_admin_or_director)):
+    """Définit le mot de passe local d'un utilisateur, choisi par l'administrateur.
+
+    Sans mot de passe commun à tous les comptes : chaque personne reçoit le
+    sien. Refusé quand le mot de passe local serait ignoré à la connexion
+    (annuaire actif et compte ordinaire) : mieux vaut un refus explicite
+    qu'un changement silencieusement sans effet.
+    """
     user = await _get_user_or_404(user_id)
     _check_user_scope(admin, user)
-    user.password_hash = get_password_hash("testprime")
+    if not _password_is_effective(user):
+        raise HTTPException(
+            status_code=400,
+            detail="L'authentification LDAP est active : les mots de passe sont gérés dans l'annuaire. Désactivez USE_LDAP_PASSWORD (Configuration → LDAP) pour définir des mots de passe locaux.",
+        )
+    password = (data.password or "").strip()
+    if _password_too_weak(password):
+        raise HTTPException(
+            status_code=400,
+            detail="Mot de passe trop faible : 8 caractères minimum, au moins 3 caractères différents, et pas un mot de passe évident.",
+        )
+    user.password_hash = get_password_hash(password)
     await user.save()
-    return {"message": "Mot de passe réinitialisé à 'testprime'"}
+    return {"message": f"Mot de passe de {user.name} défini."}
+
+
+@router.post("/users/{user_id}/reset-default-password")
+async def admin_reset_default_password(user_id: int, admin: User = Depends(require_admin_or_director)):
+    """Rétablit le mot de passe par défaut du compte de secours hors LDAP.
+
+    Réservé aux comptes ``LDAP_LOCAL_ADMIN_EMAILS`` : c'est leur seul moyen de
+    rentrer si le mot de passe local a été perdu. Même refused qu'avec LDAP
+    actif, ce qui est sans objet ici puisque ces comptes s'authentifient par
+    leur mot de passe local même quand l'annuaire est allumé.
+    """
+    from app.auth import can_use_local_password, local_admin_default_password
+
+    user = await _get_user_or_404(user_id)
+    _check_user_scope(admin, user)
+    if not can_use_local_password(user):
+        raise HTTPException(
+            status_code=400,
+            detail="Seuls les comptes de secours hors LDAP (paramètre LDAP_LOCAL_ADMIN_EMAILS, onglet Authentification) peuvent être ramenés au mot de passe par défaut.",
+        )
+    user.password_hash = get_password_hash(local_admin_default_password())
+    await user.save()
+    return {"message": f"Mot de passe par défaut rétabli pour {user.name}."}
 
 
 class CreateUserRequest(BaseModel):
@@ -187,9 +279,29 @@ class CreateUserRequest(BaseModel):
     is_dg: Optional[bool] = False
     is_admin: Optional[bool] = False
     can_modify_plafonds: Optional[bool] = False
+    # Mot de passe local choisi par l'administrateur. Absent → aucun mot de
+    # passe n'est posé : le compte est utilisable uniquement via LDAP (ou après
+    # un « Définir le mot de passe » depuis la page Utilisateurs).
+    password: Optional[str] = None
 
 
-@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def _generate_password() -> str:
+    """Mot de passe provisoire, unique par compte, communiqué à l'administrateur
+    qui le transmet à la personne concernée (elle pourra le changer si
+    l'authentification LDAP est désactivée)."""
+    return f"Bpm-{secrets.token_hex(4)}-{secrets.token_hex(2)}"
+
+
+class CreateUserResponse(BaseModel):
+    user: UserResponse
+    # Renseigné uniquement lorsqu'un mot de passe provisoire a été généré : le
+    # mot de passe saisi par l'administrateur est déjà connu de lui, inutile de
+    # le renvoyer. Un mot de passe provisoire n'existe qu'en hachage en base,
+    # c'est donc la seule occasion de le lire.
+    temporary_password: Optional[str] = None
+
+
+@router.post("/users", response_model=CreateUserResponse, status_code=status.HTTP_201_CREATED)
 async def admin_create_user(data: CreateUserRequest, admin: User = Depends(require_admin_or_director)):
     if _scoped_director(admin):
         _check_director_role_edit(admin, data)
@@ -199,13 +311,25 @@ async def admin_create_user(data: CreateUserRequest, admin: User = Depends(requi
     existing = await User.get_or_none(email=data.email)
     if existing:
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    password = (data.password or "").strip()
+    if password and _password_too_weak(password):
+        raise HTTPException(
+            status_code=400,
+            detail="Mot de passe trop faible : 8 caractères minimum, au moins 3 caractères différents, et pas un mot de passe évident.",
+        )
+    temporary_password = None
+    if not password and not _ldap_password_in_use():
+        # Ni mot de passe choisi ni annuaire : on en génère un, devinable
+        # impossible, et il est renvoyé une seule fois à l'écran.
+        temporary_password = _generate_password()
+        password = temporary_password
     dept_obj = None
     if data.department:
         dept_obj = await Department.get_or_none(name=data.department)
     user = await User.create(
         email=data.email,
         name=data.name,
-        password_hash=get_password_hash("testprime"),
+        password_hash=get_password_hash(password) if password else None,
         poste=data.poste,
         dept_str=data.department,
         dept=dept_obj,
@@ -217,7 +341,7 @@ async def admin_create_user(data: CreateUserRequest, admin: User = Depends(requi
         is_admin=data.is_admin,
         can_modify_plafonds=data.can_modify_plafonds,
     )
-    return user
+    return CreateUserResponse(user=user, temporary_password=temporary_password)
 
 
 class UserPrimeBatchRequest(BaseModel):

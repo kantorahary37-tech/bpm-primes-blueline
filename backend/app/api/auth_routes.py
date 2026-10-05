@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Depends
 from app.models import User, Department, Employee, UserServiceAssignment, ServiceGroup
 from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, can_use_local_password
+from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, can_use_local_password, local_admin_default_password
 from app.email_service import send_reset_email
 from app.rate_limit import check_rate_limit, record_failed_attempt, reset_attempts
 from app.config import get_config
@@ -112,6 +112,8 @@ async def login(data: LoginRequest, request: Request):
 
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user)):
+    from app.ldap_helpers import ldap_auth_enabled
+
     return {
         "id": user.id,
         "email": user.email,
@@ -125,6 +127,14 @@ async def get_me(user: User = Depends(get_current_user)):
         "is_dg": user.is_dg,
         "is_admin": user.is_admin,
         "can_modify_plafonds": user.can_modify_plafonds,
+        # L'interface masque les outils de mot de passe local quand
+        # l'authentification LDAP est active (ils seraient sans effet).
+        "ldap_auth_enabled": ldap_auth_enabled(),
+        # Un compte sans hash ne peut pas se connecter hors LDAP.
+        "has_local_password": bool(user.password_hash),
+        # Compte de secours : seul cas où « Rétablir le mot de passe par
+        # défaut » est proposé, y compris quand LDAP est actif.
+        "can_restore_default_password": can_use_local_password(user),
     }
 
 

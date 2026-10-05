@@ -7,6 +7,12 @@ from app.models import User
 from tortoise.exceptions import DoesNotExist
 from app.config import get_config
 
+# Mot de passe par défaut du compte de secours hors LDAP. Source de référence :
+# ce que réapplique backend/scripts/reset_admin_password.py. La valeur vit
+# aussi en configuration (LDAP_LOCAL_ADMIN_DEFAULT_PASSWORD) pour être
+# modifiable depuis le menu sans redéploiement.
+DEFAULT_LOCAL_ADMIN_PASSWORD = "Adm1N@Gulfs4T"
+
 # Schéma pour le token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -43,6 +49,16 @@ def can_use_local_password(user) -> bool:
     if not user or not user.is_admin:
         return False
     return (user.email or "").strip().lower() in local_admin_emails()
+
+
+def local_admin_default_password() -> str:
+    """Mot de passe par défaut des comptes de secours hors LDAP.
+
+    Lu dans la configuration (``LDAP_LOCAL_ADMIN_DEFAULT_PASSWORD``) pour rester
+    modifiable depuis le menu Configuration. Retombée sur la valeur de la
+    constante du script de réinitialisation si la config est absente.
+    """
+    return get_config("LDAP_LOCAL_ADMIN_DEFAULT_PASSWORD") or DEFAULT_LOCAL_ADMIN_PASSWORD
 
 def _secret_key() -> str:
     """Retourne la clé secrète JWT, avec fallback dev si non configurée.

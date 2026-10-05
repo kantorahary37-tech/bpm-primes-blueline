@@ -400,8 +400,13 @@ export const adminDeleteUser = async (userId) => {
   return data;
 };
 
-export const adminResetPassword = async (userId) => {
-  const { data } = await api.post(`/admin/users/${userId}/reset-password`);
+export const adminSetPassword = async (userId, password) => {
+  const { data } = await api.post(`/admin/users/${userId}/set-password`, { password });
+  return data;
+};
+
+export const adminResetDefaultPassword = async (userId) => {
+  const { data } = await api.post(`/admin/users/${userId}/reset-default-password`);
   return data;
 };
 

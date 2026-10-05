@@ -29,6 +29,13 @@ CONFIG_DEFINITIONS = {
     # l'annuaire rendrait l'application inaccessible (le mot de passe LDAP ne
     # peut pas être changé depuis BPM). Réservé aux comptes is_admin.
     "LDAP_LOCAL_ADMIN_EMAILS": {"category": "auth", "type": "string", "description": "Emails des administrateurs autorisés à se connecter sans LDAP (mot de passe local, séparés par virgules)", "default": "admin@gulfsat.mg"},
+    # Mot de passe de secours appliqué au compte admin@gulfsat.mg par le script
+    # scripts/reset_admin_password.py, et proposé par « Rétablir le mot de passe
+    # par défaut » dans l'écran Utilisateurs.Stocké en clair comme
+    # LDAP_BIND_PASSWORD (même nature : secret applicatif nécessaire à un
+    # fonctionnement dégradé). Le changer ici n'a d'effet qu'au prochain
+    # reset ; le mot de passe réellement en base reste inchangé.
+    "LDAP_LOCAL_ADMIN_DEFAULT_PASSWORD": {"category": "auth", "type": "password", "description": "Mot de passe par défaut du compte de secours hors LDAP (appliqué par le script reset_admin_password et par « Rétablir le mot de passe par défaut »)", "default": "Adm1N@Gulfs4T"},
 
     # ── Email (SMTP) ──
     "SMTP_HOST": {"category": "email", "type": "string", "description": "Serveur SMTP", "default": "smtp.blueline.mg"},
