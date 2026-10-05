@@ -1,4 +1,7 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from tortoise.exceptions import DoesNotExist
 
 from app.auth import get_current_user
@@ -69,3 +72,55 @@ async def bulk_update_system_config(body: SystemConfigBulkUpdate, user: User = D
         set_config(key, value)
         updated.append(key)
     return {"ok": True, "updated": updated}
+
+
+LDAP_TESTABLE_KEYS = (
+    'LDAP_SERVER_URI',
+    'LDAP_BIND_DN',
+    'LDAP_BIND_PASSWORD',
+    'LDAP_USER_SEARCH_BASE',
+)
+
+
+class LdapTestRequest(BaseModel):
+    """Test de la configuration LDAP depuis le menu Configuration.
+
+    ``settings`` permet de tester des valeurs non encore enregistrées
+    (le test est sans effet de bord : la configuration est restaurée ensuite).
+    ``login`` / ``password`` testent en plus la validation d'un mot de passe
+    utilisateur — c'est exactement ce que fait la connexion quand
+    ``USE_LDAP_PASSWORD`` est activé.
+    """
+    settings: Optional[dict] = None
+    login: Optional[str] = None
+    password: Optional[str] = None
+
+
+@router.post("/system-config/ldap-test")
+async def ldap_test(body: LdapTestRequest, user: User = Depends(get_current_user)):
+    _require_admin(user)
+    from app.ldap_helpers import LdapUnavailable, connect, temporary_settings, verify_credentials
+
+    overrides = {k: v for k, v in (body.settings or {}).items() if k in LDAP_TESTABLE_KEYS}
+    try:
+        with temporary_settings(overrides):
+            if not body.login or not body.password:
+                with connect():
+                    pass
+                return {
+                    "ok": True,
+                    "user_checked": False,
+                    "message": "Connexion au compte de service LDAP réussie.",
+                }
+            if not verify_credentials(body.login, body.password):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Identifiant inconnu dans l'annuaire ou mot de passe LDAP refusé.",
+                )
+            return {
+                "ok": True,
+                "user_checked": True,
+                "message": f"Connexion réussie et mot de passe LDAP valide pour « {body.login} ».",
+            }
+    except LdapUnavailable as e:
+        raise HTTPException(status_code=502, detail=str(e))

@@ -25,6 +25,9 @@ const PlafondsPage = () => {
   // Rôles à portée globale (admin/DG/DRH) ou utilisateur coche « Autoriser à
   // modifier les plafonds » : accès à tous les départements et à tous les taux
   // spéciaux, quel que soit son département.
+  // La modification des plafonds est EXCLUSIVEMENT réservée à ces rôles : un
+  // directeur (ou tout autre utilisateur) reste en lecture seule, y compris sur
+  // les plafonds de son propre département.
   const fullAccess = !!(user?.is_admin || user?.is_dg || user?.is_drh || user?.can_modify_plafonds);
   const showPlafond = seeAmounts && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_directeur || user?.is_validator_n1 || user?.is_validator_n2 || user?.can_modify_plafonds);
   const { currencies, symbolFor } = useCurrencies();
@@ -197,8 +200,9 @@ const PlafondsPage = () => {
       <div className="mb-4">
         <h1 className="text-xl font-bold text-gray-900">Plafonds des Primes</h1>
         <p className="text-sm text-gray-400">
-          {fullAccess ? 'Accès total — cliquer un montant pour le modifier'
-            : `Vous ne pouvez modifier que les plafonds de votre département (${user?.department})`}
+          {fullAccess
+            ? 'Accès total — cliquer un montant pour le modifier'
+            : 'Consultation seule — la modification des plafonds et des taux spéciaux est réservée à la DRH, à un administrateur et aux utilisateurs autorisés'}
         </p>
       </div>
 
@@ -229,7 +233,7 @@ const PlafondsPage = () => {
             </thead>
             <tbody>
               {departments.map(dept => {
-                const canEditDept = fullAccess || dept === user?.department;
+                const canEditDept = fullAccess;
                 return (
                   <tr key={dept} className={!canEditDept ? 'opacity-50' : 'hover'}>
                     <td className="font-medium text-gray-900">{dept}</td>

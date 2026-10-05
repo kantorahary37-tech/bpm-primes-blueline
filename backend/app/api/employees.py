@@ -164,6 +164,17 @@ async def update_employee(emp_id: int, data: EmployeeUpdate, user: User = Depend
         raise HTTPException(status_code=404, detail="Employé introuvable")
     update_data = data.dict(exclude_unset=True)
 
+    # Les taux spéciaux (astreinte / mensuel) sont des plafonds : leur
+    # modification est réservée aux rôles habilités (DRH, admin, DG, ou
+    # utilisateur coché « Autoriser à modifier les plafonds »), même pour un
+    # employé de son propre département.
+    if set(update_data) & set(PLAFOND_RATE_FIELDS) and not can_manage_plafonds(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Seuls la DRH, un administrateur, le DG ou un utilisateur autorisé "
+                   "peuvent modifier les taux spéciaux (astreinte / mensuel)",
+        )
+
     # Un utilisateur autorisé à modifier les plafonds peut régler les taux
     # spéciaux (astreinte / mensuel) de n'importe quel employé — c'est
     # exactement ce que fait la page Plafonds — mais uniquement ces champs.

@@ -626,6 +626,17 @@ export const bulkUpdateSystemConfig = async (settings) => {
   return data;
 };
 
+// Teste la configuration LDAP (et éventuellement un mot de passe utilisateur).
+// `settings` permet de tester des valeurs non encore enregistrées.
+export const testLdapConfig = async ({ settings, login, password } = {}) => {
+  const { data } = await api.post('/admin/system-config/ldap-test', {
+    settings: settings || {},
+    login: login || null,
+    password: password || null,
+  });
+  return data;
+};
+
 // --- Devises / Profils ---
 export const getCurrencies = async (activeOnly = true) => {
   const { data } = await api.get('/currencies/', { params: { active_only: activeOnly } });

@@ -23,6 +23,13 @@ CONFIG_DEFINITIONS = {
     # ── Frontend ──
     "FRONTEND_URL": {"category": "auth", "type": "string", "description": "URL du frontend (liens dans les emails)", "default": "http://localhost:5173"},
 
+    # ── Accès de secours hors LDAP ──
+    # Comptes d'administration qui peuvent se connecter avec leur mot de passe
+    # local même quand USE_LDAP_PASSWORD est activé : sans cela, une panne de
+    # l'annuaire rendrait l'application inaccessible (le mot de passe LDAP ne
+    # peut pas être changé depuis BPM). Réservé aux comptes is_admin.
+    "LDAP_LOCAL_ADMIN_EMAILS": {"category": "auth", "type": "string", "description": "Emails des administrateurs autorisés à se connecter sans LDAP (mot de passe local, séparés par virgules)", "default": "admin@gulfsat.mg"},
+
     # ── Email (SMTP) ──
     "SMTP_HOST": {"category": "email", "type": "string", "description": "Serveur SMTP", "default": "smtp.blueline.mg"},
     "SMTP_PORT": {"category": "email", "type": "number", "description": "Port SMTP", "default": "25"},

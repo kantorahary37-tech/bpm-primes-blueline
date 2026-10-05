@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from '../utils/toast';
-import { getSystemConfig, bulkUpdateSystemConfig } from '../services/api';
+import { getSystemConfig, bulkUpdateSystemConfig, testLdapConfig } from '../services/api';
 import { SettingsIcon, CheckIcon, MailIcon, BuildingIcon, FolderIcon, KeyIcon, BellIcon, DatabaseIcon, EyeIcon, EyeOffIcon, ServerIcon, ArchiveIcon } from '../components/Icons';
 
 const CATEGORY_META = {
@@ -28,6 +28,19 @@ export default function SystemConfigPage() {
   const [saving, setSaving] = useState(false);
   const [activeCategory, setActiveCategory] = useState(null);
   const [showPasswords, setShowPasswords] = useState({});
+  const [ldapTest, setLdapTest] = useState({ login: '', password: '' });
+  const [ldapTesting, setLdapTesting] = useState(false);
+  const [ldapTestResult, setLdapTestResult] = useState(null);
+
+  // Valeur effective d'un paramètre : l'édition en cours si elle existe,
+  // sinon la valeur enregistrée.
+  const configValue = (key, fallback = '') => {
+    if (edits[key] !== undefined) return edits[key];
+    const item = Object.values(categories)
+      .flat()
+      .find(i => i.key === key);
+    return item ? item.value : fallback;
+  };
 
   const applyConfig = (data) => {
     const filtered = Object.fromEntries(
@@ -77,6 +90,31 @@ export default function SystemConfigPage() {
 
   const togglePassword = (key) => {
     setShowPasswords(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleLdapTest = async () => {
+    setLdapTesting(true);
+    setLdapTestResult(null);
+    try {
+      // Les valeurs en cours d'édition sont testées telles quelles : « Tester »
+      // ne touche pas à la configuration enregistrée.
+      const settings = {};
+      ['LDAP_SERVER_URI', 'LDAP_BIND_DN', 'LDAP_BIND_PASSWORD', 'LDAP_USER_SEARCH_BASE']
+        .forEach(key => { if (edits[key] !== undefined) settings[key] = edits[key]; });
+      const res = await testLdapConfig({
+        settings,
+        login: ldapTest.login.trim(),
+        password: ldapTest.password,
+      });
+      setLdapTestResult({ ok: true, message: res.message });
+    } catch (err) {
+      setLdapTestResult({
+        ok: false,
+        message: err.response?.data?.detail || 'Erreur lors du test LDAP',
+      });
+    } finally {
+      setLdapTesting(false);
+    }
   };
 
   if (loading) {
@@ -161,6 +199,77 @@ export default function SystemConfigPage() {
                     {CATEGORY_META[activeCategory]?.desc}
                   </p>
                 </div>
+                {activeCategory === 'ldap' && (() => {
+                  const authEnabled = configValue('USE_LDAP_PASSWORD', 'false') === 'true';
+                  const localAdminEmails = configValue('LDAP_LOCAL_ADMIN_EMAILS', '')
+                    .split(',').map(e => e.trim()).filter(Boolean);
+                  const hasBoth = !!(ldapTest.login.trim() && ldapTest.password);
+                  return (
+                    <div className={`mb-4 rounded-lg border p-4 ${authEnabled ? 'border-amber-200 bg-amber-50/60' : 'border-blue-100 bg-blue-50/60'}`}>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-500">Authentification LDAP</span>
+                        <span className={`badge badge-sm ${authEnabled ? 'badge-warning' : 'badge-ghost'}`}>
+                          {authEnabled ? 'Activée' : 'Désactivée'}
+                        </span>
+                        <span className="text-gray-400 font-mono truncate">
+                          {configValue('LDAP_SERVER_URI', '?')}
+                        </span>
+                      </div>
+                      <p className={`text-[11px] mt-2 ${authEnabled ? 'text-amber-800' : 'text-blue-700/80'}`}>
+                        {authEnabled
+                          ? "Le mot de passe de connexion est vérifié directement dans l'annuaire LDAP : le mot de passe enregistré dans BPM n'est plus utilisé. L'accès reste réservé aux comptes créés dans l'écran Utilisateurs avec la même adresse mail que dans l'annuaire — être présent dans l'annuaire ne suffit pas. Si l'annuaire est injoignable, la connexion échoue (aucun repli sur le mot de passe local)."
+                          : "Désactivée : le mot de passe est vérifié localement. Activez USE_LDAP_PASSWORD pour que les mots de passe soient ceux de l'annuaire. La synchronisation des employés est indépendante de ce réglage."}
+                      </p>
+                      {authEnabled && localAdminEmails.length > 0 && (
+                        <p className="text-[11px] mt-2 text-amber-900/80">
+                          Accès de secours hors LDAP : <span className="font-mono">{localAdminEmails.join(', ')}</span>
+                          {localAdminEmails.length > 1 ? ' (comptes administrateurs)' : ' (compte administrateur)'} — connexion possible avec le
+                          mot de passe local, afin de ne pas dépendre de l'annuaire. Paramètre <span className="font-mono">LDAP_LOCAL_ADMIN_EMAILS</span>, onglet
+                          Authentification.
+                        </p>
+                      )}
+
+                      <div className="mt-3 pt-3 border-t border-blue-100 space-y-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={ldapTest.login}
+                            onChange={e => setLdapTest({ ...ldapTest, login: e.target.value })}
+                            placeholder="Identifiant LDAP (email ou matricule)"
+                            className="input input-bordered input-sm w-full font-mono"
+                          />
+                          <input
+                            type="password"
+                            value={ldapTest.password}
+                            onChange={e => setLdapTest({ ...ldapTest, password: e.target.value })}
+                            placeholder="Mot de passe LDAP"
+                            className="input input-bordered input-sm w-full font-mono"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={handleLdapTest}
+                            disabled={ldapTesting}
+                            className="btn btn-sm btn-outline gap-2"
+                          >
+                            {ldapTesting ? <span className="loading loading-spinner loading-xs"></span> : <CheckIcon className="w-4 h-4" />}
+                            Tester la connexion
+                          </button>
+                          <span className="text-[11px] text-gray-400">
+                            Teste le compte de service avec les valeurs affichées (y compris vos modifications non enregistrées).
+                            {' '}Renseignez un identifiant <b>et</b> un mot de passe pour vérifier la validation d'un mot de passe utilisateur.
+                          </span>
+                        </div>
+                        {ldapTestResult && (
+                          <div className={`text-[11px] px-2 py-1.5 rounded ${ldapTestResult.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                            {ldapTestResult.message}
+                            {!ldapTestResult.ok && !hasBoth && ' (aucun couple identifiant/mot de passe testé)'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {activeCategory === 'sftp' && (() => {
                   const getVal = (key, fallback = '') => {
                     const item = (categories['sftp'] || []).find(i => i.key === key);

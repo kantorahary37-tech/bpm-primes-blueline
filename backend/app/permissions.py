@@ -52,13 +52,19 @@ def is_broad_role(user: User) -> bool:
 
 def can_manage_plafonds(user: User) -> bool:
     """True si l'utilisateur peut gérer les plafonds, quel que soit son
-    département.
+    département — et donc les ÉCRIRE (création, modification, suppression d'un
+    plafond de n'importe quel département, et taux spéciaux de n'importe quel
+    employé).
 
     Vrai pour les rôles admin / DG / DRH, et pour tout utilisateur coché
     « Autoriser à modifier les plafonds » (case à cocher de la page
     Utilisateurs, ``User.can_modify_plafonds``) : ce drapeau donne accès aux
     plafonds de TOUS les départements ainsi qu'aux taux spéciaux
     (astreinte / mensuel) de tous les employés.
+
+    Un directeur (ni admin, ni DG, ni DRH, ni drapeau) ne dispose d'aucun
+    droit d'écriture sur les plafonds : il ne peut en modifier aucun, pas même
+    ceux de son propre département.
     """
     return bool(
         user.can_modify_plafonds or user.is_admin or user.is_dg or user.is_drh

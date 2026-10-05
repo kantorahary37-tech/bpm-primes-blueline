@@ -28,7 +28,7 @@ from datetime import datetime
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
-from app.ldap_helpers import connect, first, full_name, matricule, dept_name, LDAP_ATTRS
+from app.ldap_helpers import connect, first, full_name, matricule, dept_name, setting, LDAP_ATTRS
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def fetch_all_ldap_users() -> list[dict]:
     try:
         try:
             conn.search(
-                search_base=__import__('os').getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg'),
+                search_base=setting('LDAP_USER_SEARCH_BASE'),
                 search_filter='(mail=*)',
                 attributes=SYNC_ATTRS,
                 paged_size=500,

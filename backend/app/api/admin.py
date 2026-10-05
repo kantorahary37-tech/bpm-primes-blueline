@@ -506,28 +506,16 @@ async def admin_ldap_search(q: str = "", _admin: User = Depends(require_admin_or
     if len(q) < 2:
         return []
     try:
-        from ldap3 import ALL, Connection, Server
-        import os
-
-        LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI', 'ldap://ldap.blueline.mg:389')
-        LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=blueline,dc=mg')
-        LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', 'blueline2488')
-        LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
-
-        server = Server(LDAP_SERVER_URI, get_info=ALL, connect_timeout=5)
-        conn = Connection(server, user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD, auto_bind=True, receive_timeout=5)
+        conn = connect()
         try:
-            def _escape_ldap(s):
-                return s.replace('\\', '\\5c').replace('*', '\\2a').replace('(', '\\28').replace(')', '\\29').replace('\0', '\\00')
-
-            q_safe = _escape_ldap(q)
+            q_safe = escape_ldap(q)
             if '@' in q:
                 search_filter = f'(&(mail=*)(mail=*{q_safe}*))'
             else:
                 search_filter = f'(|(cn=*{q_safe}*)(mail=*{q_safe}*))'
 
             conn.search(
-                search_base=LDAP_USER_SEARCH_BASE,
+                search_base=setting('LDAP_USER_SEARCH_BASE'),
                 search_filter=search_filter,
                 attributes=['cn', 'mail', 'givenName', 'sn', 'title', 'departmentNumber', 'ou', 'uid', 'employeeNumber'],
                 paged_size=20,
@@ -556,16 +544,7 @@ async def admin_ldap_employee_search(q: str = "", _admin: User = Depends(require
     if len(q) < 2:
         return []
     try:
-        from ldap3 import ALL, Connection, Server
-        import os
-
-        LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI', 'ldap://ldap.blueline.mg:389')
-        LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=blueline,dc=mg')
-        LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', 'blueline2488')
-        LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
-
-        server = Server(LDAP_SERVER_URI, get_info=ALL, connect_timeout=5)
-        conn = Connection(server, user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD, auto_bind=True, receive_timeout=5)
+        conn = connect()
         try:
             q_safe = escape_ldap(q)
             if '@' in q:
@@ -577,7 +556,7 @@ async def admin_ldap_employee_search(q: str = "", _admin: User = Depends(require
                 search_filter = f'(|(cn={q_safe})(uid={q_safe})(mail={q_safe}))'
 
             conn.search(
-                search_base=LDAP_USER_SEARCH_BASE,
+                search_base=setting('LDAP_USER_SEARCH_BASE'),
                 search_filter=search_filter,
                 attributes=['cn', 'mail', 'givenName', 'sn', 'title', 'departmentNumber', 'ou', 'uid', 'employeeNumber', 'manager'],
                 paged_size=30,
@@ -642,23 +621,14 @@ async def _resolve_manager(rec: dict, dept_name_: Optional[str]) -> Optional[Use
 
 @router.post("/ldap-employees", response_model=EmployeeResponse)
 async def admin_create_employee_from_ldap(req: LdapEmployeeCreateRequest, _admin: User = Depends(require_admin)):
-    import os
-    from ldap3 import ALL, Connection, Server
-
     email = (req.email or '').strip().lower()
     if not email or '@' not in email:
         raise HTTPException(status_code=400, detail="Email invalide")
 
-    LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI', 'ldap://ldap.blueline.mg:389')
-    LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', 'cn=admin,dc=blueline,dc=mg')
-    LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD', 'blueline2488')
-    LDAP_USER_SEARCH_BASE = os.getenv('LDAP_USER_SEARCH_BASE', 'dc=blueline,dc=mg')
-
-    server = Server(LDAP_SERVER_URI, get_info=ALL, connect_timeout=5)
-    conn = Connection(server, user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD, auto_bind=True, receive_timeout=5)
+    conn = connect()
     try:
         conn.search(
-            search_base=LDAP_USER_SEARCH_BASE,
+            search_base=setting('LDAP_USER_SEARCH_BASE'),
             search_filter=f'(&(mail=*)(mail={escape_ldap(email)}))',
             attributes=['cn', 'mail', 'givenName', 'sn', 'title', 'employeeType', 'employeeNumber', 'departmentNumber', 'ou', 'uid', 'manager'],
             paged_size=5,
@@ -707,7 +677,7 @@ from datetime import datetime
 import os, json, re
 from fastapi.responses import FileResponse
 from app.auth import get_current_user, get_password_hash
-from app.ldap_helpers import connect, first, full_name, matricule, dept_name, escape_ldap, LDAP_ATTRS
+from app.ldap_helpers import connect, first, full_name, matricule, dept_name, escape_ldap, setting, LDAP_ATTRS
 from app.schemas import UserResponse, EmployeeResponse, UserServiceAssignmentResponse, UserServiceAssignmentCreate, UserServiceAssignmentUpdate
 from app.models import User, Department, Employee, ServiceGroup, UserServiceAssignment, Bonus, ValidationStatus, BonusType, PrimeMax
 from app.permissions import (

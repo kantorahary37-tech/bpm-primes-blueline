@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Depends
 from app.models import User, Department, Employee, UserServiceAssignment, ServiceGroup
 from app.schemas import LoginRequest, SignUpRequest, SignUpResponse, Token, ForgotPasswordRequest, ResetPasswordRequest
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
+from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, can_use_local_password
 from app.email_service import send_reset_email
 from app.rate_limit import check_rate_limit, record_failed_attempt, reset_attempts
 from app.config import get_config
@@ -66,18 +66,45 @@ async def login(data: LoginRequest, request: Request):
     if not allowed:
         raise HTTPException(status_code=429, detail=message)
 
+    invalid = HTTPException(status_code=401, detail="Invalid email or password")
+    # L'accès est réservé aux comptes créés depuis l'écran Utilisateurs : être
+    # présent dans l'annuaire LDAP ne suffit pas, les droits dans BPM sont
+    # toujours attribués manuellement par un administrateur.
     user = await User.get_or_none(email=data.email)
-    if not user or not user.password_hash:
+    if not user:
         record_failed_attempt(client_ip)
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    try:
-        password_ok = verify_password(data.password, user.password_hash)
-    except Exception:
-        record_failed_attempt(client_ip)
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise invalid
+
+    # Import tardif : ldap3 n'est nécessaire que si l'authentification LDAP est
+    # activée (paramètre USE_LDAP_PASSWORD du menu Configuration → LDAP).
+    from app.ldap_helpers import LdapUnavailable, ldap_auth_enabled, verify_credentials
+
+    # Compte d'administration de secours : authentifié par son mot de passe
+    # local même quand LDAP est activé, pour ne pas dépendre de l'annuaire.
+    use_ldap = ldap_auth_enabled() and not can_use_local_password(user)
+
+    if use_ldap:
+        # Authentification LDAP : le mot de passe est validé par l'annuaire,
+        # le hachage local n'est pas consulté. Si l'annuaire est injoignable on
+        # ne renvoie pas un « mot de passe invalide » mais une erreur explicite,
+        # pour ne pas verrouiller les comptes à tort.
+        try:
+            password_ok = verify_credentials(user.email, data.password)
+        except LdapUnavailable as e:
+            raise HTTPException(status_code=503, detail=f"Authentification LDAP indisponible : {e}")
+    else:
+        if not user.password_hash:
+            record_failed_attempt(client_ip)
+            raise invalid
+        try:
+            password_ok = verify_password(data.password, user.password_hash)
+        except Exception:
+            record_failed_attempt(client_ip)
+            raise invalid
+
     if not password_ok:
         record_failed_attempt(client_ip)
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise invalid
 
     reset_attempts(client_ip)
     token = create_access_token({"sub": str(user.id)})

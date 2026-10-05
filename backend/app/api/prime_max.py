@@ -8,11 +8,25 @@ from app.permissions import can_manage_plafonds
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
+def _require_plafond_manager(user: User):
+    """Écriture sur les plafonds : réservée aux rôles habilités.
+
+    La modification des plafonds (montants maximum des primes) est réservée à
+    la DRH, à l'administrateur, au DG et aux utilisateurs cochés « Autoriser à
+    modifier les plafonds ». Un directeur — comme tout autre utilisateur — est
+    en lecture seule, y compris sur les plafonds de son propre département.
+    """
+    if not can_manage_plafonds(user):
+        raise HTTPException(
+            403,
+            "Seuls la DRH, un administrateur, le DG ou un utilisateur autorisé "
+            "peuvent modifier les plafonds.",
+        )
+
+
 @router.post("/", response_model=PrimeMaxResponse)
 async def create_primemax(data: PrimeMaxCreate, user: User = Depends(get_current_user)):
-    user_dept = user.department
-    if not can_manage_plafonds(user) and data.department != user_dept:
-        raise HTTPException(403, "Vous ne pouvez créer un plafond que pour votre propre département")
+    _require_plafond_manager(user)
     existing = await PrimeMax.filter(
         dept_str=data.department,
         bonus_type=data.bonus_type,
@@ -63,9 +77,8 @@ async def get_primemax(pm_id: int, user: User = Depends(get_current_user)):
 
 @router.put("/{pm_id}", response_model=PrimeMaxResponse)
 async def update_primemax(pm_id: int, data: PrimeMaxCreate, user: User = Depends(get_current_user)):
+    _require_plafond_manager(user)
     obj = await PrimeMax.get(id=pm_id)
-    if not can_manage_plafonds(user) and obj.dept_id != user.dept_id:
-        raise HTTPException(403, "Vous ne pouvez modifier que les plafonds de votre département")
     obj.amount = data.amount
     await obj.save()
     return obj
@@ -73,8 +86,7 @@ async def update_primemax(pm_id: int, data: PrimeMaxCreate, user: User = Depends
 
 @router.delete("/{pm_id}")
 async def delete_primemax(pm_id: int, user: User = Depends(get_current_user)):
+    _require_plafond_manager(user)
     obj = await PrimeMax.get(id=pm_id)
-    if not can_manage_plafonds(user) and obj.dept_id != user.dept_id:
-        raise HTTPException(403, "Vous ne pouvez supprimer que les plafonds de votre département")
     await obj.delete()
     return {"message": "Plafond supprimé"}

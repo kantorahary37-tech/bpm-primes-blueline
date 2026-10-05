@@ -17,6 +17,33 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
+
+def local_admin_emails() -> set[str]:
+    """Comptes administrateurs habilités à se connecter en local (config
+    ``LDAP_LOCAL_ADMIN_EMAILS``, séparés par virgules)."""
+    raw = get_config("LDAP_LOCAL_ADMIN_EMAILS") or ""
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def can_use_local_password(user) -> bool:
+    """True si ce compte peut être authentifié par son mot de passe local
+    (bcrypt) même lorsque l'authentification LDAP est activée.
+
+    Port de secours de l'administration : sans lui, une panne, une mauvaise
+    configuration ou la perte d'accès à l'annuaire rendrait BPM
+    inutilisable, puisque le mot de passe LDAP ne peut pas être changé depuis
+    l'application.
+
+    Par sécurité :
+      - seuls les comptes ``is_admin`` en bénéficient (un compte rétrogradé
+        perd automatiquement le contournement) ;
+      - la comparaison porte sur l'adresse email, quelle que soit sa casse ;
+      - le contournement est piloté par le menu Configuration, pas codé en dur.
+    """
+    if not user or not user.is_admin:
+        return False
+    return (user.email or "").strip().lower() in local_admin_emails()
+
 def _secret_key() -> str:
     """Retourne la clé secrète JWT, avec fallback dev si non configurée.
 

@@ -1,15 +1,18 @@
-"""Permission « Autoriser à modifier les plafonds » (User.can_modify_plafonds).
+"""Permissions d'écriture sur les plafonds.
 
-Un utilisateur coché dans la page Utilisateurs doit pouvoir gérer les plafonds
-ET les taux spéciaux de tous les départements, sans rôle admin/DG/DRH et quel
-que soit son département. Les autres utilisateurs conservent un accès limité à
-leur département.
+La création / modification / suppression d'un plafond et les taux spéciaux
+(astreinte / mensuel) sont réservées à la DRH, à l'administrateur, au DG et aux
+utilisateurs cochés « Autoriser à modifier les plafonds » (User
+.can_modify_plafonds). Un directeur est en lecture seule, y compris sur les
+plafonds de son propre département.
 
 Régressions couvertes :
 - ``/primemax`` ignorait le drapeau (lecture/écriture restreintes à son dept.) ;
 - la création d'un plafond ne renseignait pas la FK ``department_id`` ;
 - les accès par id lisaient un attribut ``department_id`` inexistant (500) ;
-- un taux spécial d'un employé hors périmètre était refusé.
+- un taux spécial d'un employé hors périmètre était refusé ;
+- un directeur pouvait modifier / créer / supprimer les plafonds de son
+  département, et les taux spéciaux de ses employés.
 """
 
 from fastapi import FastAPI
@@ -122,3 +125,70 @@ async def test_directeur_scoped_ne_peut_pas_accorder_la_permission(db):
     async for ac in _client(db, directeur):
         r = await ac.put(f"/admin/users/{cible.id}", json={"can_modify_plafonds": True})
         assert r.status_code == 403, r.text
+
+
+async def test_directeur_ne_peut_pas_modifier_les_plafonds_de_son_departement(db):
+    """Un directeur est en lecture seule sur les plafonds — même ceux de son
+    propre département (il peut en revanche les consulter)."""
+    ctx = await _setup()
+    directeur = await User.create(email="dir@test.mg", name="Dir", password_hash="x",
+                                  is_directeur=True, dept=ctx["dept_a"],
+                                  dept_str="Dept A")
+
+    async for ac in _client(db, directeur):
+        # Lecture autorisée
+        r = await ac.get("/primemax/")
+        assert r.status_code == 200
+        assert {p["id"] for p in r.json()} == {ctx["plafond_a"].id}
+
+        # Écriture refusée sur le plafond de son département…
+        r = await ac.put(f"/primemax/{ctx['plafond_a'].id}",
+                         json={"department": "Dept A", "bonus_type": "mensuel",
+                               "currency": "Ar", "amount": 999})
+        assert r.status_code == 403, r.text
+        assert float((await PrimeMax.get(id=ctx["plafond_a"].id)).amount) == 100
+
+        # … création, suppression et taux spéciaux également refusés
+        r = await ac.post("/primemax/", json={"department": "Dept A",
+                                              "bonus_type": "ponctuelle",
+                                              "currency": "Ar", "amount": 500})
+        assert r.status_code == 403, r.text
+        r = await ac.delete(f"/primemax/{ctx['plafond_a'].id}")
+        assert r.status_code == 403, r.text
+        assert await PrimeMax.filter(id=ctx["plafond_a"].id).exists()
+
+        employe_a = await Employee.create(matricule="A1", name="Employe A", dept=ctx["dept_a"],
+                                          dept_str="Dept A", manager=directeur)
+        r = await ac.put(f"/employees/{employe_a.id}", json={"astreinte_rate": 25000})
+        assert r.status_code == 403, r.text
+        assert (await Employee.get(id=employe_a.id)).astreinte_rate is None
+
+
+async def test_drh_administre_tous_les_plafonds(db):
+    ctx = await _setup()
+    drh = await User.create(email="drh@test.mg", name="Drh", password_hash="x",
+                            dept=ctx["dept_b"], dept_str="Dept B", is_drh=True)
+    async for ac in _client(db, drh):
+        r = await ac.get("/primemax/")
+        assert {p["id"] for p in r.json()} == {ctx["plafond_a"].id, ctx["plafond_b"].id}
+
+        r = await ac.put(f"/primemax/{ctx['plafond_a'].id}",
+                         json={"department": "Dept A", "bonus_type": "mensuel",
+                               "currency": "Ar", "amount": 750})
+        assert r.status_code == 200, r.text
+        r = await ac.put(f"/employees/{ctx['employe_b'].id}", json={"mensuel_rate": 60000})
+        assert r.status_code == 200, r.text
+        r = await ac.delete(f"/primemax/{ctx['plafond_b'].id}")
+        assert r.status_code == 200, r.text
+
+
+async def test_administrateur_administre_tous_les_plafonds(db):
+    ctx = await _setup()
+    admin = await User.create(email="adm@test.mg", name="Adm", password_hash="x",
+                              dept=ctx["dept_b"], dept_str="Dept B", is_admin=True)
+    async for ac in _client(db, admin):
+        r = await ac.post("/primemax/", json={"department": "Dept A",
+                                              "bonus_type": "exceptionnel",
+                                              "currency": "Ar", "amount": 1234})
+        assert r.status_code == 200, r.text
+        assert r.json()["department"] == "Dept A"
