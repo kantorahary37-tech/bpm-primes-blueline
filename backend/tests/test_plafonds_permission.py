@@ -127,6 +127,35 @@ async def test_directeur_scoped_ne_peut_pas_accorder_la_permission(db):
         assert r.status_code == 403, r.text
 
 
+async def test_directeur_lit_les_taux_speciaux_de_son_departement(db):
+    """Un directeur voit (lecture seule) les taux spéciaux (astreinte / mensuel)
+    des employés de son département — et uniquement ceux-là : la liste des
+    employés qui alimente les sections « Taux spéciaux » de la page Plafonds
+    expose bien les taux de son département, sans jamais déborder sur un autre.
+    """
+    ctx = await _setup()
+    directeur = await User.create(email="dir@test.mg", name="Dir", password_hash="x",
+                                  is_directeur=True, dept=ctx["dept_a"],
+                                  dept_str="Dept A")
+    emp_a1 = await Employee.create(matricule="A1", name="Employe A1", dept=ctx["dept_a"],
+                                   dept_str="Dept A", manager=directeur,
+                                   astreinte_rate=25000, mensuel_rate=50000)
+    emp_a2 = await Employee.create(matricule="A2", name="Employe A2", dept=ctx["dept_a"],
+                                   dept_str="Dept A", manager=directeur)
+
+    async for ac in _client(db, directeur):
+        r = await ac.get("/employees/")
+        assert r.status_code == 200
+        by_id = {e["id"]: e for e in r.json()}
+        # Les employés de son département, avec leurs taux spéciaux visibles
+        assert set(by_id) == {emp_a1.id, emp_a2.id}
+        assert by_id[emp_a1.id]["astreinte_rate"] == 25000
+        assert by_id[emp_a1.id]["mensuel_rate"] == 50000
+        assert by_id[emp_a2.id]["astreinte_rate"] is None
+        # Aucun employé hors de son département (l'employé de Dept B reste invisible)
+        assert ctx["employe_b"].id not in by_id
+
+
 async def test_directeur_ne_peut_pas_modifier_les_plafonds_de_son_departement(db):
     """Un directeur est en lecture seule sur les plafonds — même ceux de son
     propre département (il peut en revanche les consulter)."""

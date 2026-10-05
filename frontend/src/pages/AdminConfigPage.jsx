@@ -25,7 +25,7 @@ const SECTIONS_ALL = [
   {
     group: 'Primes & commissions',
     items: [
-      { key: 'plafonds', label: 'Plafonds des primes', desc: 'Montants maximum par type de prime et département', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'can_modify_plafonds'] },
+      { key: 'plafonds', label: 'Plafonds des primes', desc: 'Montants maximum par type de prime et département', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh', 'is_directeur', 'can_modify_plafonds'] },
       { key: 'bareme', label: 'Barème Commission GP', desc: 'Taux de commission et objectifs par produit', Icon: ChartIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
       { key: 'otherPrimes', label: 'Autres primes', desc: 'Types de primes à montant fixe du formulaire mensuel', Icon: SettingsIcon, roles: ['is_admin', 'is_dg', 'is_drh'] },
       { key: 'commissionGC', label: 'Commission GC', desc: 'Objectifs et commissions Grand Compte', Icon: ChartIcon, check: canAccessGC },

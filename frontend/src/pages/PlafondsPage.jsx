@@ -30,6 +30,16 @@ const PlafondsPage = () => {
   // les plafonds de son propre département.
   const fullAccess = !!(user?.is_admin || user?.is_dg || user?.is_drh || user?.can_modify_plafonds);
   const showPlafond = seeAmounts && (user?.is_admin || user?.is_dg || user?.is_drh || user?.is_directeur || user?.is_validator_n1 || user?.is_validator_n2 || user?.can_modify_plafonds);
+  // Un directeur (sans le drapeau « Autoriser à modifier les plafonds »)
+  // consulte les taux spéciaux (astreinte / mensuel) de SON département, en
+  // lecture seule : aucune configuration possible. Le backend renvoie déjà
+  // uniquement les employés de son département (apply_department_scope) et
+  // refuse toute écriture sur les taux spéciaux (403).
+  const readOnlyDirecteur = !!user?.is_directeur && !fullAccess;
+  const canViewSpecialRates = fullAccess || readOnlyDirecteur;
+  // La prime d'astreinte ne concerne que certains départements : un directeur
+  // d'un autre département n'a rien à consulter dans cette section.
+  const showAstrSection = fullAccess || ASTR_DEPARTMENTS.includes(user?.department);
   const { currencies, symbolFor } = useCurrencies();
   const [plafonds, setPlafonds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +64,10 @@ const PlafondsPage = () => {
     if (!s) return list;
     return list.filter(e => (e.name || '').toLowerCase().includes(s) || (e.matricule || '').toLowerCase().includes(s));
   };
+
+  // Montant d'un taux spécial : masqué si la config système cache les montants.
+  const fmtRate = (rate, currency) =>
+    showPlafond ? `${rate.toLocaleString('fr-FR')} ${symbolFor(currency)}` : '••••••';
 
   const fetchPlafonds = async () => {
     try {
@@ -202,7 +216,9 @@ const PlafondsPage = () => {
         <p className="text-sm text-gray-400">
           {fullAccess
             ? 'Accès total — cliquer un montant pour le modifier'
-            : 'Consultation seule — la modification des plafonds et des taux spéciaux est réservée à la DRH, à un administrateur et aux utilisateurs autorisés'}
+            : readOnlyDirecteur
+              ? 'Consultation de votre département — la modification des plafonds et des taux spéciaux est réservée à la DRH, à un administrateur et aux utilisateurs autorisés'
+              : 'Consultation seule — la modification des plafonds et des taux spéciaux est réservée à la DRH, à un administrateur et aux utilisateurs autorisés'}
         </p>
       </div>
 
@@ -280,12 +296,12 @@ const PlafondsPage = () => {
           </table>
         </div>
 
-        {fullAccess && (
+        {canViewSpecialRates && showAstrSection && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-2 flex items-center gap-2 border-b bg-violet-50 text-violet-700 border-violet-200">
               <MoonIcon className="w-4 h-4" />
               <span className="font-semibold text-sm">Astreinte — Taux spéciaux</span>
-              <span className="text-xs font-normal opacity-60">— Configurer un taux personnalisé par employé</span>
+              <span className="text-xs font-normal opacity-60">{fullAccess ? '— Configurer un taux personnalisé par employé' : '— Votre département (lecture seule)'}</span>
             </div>
             <table className="table table-sm table-zebra w-full">
               <thead>
@@ -296,7 +312,7 @@ const PlafondsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {ASTR_DEPARTMENTS.map((dept) => {
+                {(fullAccess ? ASTR_DEPARTMENTS : [user?.department].filter(Boolean)).map((dept) => {
                   const deptEmps = astrEmployees.filter(e => e.department === dept);
                   const specials = deptEmps.filter(e => e.astreinte_rate != null);
                   return (
@@ -305,14 +321,20 @@ const PlafondsPage = () => {
                       <td className="text-sm text-gray-500">
                         {specials.length === 0
                           ? <span className="text-gray-400 italic">Aucun</span>
-                          : specials.map(e => `${e.name} (${e.astreinte_rate.toLocaleString('fr-FR')} ${symbolFor(e.currency)})`).join(', ')
+                          : specials.map(e => `${e.name} (${fmtRate(e.astreinte_rate, e.currency)})`).join(', ')
                         }
                       </td>
                       <td>
-                        <button onClick={() => openRateModal(dept)}
-                          className="btn btn-xs bg-violet-600 hover:bg-violet-700 text-white border-0">
-                          Configurer
-                        </button>
+                        {fullAccess ? (
+                          <button onClick={() => openRateModal(dept)}
+                            className="btn btn-xs bg-violet-600 hover:bg-violet-700 text-white border-0">
+                            Configurer
+                          </button>
+                        ) : (
+                          <span className="tooltip flex justify-center" data-tip="Lecture seule">
+                            <LockIcon className="w-4 h-4 text-gray-300" />
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -322,12 +344,12 @@ const PlafondsPage = () => {
           </div>
         )}
 
-        {fullAccess && (
+        {canViewSpecialRates && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-2 flex items-center gap-2 border-b bg-amber-50 text-amber-700 border-amber-200">
               <CalendarIcon className="w-4 h-4" />
               <span className="font-semibold text-sm">Mensuel — Taux spéciaux</span>
-              <span className="text-xs font-normal opacity-60">— Configurer un montant personnalisé par employé</span>
+              <span className="text-xs font-normal opacity-60">{fullAccess ? '— Configurer un montant personnalisé par employé' : '— Votre département (lecture seule)'}</span>
             </div>
             <table className="table table-sm table-zebra w-full">
               <thead>
@@ -338,7 +360,10 @@ const PlafondsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {[...new Set(mensuelEmployees.map(e => e.department))].sort().map((dept) => {
+                {(fullAccess
+                  ? [...new Set(mensuelEmployees.map(e => e.department))].sort()
+                  : [user?.department].filter(Boolean)
+                ).map((dept) => {
                   const deptEmps = mensuelEmployees.filter(e => e.department === dept);
                   const specials = deptEmps.filter(e => e.mensuel_rate != null);
                   return (
@@ -347,14 +372,20 @@ const PlafondsPage = () => {
                       <td className="text-sm text-gray-500">
                         {specials.length === 0
                           ? <span className="text-gray-400 italic">Aucun</span>
-                          : specials.map(e => `${e.name} (${e.mensuel_rate.toLocaleString('fr-FR')} ${symbolFor(e.currency)})`).join(', ')
+                          : specials.map(e => `${e.name} (${fmtRate(e.mensuel_rate, e.currency)})`).join(', ')
                         }
                       </td>
                       <td>
-                        <button onClick={() => openMensuelRateModal(dept)}
-                          className="btn btn-xs bg-amber-600 hover:bg-amber-700 text-white border-0">
-                          Configurer
-                        </button>
+                        {fullAccess ? (
+                          <button onClick={() => openMensuelRateModal(dept)}
+                            className="btn btn-xs bg-amber-600 hover:bg-amber-700 text-white border-0">
+                            Configurer
+                          </button>
+                        ) : (
+                          <span className="tooltip flex justify-center" data-tip="Lecture seule">
+                            <LockIcon className="w-4 h-4 text-gray-300" />
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
